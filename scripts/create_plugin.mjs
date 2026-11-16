@@ -28,7 +28,7 @@ if (existsSync(pluginDir)) {
 
 mkdirSync(pluginDir, { recursive: true });
 
-const execution = type === 'theme' ? 'data' : type === 'declarative' ? 'declarative' : 'data';
+const execution = type === 'theme' ? 'data' : type === 'declarative' ? 'declarative' : type === 'editor' ? 'sandboxed-ui' : 'data';
 
 const manifest = {
   manifestVersion: 2,
@@ -44,8 +44,9 @@ const manifest = {
   },
   repository: "https://github.com/fuevaco/orca-tw",
   engines: {
-    orca: ">=1.4.0"
+    orca: type === 'editor' ? ">=1.4.248" : ">=1.4.245"
   },
+  ...(type === 'editor' ? { pluginApi: 1 } : {}),
   contributes: {},
   capabilities: []
 };
@@ -60,6 +61,23 @@ if (type === 'theme') {
   ];
   mkdirSync(join(pluginDir, 'themes'), { recursive: true });
   writeFileSync(join(pluginDir, 'themes', `${id}.json`), JSON.stringify({ name: name || id, colors: {} }, null, 2) + '\n');
+}
+
+if (type === 'editor') {
+  manifest.contributes.customEditors = [
+    {
+      id: id,
+      title: name || id,
+      extensions: [`.${id}`],
+      filenames: [],
+      entry: "editor/index.html",
+      priority: "option",
+      contentKind: "text",
+      frame: "isolated"
+    }
+  ];
+  mkdirSync(join(pluginDir, 'editor'), { recursive: true });
+  writeFileSync(join(pluginDir, 'editor', 'index.html'), '<!DOCTYPE html><html><body><h1>' + (name || id) + '</h1></body></html>\n');
 }
 
 writeFileSync(join(pluginDir, 'orca-plugin.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');

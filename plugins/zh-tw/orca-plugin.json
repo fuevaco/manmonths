@@ -12,7 +12,7 @@
   },
   "repository": "https://github.com/fuevaco/orca-tw",
   "engines": {
-    "orca": ">=1.4.0"
+    "orca": ">=1.4.245"
   },
   "contributes": {
     "languagePacks": [

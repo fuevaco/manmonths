@@ -1,0 +1,39 @@
+{
+  "manifestVersion": 2,
+  "execution": "sandboxed-ui",
+  "id": "marp-mermaid-preview",
+  "publisher": "fuevaco",
+  "name": "Markdown Marp & Mermaid 預覽",
+  "version": "1.0.0",
+  "description": "為 Orca 提供強大的 Markdown 增強預覽自訂編輯器，支援 Marp 簡報投影片、Mermaid 流程架構圖表與 GitHub 風格排版。",
+  "author": {
+    "name": "fuevaco",
+    "url": "https://github.com/fuevaco"
+  },
+  "repository": "https://github.com/fuevaco/orca-tw",
+  "engines": {
+    "orca": ">=1.4.248"
+  },
+  "pluginApi": 1,
+  "contributes": {
+    "customEditors": [
+      {
+        "id": "marp-mermaid-preview",
+        "title": "Marp & Mermaid 預覽",
+        "extensions": [
+          ".md",
+          ".markdown",
+          ".marp",
+          ".mmd",
+          ".mermaid"
+        ],
+        "filenames": [],
+        "entry": "editor/index.html",
+        "priority": "option",
+        "contentKind": "text",
+        "frame": "isolated"
+      }
+    ]
+  },
+  "capabilities": []
+}

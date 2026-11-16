@@ -95,6 +95,12 @@ function deriveContributionSummary(manifest) {
   if (c.keybindings) {
     for (const k of c.keybindings) items.push({ kind: 'keybindings', name: k.key });
   }
+  if (c.customEditors) {
+    for (const ed of c.customEditors) {
+      const detail = [...(ed.extensions || []), ...(ed.filenames || [])].join(', ') || undefined;
+      items.push({ kind: 'customEditors', name: ed.title || ed.id, ...(detail ? { detail } : {}) });
+    }
+  }
   return items;
 }
 
