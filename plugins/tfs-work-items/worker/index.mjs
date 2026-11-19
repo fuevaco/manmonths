@@ -99,6 +99,55 @@ async function fetchWorkItemTypeStates(cfg, project, wiType) {
   return names;
 }
 
+// 往上追溯父項，直到「需求」層（或沒有父項 / 達到上限）為止
+const REQUIREMENT_TYPES = new Set(['Requirement', '需求']);
+const MAX_ANCESTOR_DEPTH = 8;
+const PARENT_FIELDS = [
+  'System.Id',
+  'System.TeamProject',
+  'System.Title',
+  'System.WorkItemType',
+  'System.State',
+  'System.Parent'
+].join(',');
+
+async function fetchWorkItemAncestors(cfg, id) {
+  const ancestors = [];
+  const seen = new Set([Number(id)]);
+
+  const fetchOne = async (wid) => {
+    const res = await tfsRequest(
+      cfg,
+      `_apis/wit/workitems/${encodeURIComponent(wid)}?fields=${encodeURIComponent(PARENT_FIELDS)}&api-version=${encodeURIComponent(cfg.apiVersion)}`
+    );
+    return res || null;
+  };
+
+  let current = await fetchOne(id);
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
+    const parentId = Number(current?.fields?.['System.Parent']);
+    if (!parentId || seen.has(parentId)) break;
+    seen.add(parentId);
+
+    const parent = await fetchOne(parentId);
+    if (!parent) break;
+    const f = parent.fields || {};
+    const projectName = String(f['System.TeamProject'] || '').trim();
+    const type = String(f['System.WorkItemType'] || '');
+    ancestors.push({
+      id: parent.id,
+      type,
+      title: f['System.Title'] || '',
+      state: f['System.State'] || '',
+      webUrl: parent._links?.html?.href || buildWorkItemWebUrl(cfg, projectName, parent.id),
+      isRequirement: REQUIREMENT_TYPES.has(type)
+    });
+    if (REQUIREMENT_TYPES.has(type)) break;
+    current = parent;
+  }
+  return ancestors; // 由最近的父項到最上層
+}
+
 let cachedProjectKey = '';
 let cachedProjects = []; // [{ name, description, label }]
 let cachedProjectMap = new Map(); // name -> { name, description, label }
@@ -413,6 +462,16 @@ export default function activate(orca) {
     const cfg = await loadConfig(orca);
     const states = await fetchWorkItemTypeStates(cfg, input.project, input.type);
     return { states };
+  });
+
+  orca.panels.handle('tfs.getWorkItemAncestors', async (input = {}) => {
+    const id = Number(input.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw makeError('缺少有效的工項 ID。', 'invalid_params');
+    }
+    const cfg = await loadConfig(orca);
+    const ancestors = await fetchWorkItemAncestors(cfg, id);
+    return { ancestors };
   });
 
   orca.panels.handle('tfs.listWorkItems', async (input = {}) => {

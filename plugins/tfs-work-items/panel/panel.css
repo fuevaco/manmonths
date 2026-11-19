@@ -404,6 +404,38 @@ html, body {
 }
 
 /* Detail View */
+.detail-parents {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+
+.detail-parents .parent-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.detail-parents .parent-link {
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.detail-parents .parent-link:hover {
+  text-decoration: underline;
+}
+
 .detail-desc {
   font-size: 12px;
   white-space: pre-wrap;

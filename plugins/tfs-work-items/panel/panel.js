@@ -79,6 +79,7 @@
   const detailStateSelect = document.getElementById('detail-state-select');
   const detailComment = document.getElementById('detail-comment');
   const btnUpdateState = document.getElementById('btn-update-state');
+  const detailParents = document.getElementById('detail-parents');
   const btnSendComment = document.getElementById('btn-send-comment');
   const btnLaunchAgent = document.getElementById('btn-launch-agent');
   const btnRefreshAgents = document.getElementById('btn-refresh-agents');
@@ -440,6 +441,52 @@
     }
   }
 
+  function openExternalUrl(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return;
+    if (window.orca?.shell?.openExternal) {
+      window.orca.shell.openExternal(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  // 顯示上層父項，由最上層（需求）排到最近的父項
+  async function loadAncestorsForItem(item) {
+    const box = detailParents;
+    box.innerHTML = '';
+    box.classList.add('hidden');
+    if (!item) return;
+    try {
+      const res = await callWorker('tfs.getWorkItemAncestors', { id: item.id });
+      if (!selectedItem || selectedItem.id !== item.id) return;
+      const list = (res?.ancestors || []).slice().reverse();
+      if (list.length === 0) return;
+      list.forEach((p, idx) => {
+        const row = document.createElement('div');
+        row.className = 'parent-row';
+        row.style.paddingLeft = `${idx * 12}px`;
+
+        const typeBadge = document.createElement('span');
+        typeBadge.className = 'badge badge-project';
+        typeBadge.textContent = p.type || '工項';
+        row.appendChild(typeBadge);
+
+        const link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'parent-link';
+        link.textContent = `#${p.id} ${p.title}${p.state ? `（${p.state}）` : ''}`;
+        link.title = '在瀏覽器中開啟';
+        link.addEventListener('click', () => openExternalUrl(p.webUrl));
+        row.appendChild(link);
+
+        box.appendChild(row);
+      });
+      box.classList.remove('hidden');
+    } catch {
+      // 取得失敗時不顯示上層資訊，不影響其他操作
+    }
+  }
+
   function openDetail(item) {
     selectedItem = item;
     hideBanner();
@@ -478,6 +525,7 @@
     // 先以現有資料立即顯示，再非同步載入「此工項類型」的 workflow 狀態
     renderDetailStateOptions(item, getOpenStatesList(allItems));
     loadTypeStatesForItem(item);
+    loadAncestorsForItem(item);
     detailComment.value = '';
     showView('detail');
     loadCurrentAgentsForDetail();
