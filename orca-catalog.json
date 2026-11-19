@@ -11,15 +11,15 @@
         "ref": "main",
         "path": "plugins/marp-mermaid-preview"
       },
-      "description": "為 Orca 提供強大的 Markdown 增強預覽自訂編輯器，支援 Marp 簡報投影片、Mermaid 流程架構圖表與 GitHub 風格排版。",
+      "description": "人月維護的 Orca Markdown 增強預覽自訂編輯器，支援 Marp 投影片簡報、Mermaid 流程架構圖表與 GitHub 風格排版。",
       "categories": [
         "tools"
       ],
       "releases": [
         {
           "version": "1.0.0",
-          "commit": "b93aa4cc3f7a186d05ba3477a6eeb262b42e0eff",
-          "contentHash": "f6aeab38aee585943bb4b307d9972278a87762341e5bf8818af003959b801316",
+          "commit": "c240a29b378ff2d2da012c976e314a9ec84b4719",
+          "contentHash": "d6fbc0708979634a68b5dc362ddb0bdfeb0895360e8852574477ce6efa9a213b",
           "execution": "sandboxed-ui",
           "minimumOrca": "1.4.248",
           "types": [
@@ -43,15 +43,15 @@
         "ref": "main",
         "path": "plugins/zh-tw"
       },
-      "description": "fuevaco 維護的 Orca 繁體中文（台灣）語言套件。",
+      "description": "人月維護的 Orca 繁體中文（台灣）語言套件。",
       "categories": [
         "languages"
       ],
       "releases": [
         {
           "version": "1.1.0",
-          "commit": "b93aa4cc3f7a186d05ba3477a6eeb262b42e0eff",
-          "contentHash": "a55523294b7f67e8714a25df3a8ae5eebf1866e75f2b3546026df816cc250cd4",
+          "commit": "c240a29b378ff2d2da012c976e314a9ec84b4719",
+          "contentHash": "9c2523257e1a06a9c854163c761e8699b21ec13ed531a00a942e160f8d173615",
           "execution": "data",
           "minimumOrca": "1.4.245",
           "types": [
