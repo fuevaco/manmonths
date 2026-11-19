@@ -216,9 +216,10 @@
     }
   }
 
-  function createWorkItemCard(item, showProjectBadge) {
+  function createWorkItemCard(item, showProjectBadge, isGrouped = false) {
     const card = document.createElement('div');
-    card.className = 'wi-card';
+    const typeClass = item.type === 'Bug' ? 'is-bug' : 'is-task';
+    card.className = `wi-card ${typeClass}${isGrouped ? ' is-grouped' : ''}`;
 
     const meta = document.createElement('div');
     meta.className = 'wi-meta';
@@ -309,7 +310,7 @@
         viewList.appendChild(header);
 
         for (const item of group.items) {
-          viewList.appendChild(createWorkItemCard(item, false));
+          viewList.appendChild(createWorkItemCard(item, false, true));
         }
       }
     } else {

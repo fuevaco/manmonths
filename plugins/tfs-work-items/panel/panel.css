@@ -4,7 +4,11 @@
   --muted: #8b949e;
   --border: var(--orca-border, #30363d);
   --card-bg: rgba(255, 255, 255, 0.03);
-  --hover-bg: rgba(255, 255, 255, 0.06);
+  --wi-card-bg: rgba(255, 255, 255, 0.045);
+  --proj-header-bg: rgba(47, 129, 247, 0.12);
+  --proj-header-border: rgba(47, 129, 247, 0.35);
+  --proj-header-fg: #79c0ff;
+  --hover-bg: rgba(255, 255, 255, 0.08);
   --input-bg: rgba(0, 0, 0, 0.25);
   --accent: #2f81f7;
   --accent-fg: #ffffff;
@@ -24,6 +28,10 @@ body.light {
   --muted: #656d76;
   --border: var(--orca-border, #d0d7de);
   --card-bg: #f6f8fa;
+  --wi-card-bg: #ffffff;
+  --proj-header-bg: rgba(9, 105, 218, 0.09);
+  --proj-header-border: rgba(9, 105, 218, 0.28);
+  --proj-header-fg: #0550ae;
   --hover-bg: #eaeef2;
   --input-bg: #ffffff;
   --accent: #0969da;
@@ -176,21 +184,25 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 4px 2px 4px;
-  margin-top: 4px;
-  font-size: 11px;
+  padding: 6px 10px;
+  margin-top: 8px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--muted);
-  border-bottom: 1px solid var(--border);
+  color: var(--proj-header-fg);
+  background: var(--proj-header-bg);
+  border: 1px solid var(--proj-header-border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
 }
 .project-group-header:first-child { margin-top: 0; }
 
 .project-group-count {
   font-size: 10px;
-  padding: 0 6px;
+  font-weight: 700;
+  padding: 1px 7px;
   border-radius: 10px;
-  background: var(--hover-bg);
-  color: var(--fg);
+  background: var(--accent);
+  color: var(--accent-fg);
 }
 
 .badge-project {
@@ -265,12 +277,16 @@ html, body {
 /* Work Item Card */
 .wi-card {
   border: 1px solid var(--border);
-  background: var(--card-bg);
-  border-radius: 8px;
+  border-left: 3px solid var(--border);
+  background: var(--wi-card-bg);
+  border-radius: 7px;
   padding: 9px 10px;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
 }
+.wi-card.is-task { border-left-color: var(--task-color); }
+.wi-card.is-bug { border-left-color: var(--bug-color); }
+.wi-card.is-grouped { margin-left: 8px; }
 .wi-card:hover {
   border-color: var(--accent);
   background: var(--hover-bg);
