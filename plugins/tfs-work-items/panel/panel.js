@@ -701,7 +701,7 @@
     });
 
     btnDetailOpen.addEventListener('click', () => {
-      if (!selectedItem?.webUrl) return;
+      if (!selectedItem?.webUrl || !/^https?:\/\//i.test(selectedItem.webUrl)) return;
       if (window.orca?.shell?.openExternal) {
         window.orca.shell.openExternal(selectedItem.webUrl);
       } else {

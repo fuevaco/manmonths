@@ -45,7 +45,7 @@
     return {
       startOnLoad: false,
       theme: theme === 'dark' ? 'dark' : 'default',
-      securityLevel: 'loose',
+      securityLevel: 'strict',
       fontFamily: 'var(--app-font)',
       flowchart: { useMaxWidth: true, htmlLabels: true },
       sequence: { useMaxWidth: true },
@@ -197,7 +197,11 @@
       } catch (e) {
         if (seq !== renderSeq) return;
         console.error('Marp render error:', e);
-        marpContainer.innerHTML = `<div class="mermaid-error-box">Marp 渲染失敗: ${e.message}</div>`;
+        marpContainer.innerHTML = '';
+        const errBox = document.createElement('div');
+        errBox.className = 'mermaid-error-box';
+        errBox.textContent = `Marp 渲染失敗: ${e.message}`;
+        marpContainer.appendChild(errBox);
       }
     } else {
       // 2. Render as Standard Document
@@ -212,7 +216,11 @@
         } catch (e) {
           if (seq !== renderSeq) return;
           console.error('Markdown-it render error:', e);
-          docContainer.innerHTML = `<div class="mermaid-error-box">Markdown 渲染失敗: ${e.message}</div>`;
+          docContainer.innerHTML = '';
+          const errBox = document.createElement('div');
+          errBox.className = 'mermaid-error-box';
+          errBox.textContent = `Markdown 渲染失敗: ${e.message}`;
+          docContainer.appendChild(errBox);
         }
       }
     }
