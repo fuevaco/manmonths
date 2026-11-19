@@ -6,6 +6,7 @@
 
 - **連線地端 TFS / Azure DevOps Server**：支援自訂 Collection URL（如 `https://tfs.company.com/tfs/DefaultCollection`）、API 版本切換（`4.1` ~ `7.0`）與內網自簽 HTTPS 憑證選項。
 - **PAT 安全儲存**：Personal Access Token 透過 Orca 的 `secrets:own` 加密儲存於系統金鑰圈，不會明文寫入設定檔。
+- **Windows 整合驗證（選用）**：設定頁的「認證方式」可改成 Windows，改用這台電腦目前登入的網域帳號連線（呼叫系統內建 `curl.exe --negotiate`，Kerberos），不需要 PAT。僅限 Windows，TFS 網址須使用網域名稱（不能用 IP）。驗證失敗時，若已設定 PAT 會自動改用 PAT。預設仍是 PAT。
 - **查詢與篩選 Task / Bug**：
   - 快速切換「指派給我」或「全部」
   - 依 `Task` / `Bug`、標題關鍵字或直接輸入 `#ID`（例如 `#1234`）查詢

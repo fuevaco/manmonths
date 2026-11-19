@@ -1,5 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
+import { spawn } from 'node:child_process';
+import { join as joinPath } from 'node:path';
 
 const SECRET_PAT_KEY = 'tfs_pat';
 
@@ -171,11 +173,177 @@ async function loadConfig(orca) {
     apiVersion: String(all.apiVersion || '5.0').trim(),
     allowInsecureTls: Boolean(all.allowInsecureTls),
     defaultAgent: String(all.defaultAgent || 'claude').trim() || 'claude',
+    authMode: normalizeAuthMode(all.authMode),
     pat: pat || ''
   };
 }
 
-function tfsRequest(config, relativePath, { method = 'GET', body = null, contentType = 'application/json' } = {}) {
+function normalizeAuthMode(mode) {
+  return mode === 'windows' ? 'windows' : 'pat';
+}
+
+// Windows 整合驗證失敗後，短時間內直接走 PAT，避免每個請求都多跑一次失敗的 Windows 驗證
+const WINDOWS_AUTH_RETRY_MS = 5 * 60 * 1000;
+const windowsAuthFailedAt = new Map(); // tfsUrl -> timestamp
+
+// 依設定的認證方式送出請求；Windows 驗證失敗時，若有 PAT 就自動改用 PAT
+async function tfsRequest(config, relativePath, options = {}) {
+  if (config.authMode !== 'windows') {
+    const res = await tfsRequestPat(config, relativePath, options);
+    config.authUsed = 'pat';
+    return res;
+  }
+
+  const failedAt = windowsAuthFailedAt.get(config.tfsUrl) || 0;
+  const skipWindows = Boolean(config.pat) && Date.now() - failedAt < WINDOWS_AUTH_RETRY_MS;
+  if (!skipWindows) {
+    try {
+      const res = await tfsRequestWindows(config, relativePath, options);
+      windowsAuthFailedAt.delete(config.tfsUrl);
+      config.authUsed = 'windows';
+      return res;
+    } catch (err) {
+      if (!(err.fallbackToPat && config.pat)) throw err;
+      windowsAuthFailedAt.set(config.tfsUrl, Date.now());
+    }
+  }
+  const res = await tfsRequestPat(config, relativePath, options);
+  config.authUsed = 'pat';
+  return res;
+}
+
+// Windows 整合驗證（Negotiate / Kerberos）：呼叫系統內建的 curl.exe，使用目前登入的 Windows 帳號
+function tfsRequestWindows(config, relativePath, { method = 'GET', body = null, contentType = 'application/json' } = {}) {
+  return new Promise((resolve, reject) => {
+    const fail = (message, code = 'action_failed', fallbackToPat = false) => {
+      const err = makeError(message, code);
+      err.fallbackToPat = fallbackToPat;
+      reject(err);
+    };
+
+    if (!config.tfsUrl) {
+      fail('尚未設定 TFS Collection 網址，請先在面板設定中填寫。', 'invalid_params');
+      return;
+    }
+    if (process.platform !== 'win32') {
+      fail('Windows 整合驗證只支援 Windows 系統，請改用 PAT。', 'unavailable', true);
+      return;
+    }
+
+    let targetUrl;
+    try {
+      targetUrl = new URL(relativePath.replace(/^\/+/, ''), config.tfsUrl + '/');
+    } catch (e) {
+      fail(`TFS 網址格式不正確：${e.message}`, 'invalid_params');
+      return;
+    }
+    if (targetUrl.protocol !== 'https:' && targetUrl.protocol !== 'http:') {
+      fail('TFS 網址必須以 http:// 或 https:// 開頭。', 'invalid_params');
+      return;
+    }
+
+    const payload = body !== null ? JSON.stringify(body) : null;
+    const curlPath = joinPath(process.env.SystemRoot || 'C:\\Windows', 'System32', 'curl.exe');
+    const args = [
+      '--silent', '--show-error',
+      '--negotiate', '--user', ':',
+      '--proto', '=http,https',
+      '--max-time', '25',
+      '--request', method,
+      '--header', 'Accept: application/json',
+      '--header', 'User-Agent: Orca-TFS-WorkItems',
+      '--write-out', '\n%{http_code}'
+    ];
+    if (targetUrl.protocol === 'https:' && config.allowInsecureTls) args.push('--insecure');
+    if (payload !== null) args.push('--header', `Content-Type: ${contentType}`, '--data-binary', '@-');
+    args.push('--url', targetUrl.href);
+
+    let child;
+    try {
+      child = spawn(curlPath, args, { windowsHide: true });
+    } catch (e) {
+      fail(`無法執行系統 curl.exe：${e.message}`, 'unavailable', true);
+      return;
+    }
+
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    const timer = setTimeout(() => {
+      child.kill();
+      fail('連線 TFS 伺服器逾時，請檢查網路或內網 VPN 連線。', 'timeout');
+    }, 30000);
+
+    child.stdout.on('data', (c) => stdoutChunks.push(c));
+    child.stderr.on('data', (c) => stderrChunks.push(c));
+    child.stdin.on('error', () => {}); // curl 提早結束時忽略 EPIPE
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      if (err.code === 'ENOENT') {
+        fail('找不到系統的 curl.exe，無法使用 Windows 整合驗證。', 'unavailable', true);
+      } else {
+        fail(`無法執行系統 curl.exe：${err.message}`, 'unavailable', true);
+      }
+    });
+
+    child.on('close', (exitCode) => {
+      clearTimeout(timer);
+      const stdout = Buffer.concat(stdoutChunks).toString('utf8');
+      const stderr = Buffer.concat(stderrChunks).toString('utf8').trim();
+
+      if (exitCode !== 0) {
+        if (exitCode === 28) {
+          fail('連線 TFS 伺服器逾時，請檢查網路或內網 VPN 連線。', 'timeout');
+        } else if ([35, 51, 58, 60, 77, 82, 83, 90, 91].includes(exitCode)) {
+          fail(`SSL 憑證驗證失敗 (curl ${exitCode})：若為公司內網自簽憑證，請在設定勾選「允許內網自簽 HTTPS 憑證」。`);
+        } else if ([6, 7].includes(exitCode)) {
+          fail(`無法連線至 TFS：${stderr || `curl 錯誤 ${exitCode}`}`);
+        } else {
+          fail(`Windows 整合驗證失敗 (curl ${exitCode})：${stderr || '未知錯誤'}`, 'not_permitted', true);
+        }
+        return;
+      }
+
+      const nl = stdout.lastIndexOf('\n');
+      const raw = nl >= 0 ? stdout.slice(0, nl) : '';
+      const status = Number(stdout.slice(nl + 1).trim());
+      let parsed = null;
+      try {
+        parsed = raw ? JSON.parse(raw) : null;
+      } catch {
+        parsed = null;
+      }
+
+      if (status >= 200 && status < 300) {
+        resolve(parsed);
+        return;
+      }
+
+      const serverMsg = parsed?.message || parsed?.value?.Message || (raw && raw.length < 300 ? raw : '');
+      if (status === 401 || status === 203) {
+        fail(
+          `Windows 整合驗證失敗 (HTTP ${status})：請確認電腦已登入公司網域、網址使用網域名稱（不能用 IP），且帳號有權限；也可改用 PAT。`,
+          'not_permitted',
+          true
+        );
+      } else if (status === 403) {
+        fail(`TFS 權限不足 (HTTP 403)：${serverMsg || '目前登入的帳號沒有此操作的權限。'}`, 'not_permitted');
+      } else if (status === 404) {
+        fail(`找不到 TFS 資源 (HTTP 404)：請檢查 Collection 網址與專案名稱是否正確。${serverMsg ? `(${serverMsg})` : ''}`, 'invalid_params');
+      } else {
+        fail(`TFS API 錯誤 (HTTP ${status || '?'})：${serverMsg || '未知錯誤'}`);
+      }
+    });
+
+    if (payload !== null) {
+      child.stdin.end(payload, 'utf8');
+    } else {
+      child.stdin.end();
+    }
+  });
+}
+
+function tfsRequestPat(config, relativePath, { method = 'GET', body = null, contentType = 'application/json' } = {}) {
   return new Promise((resolve, reject) => {
     if (!config.tfsUrl) {
       reject(makeError('尚未設定 TFS Collection 網址，請先在面板設定中填寫。', 'invalid_params'));
@@ -399,6 +567,7 @@ export default function activate(orca) {
       apiVersion: cfg.apiVersion,
       allowInsecureTls: cfg.allowInsecureTls,
       defaultAgent: cfg.defaultAgent,
+      authMode: cfg.authMode,
       hasPat: Boolean(cfg.pat)
     };
   });
@@ -419,9 +588,13 @@ export default function activate(orca) {
     if (typeof input.defaultAgent === 'string' && input.defaultAgent.trim()) {
       await orca.settings.set('defaultAgent', input.defaultAgent.trim());
     }
+    if (typeof input.authMode === 'string') {
+      await orca.settings.set('authMode', normalizeAuthMode(input.authMode));
+    }
     if (typeof input.pat === 'string' && input.pat.trim()) {
       await orca.secrets.set(SECRET_PAT_KEY, input.pat.trim());
     }
+    windowsAuthFailedAt.clear();
     cachedProjectKey = '';
     const cfg = await loadConfig(orca);
     return {
@@ -442,13 +615,17 @@ export default function activate(orca) {
       ...(input?.tfsUrl !== undefined ? { tfsUrl: normalizeBaseUrl(input.tfsUrl) } : {}),
       ...(input?.apiVersion ? { apiVersion: String(input.apiVersion).trim() } : {}),
       ...(typeof input?.allowInsecureTls === 'boolean' ? { allowInsecureTls: input.allowInsecureTls } : {}),
+      ...(input?.authMode ? { authMode: normalizeAuthMode(input.authMode) } : {}),
       ...(input?.pat ? { pat: String(input.pat).trim() } : {})
     };
 
+    windowsAuthFailedAt.clear(); // 測試連線時一定重新嘗試 Windows 驗證
     const { projects } = await fetchProjectsCatalog(cfg, true);
     return {
       ok: true,
-      projects
+      projects,
+      authMode: cfg.authMode,
+      authUsed: cfg.authUsed || cfg.authMode
     };
   });
 

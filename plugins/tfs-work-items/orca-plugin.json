@@ -4,7 +4,7 @@
   "id": "tfs-work-items",
   "publisher": "manmonths",
   "name": "Azure DevOps",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "description": "人月維護的 Azure DevOps / 地端 TFS 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
   "author": {
     "name": "人月",
@@ -56,6 +56,15 @@
           "6.0 (Azure DevOps Server 2020)",
           "7.0 (Azure DevOps Server 2022+)"
         ]
+      },
+      {
+        "key": "authMode",
+        "title": "認證方式",
+        "description": "PAT：使用個人存取權杖。Windows：使用這台電腦目前登入的網域帳號（Kerberos，僅限 Windows，網址須用網域名稱）；失敗時若已設定 PAT 會自動改用 PAT。",
+        "type": "string",
+        "default": "pat",
+        "enum": ["pat", "windows"],
+        "enumLabels": ["PAT（個人存取權杖）", "Windows 整合驗證"]
       },
       {
         "key": "allowInsecureTls",

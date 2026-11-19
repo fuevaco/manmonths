@@ -52,6 +52,9 @@
   const cfgUrl = document.getElementById('cfg-url');
   const cfgPat = document.getElementById('cfg-pat');
   const cfgPatStatus = document.getElementById('cfg-pat-status');
+  const cfgAuthMode = document.getElementById('cfg-auth-mode');
+  const cfgAuthHint = document.getElementById('cfg-auth-hint');
+  const cfgPatLabel = document.getElementById('cfg-pat-label');
   const btnClearPat = document.getElementById('btn-clear-pat');
   const cfgApiVersion = document.getElementById('cfg-api-version');
   const cfgInsecureTls = document.getElementById('cfg-insecure-tls');
@@ -424,9 +427,21 @@
   }
 
   // --- Data & Rendering ---
+  function updateAuthModeUI() {
+    const isWindows = cfgAuthMode.value === 'windows';
+    cfgAuthHint.textContent = isWindows
+      ? '使用這台電腦目前登入的網域帳號（Kerberos），免輸入帳密。僅限 Windows，網址須用網域名稱（不能用 IP）。驗證失敗時，若下方有填 PAT 會自動改用 PAT。'
+      : '使用個人存取權杖（PAT）連線。';
+    cfgPatLabel.textContent = isWindows
+      ? 'PAT（選填，Windows 驗證失敗時的備用）'
+      : 'PAT (Personal Access Token)';
+  }
+
   async function loadConfigIntoForm() {
     const cfg = await callWorker('tfs.getConfig');
     cfgUrl.value = cfg.tfsUrl || '';
+    cfgAuthMode.value = cfg.authMode === 'windows' ? 'windows' : 'pat';
+    updateAuthModeUI();
     if (settingsCombo) settingsCombo.setValue(cfg.project || '');
     cfgApiVersion.value = cfg.apiVersion || '5.0';
     cfgInsecureTls.checked = Boolean(cfg.allowInsecureTls);
@@ -815,6 +830,8 @@
       showView('list');
     });
 
+    cfgAuthMode.addEventListener('change', updateAuthModeUI);
+
     btnTestConn.addEventListener('click', async () => {
       hideBanner();
       btnTestConn.disabled = true;
@@ -824,11 +841,19 @@
           tfsUrl: cfgUrl.value,
           apiVersion: cfgApiVersion.value,
           allowInsecureTls: cfgInsecureTls.checked,
+          authMode: cfgAuthMode.value,
           ...(cfgPat.value.trim() ? { pat: cfgPat.value.trim() } : {})
         });
         populateProjectsUI(res.projects || []);
         setStatus('connected');
-        showBanner(`連線成功！共載入 ${(res.projects || []).length} 個專案（若預設專案留空將顯示所有專案）。`, 'success');
+        const count = (res.projects || []).length;
+        let authNote = '';
+        if (res.authMode === 'windows') {
+          authNote = res.authUsed === 'windows'
+            ? '（使用 Windows 整合驗證）'
+            : '（Windows 驗證未通過，已改用 PAT）';
+        }
+        showBanner(`連線成功！共載入 ${count} 個專案${authNote}（若預設專案留空將顯示所有專案）。`, 'success');
       } catch (err) {
         setStatus('error');
         showBanner(err.message || String(err), 'error');
@@ -855,6 +880,7 @@
           apiVersion: cfgApiVersion.value,
           allowInsecureTls: cfgInsecureTls.checked,
           defaultAgent: cfgAgent.value,
+          authMode: cfgAuthMode.value,
           ...(cfgPat.value.trim() ? { pat: cfgPat.value.trim() } : {})
         });
         projectFilter = projectToSave || '__ALL__';
@@ -1048,9 +1074,10 @@
 
     try {
       const cfg = await loadConfigIntoForm();
-      if (!cfg.tfsUrl || !cfg.hasPat) {
+      const needsPat = cfg.authMode !== 'windows' && !cfg.hasPat;
+      if (!cfg.tfsUrl || needsPat) {
         showView('settings');
-        showBanner('請先設定地端 TFS Collection 網址與 PAT（專案名稱可留空以檢視所有專案）。', 'info');
+        showBanner('請先設定地端 TFS Collection 網址與認證方式（PAT 或 Windows 整合驗證；專案名稱可留空以檢視所有專案）。', 'info');
       } else {
         showView('list');
         await refreshWorkItems();
