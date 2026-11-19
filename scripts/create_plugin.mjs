@@ -42,7 +42,7 @@ const manifest = {
     name: "人月",
     url: "https://github.com/fuevaco"
   },
-  repository: "https://github.com/fuevaco/orca-tw",
+  repository: "https://github.com/fuevaco/manmonths",
   engines: {
     orca: type === 'editor' ? ">=1.4.248" : ">=1.4.245"
   },

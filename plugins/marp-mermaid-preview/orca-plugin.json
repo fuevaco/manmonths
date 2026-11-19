@@ -10,7 +10,7 @@
     "name": "人月",
     "url": "https://github.com/fuevaco"
   },
-  "repository": "https://github.com/fuevaco/orca-tw",
+  "repository": "https://github.com/fuevaco/manmonths",
   "engines": {
     "orca": ">=1.4.248"
   },

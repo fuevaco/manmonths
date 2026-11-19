@@ -34,7 +34,7 @@
 
 1. 開啟 Orca，前往 **Settings → Plugins → Marketplace Sources**（或 Manage Sources）。
 2. 點選 **Add Source**，新增來源：
-   - **URL**: `https://github.com/fuevaco/orca-tw.git`
+   - **URL**: `https://github.com/fuevaco/manmonths.git`
    - **Ref / Branch**: `main`
 3. 新增後，Orca 會自動讀取根目錄的 `orca-catalog.json`，並在列表或 Marketplace 中顯示本儲存庫包含的所有外掛。
 4. 點選欲安裝的外掛（如 **繁體中文 (台灣)**）後按下 **Install** 即可。
@@ -48,7 +48,7 @@
 
 ### 1. 目錄結構
 ```text
-orca-tw/
+manmonths/
 ├── orca-catalog.json           <-- 最新版 v2 目錄索引檔（由 scripts/generate_catalog.mjs 自動產生）
 ├── orca-marketplace.json       <-- 舊版相容檔案
 ├── scripts/

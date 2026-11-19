@@ -39,7 +39,7 @@
 ### 方式一：在 Orca 中透過 Marketplace 來源安裝
 1. 開啟 Orca，前往 **Settings → Plugins → Marketplace Sources**。
 2. 確認已加入來源：
-   - **URL**: `https://github.com/fuevaco/orca-tw.git`
+   - **URL**: `https://github.com/fuevaco/manmonths.git`
    - **Ref / Branch**: `main`
 3. 在插件列表中找到 **Markdown Marp & Mermaid 預覽**（`fuevaco.marp-mermaid-preview`），點選 **Install** 安裝並啟用。
 

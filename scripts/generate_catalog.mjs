@@ -147,7 +147,7 @@ export function generateCatalog() {
       id: `fuevaco.${manifest.id}`,
       source: {
         kind: 'git',
-        url: 'https://github.com/fuevaco/orca-tw.git',
+        url: 'https://github.com/fuevaco/manmonths.git',
         ref: 'main',
         path: relPath
       },
