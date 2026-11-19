@@ -40,7 +40,11 @@
   const btnSettings = document.getElementById('btn-settings');
 
   // Filters
-  const projectSelectFilter = document.getElementById('project-filter');
+  const projectFilterInput = document.getElementById('project-filter');
+  const projectFilterClear = document.getElementById('project-filter-clear');
+  const projectFilterList = document.getElementById('project-filter-list');
+  let filterCombo = null;   // 首頁專案篩選（可搜尋）
+  let settingsCombo = null; // 設定頁預設專案（可搜尋）
   const searchInput = document.getElementById('search-input');
   const stateSelectFilter = document.getElementById('state-filter');
 
@@ -52,7 +56,8 @@
   const cfgApiVersion = document.getElementById('cfg-api-version');
   const cfgInsecureTls = document.getElementById('cfg-insecure-tls');
   const cfgProject = document.getElementById('cfg-project');
-  const projectList = document.getElementById('project-list');
+  const projectComboList = document.getElementById('project-combo-list');
+  const cfgProjectClear = document.getElementById('cfg-project-clear');
   const cfgAgent = document.getElementById('cfg-agent');
   const btnTestConn = document.getElementById('btn-test-conn');
   const btnSaveSettings = document.getElementById('btn-save-settings');
@@ -140,22 +145,11 @@
     if (!Array.isArray(list) || list.length === 0) return;
     projects = list;
 
-    // 1. Filter dropdown
-    const prevFilter = projectSelectFilter.value || projectFilter;
-    projectSelectFilter.innerHTML = '<option value="__ALL__">📁 所有專案（依專案分類顯示）</option>';
-    for (const p of projects) {
-      const opt = document.createElement('option');
-      opt.value = p.name;
-      opt.textContent = p.label || p.name;
-      opt.title = p.description ? `${p.description} (${p.name})` : p.name;
-      projectSelectFilter.appendChild(opt);
-    }
-    if (prevFilter && Array.from(projectSelectFilter.options).some((o) => o.value === prevFilter)) {
-      projectSelectFilter.value = prevFilter;
-    } else {
-      projectSelectFilter.value = '__ALL__';
+    // 1. 首頁專案篩選：目前選的專案若不在清單中就回到「所有專案」
+    if (projectFilter !== '__ALL__' && !projects.some((p) => p.name === projectFilter)) {
       projectFilter = '__ALL__';
     }
+    if (filterCombo) filterCombo.setValue(projectFilter === '__ALL__' ? '' : projectFilter);
 
     // 2. Create form dropdown
     const prevCreate = createProject.value;
@@ -173,21 +167,267 @@
       createProject.value = projectFilter;
     }
 
-    // 3. Settings datalist
-    projectList.innerHTML = '';
-    for (const p of projects) {
-      const opt = document.createElement('option');
-      opt.value = p.name;
-      if (p.description) opt.label = p.description;
-      projectList.appendChild(opt);
+    // 3. 設定頁預設專案：專案清單更新後，重新顯示目前選擇（標籤可能從名稱變成描述）
+    if (settingsCombo) settingsCombo.setValue(settingsCombo.getValue());
+  }
+
+  // --- Searchable project combobox（設定頁與首頁篩選共用）---
+  const COMBO_MAX_ITEMS = 50;
+
+  function truncateChars(text, max = 20) {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    const chars = Array.from(clean);
+    return chars.length > max ? `${chars.slice(0, max).join('')}…` : clean;
+  }
+
+  // 顯示文字：優先用描述（最多 20 字），沒有描述就用名稱
+  function projectDisplayText(p) {
+    return truncateChars((p && (p.description || p.name)) || '', 20);
+  }
+
+  function findProjectByName(name) {
+    const key = String(name || '').trim().toLowerCase();
+    if (!key) return null;
+    return projects.find((p) => p.name.toLowerCase() === key) || null;
+  }
+
+  // 同時比對專案名稱與描述；開頭相符的排前面
+  function filterProjects(query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return projects.slice();
+    const hit = (p) => p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q);
+    const starts = (p) => p.name.toLowerCase().startsWith(q) || (p.description || '').toLowerCase().startsWith(q);
+    const matched = projects.filter(hit);
+    return [...matched.filter(starts), ...matched.filter((p) => !starts(p))];
+  }
+
+  function highlightInto(el, text, query) {
+    const q = String(query || '').trim();
+    const idx = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
+    if (idx < 0) {
+      el.textContent = text;
+      return;
     }
+    el.appendChild(document.createTextNode(text.slice(0, idx)));
+    const mark = document.createElement('mark');
+    mark.textContent = text.slice(idx, idx + q.length);
+    el.appendChild(mark);
+    el.appendChild(document.createTextNode(text.slice(idx + q.length)));
+  }
+
+  /**
+   * 可輸入搜尋的專案下拉。值為專案名稱，'' 代表「全部專案」。
+   * onSelect 只在「使用者操作」造成值改變時觸發（程式呼叫 setValue 不觸發）。
+   */
+  function createProjectCombo({ input, clearBtn, listEl, allLabel, onSelect }) {
+    const defaultTitle = input.title || '';
+    let value = '';
+    let dirty = false; // 使用者正在輸入搜尋字、尚未選定
+    let matches = [];
+    let active = -1;
+
+    const isOpen = () => !listEl.classList.contains('hidden');
+    const itemEls = () => Array.from(listEl.querySelectorAll('.combo-item'));
+
+    function showValue() {
+      dirty = false;
+      const p = findProjectByName(value);
+      if (p) {
+        value = p.name;
+        input.value = projectDisplayText(p);
+        input.title = `${p.description ? `${p.description} ` : ''}(${p.name})`;
+      } else {
+        input.value = truncateChars(value, 20);
+        input.title = value || defaultTitle;
+      }
+      clearBtn.classList.toggle('hidden', !input.value);
+    }
+
+    function setActive(idx, scroll = false) {
+      const els = itemEls();
+      els.forEach((el, i) => el.classList.toggle('active', i === idx));
+      active = idx;
+      if (scroll && els[idx]) els[idx].scrollIntoView({ block: 'nearest' });
+    }
+
+    function addNote(text) {
+      const note = document.createElement('div');
+      note.className = 'combo-note';
+      note.textContent = text;
+      listEl.appendChild(note);
+    }
+
+    function render() {
+      const query = dirty ? input.value : '';
+      matches = filterProjects(query);
+      listEl.innerHTML = '';
+      active = -1;
+
+      if (projects.length === 0) {
+        addNote('尚未載入專案，請先填入網址與 PAT 後按「測試連線並載入專案」。');
+        return;
+      }
+
+      const rows = [];
+      if (!query.trim()) rows.push({ all: true });
+      matches.slice(0, COMBO_MAX_ITEMS).forEach((p) => rows.push({ p }));
+      if (rows.length === 0) {
+        addNote('找不到符合的專案（可搜尋專案名稱或描述）');
+        return;
+      }
+
+      rows.forEach((row, idx) => {
+        const el = document.createElement('div');
+        el.className = 'combo-item';
+        el.setAttribute('role', 'option');
+        const main = document.createElement('div');
+        main.className = 'ci-main';
+        el.appendChild(main);
+
+        if (row.all) {
+          main.textContent = allLabel;
+          el.dataset.name = '';
+          if (!value) el.classList.add('selected');
+        } else {
+          const sub = document.createElement('div');
+          sub.className = 'ci-sub';
+          highlightInto(main, projectDisplayText(row.p), query);
+          highlightInto(sub, truncateChars(row.p.name, 30), query);
+          el.appendChild(sub);
+          el.dataset.name = row.p.name;
+          el.title = `${row.p.description ? `${row.p.description} ` : ''}(${row.p.name})`;
+          if (row.p.name === value) el.classList.add('selected');
+        }
+
+        // 用 mousedown 而非 click，避免輸入框 blur 先關閉清單
+        el.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          choose(el.dataset.name);
+        });
+        el.addEventListener('mousemove', () => setActive(idx));
+        listEl.appendChild(el);
+      });
+
+      if (matches.length > COMBO_MAX_ITEMS) {
+        addNote(`還有 ${matches.length - COMBO_MAX_ITEMS} 筆，請輸入更多關鍵字縮小範圍`);
+      }
+
+      const selectedIdx = itemEls().findIndex((el) => el.classList.contains('selected'));
+      setActive(dirty ? 0 : selectedIdx, !dirty);
+    }
+
+    function open() {
+      listEl.classList.remove('hidden');
+      input.setAttribute('aria-expanded', 'true');
+      render();
+    }
+
+    function close() {
+      listEl.classList.add('hidden');
+      input.setAttribute('aria-expanded', 'false');
+      active = -1;
+    }
+
+    function change(next) {
+      const changed = next !== value;
+      value = next;
+      showValue();
+      if (changed && onSelect) onSelect(value);
+    }
+
+    function choose(name) {
+      change(name);
+      close();
+    }
+
+    // 失去焦點 / 儲存前：把輸入的文字確定成一個專案
+    function commit() {
+      if (!dirty) return value;
+      const text = input.value.trim();
+      let next = value; // 無法確定時還原成原本的選擇
+      if (!text) {
+        next = '';
+      } else if (projects.length === 0) {
+        next = text; // 尚未載入專案清單：保留使用者輸入的名稱
+      } else {
+        const exact = findProjectByName(text);
+        if (exact) {
+          next = exact.name;
+        } else {
+          const found = filterProjects(text);
+          if (found.length === 1) next = found[0].name;
+        }
+      }
+      change(next);
+      return value;
+    }
+
+    input.addEventListener('focus', () => {
+      dirty = false;
+      input.select();
+      open();
+    });
+
+    input.addEventListener('input', () => {
+      dirty = true;
+      clearBtn.classList.toggle('hidden', !input.value);
+      open();
+    });
+
+    input.addEventListener('blur', () => {
+      commit();
+      close();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      const els = itemEls();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!isOpen()) return open();
+        if (els.length) setActive((active + 1) % els.length, true);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!isOpen()) return open();
+        if (els.length) setActive((active - 1 + els.length) % els.length, true);
+      } else if (e.key === 'Enter') {
+        if (isOpen() && els[active]) {
+          e.preventDefault();
+          choose(els[active].dataset.name);
+        }
+      } else if (e.key === 'Escape') {
+        if (isOpen()) {
+          e.preventDefault();
+          showValue();
+          close();
+        }
+      }
+    });
+
+    clearBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      change('');
+      input.focus();
+    });
+
+    showValue();
+
+    return {
+      getValue: () => value,
+      commit,
+      // 程式端設定值（不觸發 onSelect）；使用者正在輸入時不覆蓋輸入框文字
+      setValue(name) {
+        value = String(name || '').trim();
+        if (!dirty) showValue();
+        if (isOpen()) render();
+      }
+    };
   }
 
   // --- Data & Rendering ---
   async function loadConfigIntoForm() {
     const cfg = await callWorker('tfs.getConfig');
     cfgUrl.value = cfg.tfsUrl || '';
-    cfgProject.value = cfg.project || '';
+    if (settingsCombo) settingsCombo.setValue(cfg.project || '');
     cfgApiVersion.value = cfg.apiVersion || '5.0';
     cfgInsecureTls.checked = Boolean(cfg.allowInsecureTls);
     cfgAgent.value = cfg.defaultAgent || 'claude';
@@ -201,6 +441,7 @@
     }
     if (cfg.project) {
       projectFilter = cfg.project;
+      if (filterCombo) filterCombo.setValue(cfg.project);
     }
     return cfg;
   }
@@ -542,6 +783,22 @@
 
   // --- Event Setup ---
   function setupEvents() {
+    settingsCombo = createProjectCombo({
+      input: cfgProject,
+      clearBtn: cfgProjectClear,
+      listEl: projectComboList,
+      allLabel: '📁 全部專案（留空）'
+    });
+    filterCombo = createProjectCombo({
+      input: projectFilterInput,
+      clearBtn: projectFilterClear,
+      listEl: projectFilterList,
+      allLabel: '📁 所有專案（依專案分類顯示）',
+      onSelect: (name) => {
+        projectFilter = name || '__ALL__';
+        refreshWorkItems();
+      }
+    });
     btnRefresh.addEventListener('click', () => {
       showView('list');
       refreshWorkItems();
@@ -591,15 +848,16 @@
       hideBanner();
       btnSaveSettings.disabled = true;
       try {
+        const projectToSave = settingsCombo.commit();
         await callWorker('tfs.saveConfig', {
           tfsUrl: cfgUrl.value,
-          project: cfgProject.value,
+          project: projectToSave,
           apiVersion: cfgApiVersion.value,
           allowInsecureTls: cfgInsecureTls.checked,
           defaultAgent: cfgAgent.value,
           ...(cfgPat.value.trim() ? { pat: cfgPat.value.trim() } : {})
         });
-        projectFilter = cfgProject.value.trim() || '__ALL__';
+        projectFilter = projectToSave || '__ALL__';
         showView('list');
         await refreshWorkItems();
       } catch (err) {
@@ -609,12 +867,7 @@
       }
     });
 
-    // Filters
-    projectSelectFilter.addEventListener('change', () => {
-      projectFilter = projectSelectFilter.value;
-      refreshWorkItems();
-    });
-
+    // Filters（專案篩選由 filterCombo 處理）
     document.getElementById('scope-pills').addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-scope]');
       if (!btn) return;
@@ -706,7 +959,7 @@
         // Adjust active filters if needed so the newly created item is visible in the list
         if (projectFilter !== '__ALL__' && created.projectName && projectFilter !== created.projectName) {
           projectFilter = created.projectName;
-          projectSelectFilter.value = created.projectName;
+          if (filterCombo) filterCombo.setValue(created.projectName);
         }
         if (typeFilter !== 'All' && typeFilter !== created.type) {
           typeFilter = 'All';

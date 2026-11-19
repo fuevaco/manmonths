@@ -395,6 +395,70 @@ html, body {
   min-height: 76px;
 }
 
+/* Searchable project combobox */
+.combo { position: relative; }
+.combo input { padding-right: 26px; }
+
+.combo-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.combo-clear:hover { background: var(--hover-bg); color: var(--fg); }
+
+.combo-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+}
+
+.combo-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+.combo-item:hover,
+.combo-item.active { background: var(--hover-bg); }
+.combo-item.selected .ci-main { color: var(--accent); font-weight: 600; }
+
+.combo-item .ci-main,
+.combo-item .ci-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combo-item .ci-main { font-size: 12px; }
+.combo-item .ci-sub { font-size: 10px; color: var(--muted); }
+.combo-item mark { background: rgba(210, 153, 34, 0.35); color: inherit; border-radius: 2px; }
+
+.combo-note {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .form-actions {
   display: flex;
   align-items: center;

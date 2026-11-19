@@ -22,9 +22,13 @@
 
     <!-- Filter Bar (List View) -->
     <section id="filters-bar" class="filters">
-      <select id="project-filter" class="filter-select" title="依專案分類篩選">
-        <option value="__ALL__">📁 所有專案（依專案分類顯示）</option>
-      </select>
+      <div id="project-filter-combo" class="combo">
+        <input id="project-filter" class="filter-select" type="text" autocomplete="off" spellcheck="false"
+               role="combobox" aria-expanded="false" aria-controls="project-filter-list"
+               placeholder="📁 所有專案（依專案分類顯示）" title="依專案分類篩選，可輸入名稱或描述搜尋">
+        <button id="project-filter-clear" class="combo-clear hidden" type="button" title="清除，顯示所有專案">×</button>
+        <div id="project-filter-list" class="combo-list hidden" role="listbox"></div>
+      </div>
       <input id="search-input" class="search-input" type="text" placeholder="搜尋標題或輸入 #ID（如 #1234）...">
       <div class="filter-row">
         <div class="pill-group" id="scope-pills">
@@ -82,9 +86,14 @@
           <button id="btn-test-conn" class="btn" type="button">🔌 測試連線並載入專案</button>
         </div>
         <div class="field">
-          <label>預設專案名稱（選填，留空則顯示所有專案）</label>
-          <input id="cfg-project" type="text" list="project-list" placeholder="留空代表全部專案">
-          <datalist id="project-list"></datalist>
+          <label>預設專案（選填，留空則顯示所有專案）</label>
+          <div id="project-combo" class="combo">
+            <input id="cfg-project" type="text" autocomplete="off" spellcheck="false"
+                   role="combobox" aria-expanded="false" aria-controls="project-combo-list"
+                   placeholder="輸入專案名稱或描述來搜尋，留空代表全部專案">
+            <button id="cfg-project-clear" class="combo-clear hidden" type="button" title="清除，改為全部專案">×</button>
+            <div id="project-combo-list" class="combo-list hidden" role="listbox"></div>
+          </div>
         </div>
         <div class="field">
           <label>一鍵派工預設 Agent</label>
