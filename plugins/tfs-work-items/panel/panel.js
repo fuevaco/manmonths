@@ -223,9 +223,9 @@
     renderList();
   }
 
-  async function refreshWorkItems() {
-    hideBanner();
-    viewList.innerHTML = '<div class="empty-state">載入 TFS 工項中...</div>';
+  async function refreshWorkItems({ preserveBanner = false, ensureItem = null } = {}) {
+    if (!preserveBanner) hideBanner();
+    viewList.innerHTML = '<div class="empty-state">載入 Azure DevOps 工項中...</div>';
     try {
       const res = await callWorker('tfs.listWorkItems', {
         project: projectFilter,
@@ -236,9 +236,15 @@
       if (res.projects) {
         populateProjectsUI(res.projects);
       }
-      allItems = (res.items || []).filter(
+      let list = (res.items || []).filter(
         (i) => !['Closed', 'Done', 'Removed'].includes(i.state)
       );
+      if (ensureItem && !['Closed', 'Done', 'Removed'].includes(ensureItem.state)) {
+        if (!list.some((i) => i.id === ensureItem.id)) {
+          list = [ensureItem, ...list];
+        }
+      }
+      allItems = list;
       populateStateFilter(allItems);
       setStatus('connected');
       applyStateFilter();
@@ -562,9 +568,36 @@
           assignToMe: createAssignMe.checked,
           iterationPath: createIteration.value
         });
+        const created = res.item;
+        // Adjust active filters if needed so the newly created item is visible in the list
+        if (projectFilter !== '__ALL__' && created.projectName && projectFilter !== created.projectName) {
+          projectFilter = created.projectName;
+          projectSelectFilter.value = created.projectName;
+        }
+        if (typeFilter !== 'All' && typeFilter !== created.type) {
+          typeFilter = 'All';
+          document.querySelectorAll('#type-pills button').forEach((b) =>
+            b.classList.toggle('active', b.dataset.type === 'All')
+          );
+        }
+        if (scope === 'mine' && !createAssignMe.checked) {
+          scope = 'all';
+          document.querySelectorAll('#scope-pills button').forEach((b) =>
+            b.classList.toggle('active', b.dataset.scope === 'all')
+          );
+        }
+        if (stateFilter !== '__ALL_OPEN__' && stateFilter !== created.state) {
+          stateFilter = '__ALL_OPEN__';
+          stateSelectFilter.value = '__ALL_OPEN__';
+        }
+
+        // Optimistically prepend immediately, then sync with server while keeping banner
+        allItems = [created, ...allItems.filter((i) => i.id !== created.id)];
+        populateStateFilter(allItems);
         showView('list');
-        showBanner(`成功建立 ${res.item.type} #${res.item.id} (${res.item.projectLabel})：${res.item.title}`, 'success');
-        await refreshWorkItems();
+        applyStateFilter();
+        showBanner(`成功建立 ${created.type} #${created.id} (${created.projectLabel})：${created.title}`, 'success');
+        await refreshWorkItems({ preserveBanner: true, ensureItem: created });
       } catch (err) {
         showBanner(err.message || String(err), 'error');
       } finally {
@@ -577,6 +610,7 @@
     btnCloseDetail.addEventListener('click', () => {
       hideBanner();
       showView('list');
+      applyStateFilter();
     });
 
     btnDetailOpen.addEventListener('click', () => {
@@ -597,6 +631,12 @@
           id: selectedItem.id,
           state: detailStateSelect.value
         });
+        if (['Closed', 'Done', 'Removed'].includes(res.item.state)) {
+          allItems = allItems.filter((i) => i.id !== res.item.id);
+        } else {
+          allItems = allItems.map((i) => (i.id === res.item.id ? res.item : i));
+        }
+        populateStateFilter(allItems);
         openDetail(res.item);
         showBanner(`已將 #${res.item.id} 狀態更新為 ${res.item.state}`, 'success');
       } catch (err) {

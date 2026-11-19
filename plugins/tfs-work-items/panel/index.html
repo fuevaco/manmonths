@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TFS 工項管理</title>
+  <title>Azure DevOps</title>
   <link rel="stylesheet" href="panel.css">
 </head>
 <body>
   <div id="app">
     <header class="header">
       <div class="header-title">
-        <span id="status-dot" class="status-dot" title="TFS 連線狀態"></span>
-        <span>TFS 工項</span>
+        <span id="status-dot" class="status-dot" title="Azure DevOps 連線狀態"></span>
+        <span>Azure DevOps</span>
       </div>
       <div class="header-actions">
-        <button id="btn-new" class="btn btn-primary" title="新增 Task 或 Bug 到 TFS">＋ 新增</button>
+        <button id="btn-new" class="btn btn-primary" title="新增 Task 或 Bug 到 Azure DevOps">＋ 新增</button>
         <button id="btn-refresh" class="btn" title="重新載入工項列表">🔄</button>
-        <button id="btn-settings" class="btn" title="TFS 連線與 PAT 設定">⚙️</button>
+        <button id="btn-settings" class="btn" title="Azure DevOps 連線與 PAT 設定">⚙️</button>
       </div>
     </header>
 
@@ -48,11 +48,11 @@
       <!-- Settings View -->
       <section id="view-settings" class="panel-box hidden">
         <div class="panel-box-title">
-          <span>TFS 連線與 PAT 設定</span>
+          <span>Azure DevOps 連線與 PAT 設定</span>
           <button id="btn-close-settings" class="btn btn-sm">✕</button>
         </div>
         <div class="field">
-          <label>TFS Collection 網址</label>
+          <label>Azure DevOps / TFS Collection 網址</label>
           <input id="cfg-url" type="url" placeholder="https://tfs.company.com/tfs/DefaultCollection">
         </div>
         <div class="field">
@@ -98,7 +98,7 @@
       <!-- Create Work Item View -->
       <section id="view-create" class="panel-box hidden">
         <div class="panel-box-title">
-          <span>新增 TFS 工項</span>
+          <span>新增 Azure DevOps 工項</span>
           <button id="btn-close-create" class="btn btn-sm">✕</button>
         </div>
         <div class="field">

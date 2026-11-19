@@ -3,9 +3,9 @@
   "execution": "trusted-worker",
   "id": "tfs-work-items",
   "publisher": "manmonths",
-  "name": "TFS 工項管理 (Work Items)",
-  "version": "1.1.4",
-  "description": "人月維護的地端 TFS / Azure DevOps Server 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
+  "name": "Azure DevOps",
+  "version": "1.2.0",
+  "description": "人月維護的 Azure DevOps / 地端 TFS 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
   "author": {
     "name": "人月",
     "url": "https://github.com/fuevaco"
@@ -20,7 +20,7 @@
     "panels": [
       {
         "id": "tfs-work-items",
-        "title": "TFS 工項",
+        "title": "Azure DevOps",
         "icon": "blocks",
         "entry": "panel/index.html",
         "ui": "html"
@@ -29,8 +29,8 @@
     "settings": [
       {
         "key": "tfsUrl",
-        "title": "TFS Collection 網址",
-        "description": "地端 TFS 或 Azure DevOps Server 的 Collection URL（例如：https://tfs.company.com/tfs/DefaultCollection）。",
+        "title": "Azure DevOps / TFS Collection 網址",
+        "description": "Azure DevOps Server 或地端 TFS 的 Collection URL（例如：https://tfs.company.com/tfs/DefaultCollection）。",
         "type": "string",
         "default": "",
         "placeholder": "https://tfs.company.com/tfs/DefaultCollection"
@@ -45,8 +45,8 @@
       },
       {
         "key": "apiVersion",
-        "title": "TFS REST API 版本",
-        "description": "依地端 TFS / Azure DevOps Server 版本選擇（2018u2+ 建議 5.0；2020+ 建議 6.0；2022+ 建議 7.0）。",
+        "title": "REST API 版本",
+        "description": "依 Azure DevOps Server / TFS 版本選擇（2018u2+ 建議 5.0；2020+ 建議 6.0；2022+ 建議 7.0）。",
         "type": "string",
         "default": "5.0",
         "enum": ["4.1", "5.0", "6.0", "7.0"],

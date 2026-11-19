@@ -1,6 +1,6 @@
-# TFS 工項管理 (Work Items)
+# Azure DevOps (Work Items)
 
-專為 **[Orca](https://github.com/stablyai/orca)** 開發的地端 **TFS / Azure DevOps Server** 工項互動側邊欄套件。
+專為 **[Orca](https://github.com/stablyai/orca)** 開發的 **Azure DevOps / 地端 TFS** 工項互動側邊欄套件。
 
 ## ✨ 主要功能
 
@@ -18,7 +18,7 @@
 ## 🚀 使用方式
 
 1. 於 Orca 安裝並啟用 **`manmonths.tfs-work-items`**（需核准權限：`settings:own`、`secrets:own`、`workspace:read`、`agent:launch`、`notifications:show`）。
-2. 點擊右側邊欄的 **TFS 工項** 圖示開啟面板。
+2. 點擊右側邊欄的 **Azure DevOps** 圖示開啟面板。
 3. 在設定畫面填入：
    - **TFS Collection 網址**（例如 `https://tfs.company.com/tfs/DefaultCollection`）
    - **PAT**（需具備 `Work Items (Read & Write)` 權限）
