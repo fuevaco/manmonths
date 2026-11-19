@@ -171,7 +171,7 @@ export function generateCatalog() {
 
   const catalog = {
     catalogVersion: 2,
-    name: 'fuevaco外掛庫',
+    name: '人月外掛庫',
     owner: 'fuevaco',
     plugins: pluginEntries
   };
