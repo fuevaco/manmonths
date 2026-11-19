@@ -323,7 +323,7 @@ export default function activate(orca) {
     const projectFilter = String(input.project !== undefined ? input.project : cfg.project || '').trim();
     const scope = input.scope || 'mine'; // 'mine' | 'all'
     const typeFilter = input.type || 'All'; // 'All' | 'Task' | 'Bug'
-    const hideClosed = input.hideClosed !== false;
+    const stateFilter = String(input.state || '').trim();
     const search = String(input.search || '').trim();
 
     // Direct #ID lookup (collection-level, works across all projects)
@@ -356,8 +356,11 @@ export default function activate(orca) {
       conditions.push(`[System.WorkItemType] IN ('Task', 'Bug')`);
     }
 
-    if (hideClosed) {
-      conditions.push(`[System.State] NOT IN ('Closed', 'Done', 'Removed')`);
+    // Always exclude closed/done/removed items from the list
+    conditions.push(`[System.State] NOT IN ('Closed', 'Done', 'Removed')`);
+
+    if (stateFilter && stateFilter !== '__ALL_OPEN__') {
+      conditions.push(`[System.State] = '${stateFilter.replace(/'/g, "''")}'`);
     }
 
     if (search) {
@@ -370,15 +373,15 @@ export default function activate(orca) {
     // Collection-level WIQL endpoint works across ALL projects when projectFilter is empty
     const wiqlPath =
       projectFilter && projectFilter !== '__ALL__'
-        ? `${encodeURIComponent(projectFilter)}/_apis/wit/wiql?$top=80&api-version=${encodeURIComponent(cfg.apiVersion)}`
-        : `_apis/wit/wiql?$top=80&api-version=${encodeURIComponent(cfg.apiVersion)}`;
+        ? `${encodeURIComponent(projectFilter)}/_apis/wit/wiql?$top=100&api-version=${encodeURIComponent(cfg.apiVersion)}`
+        : `_apis/wit/wiql?$top=100&api-version=${encodeURIComponent(cfg.apiVersion)}`;
 
     const wiqlRes = await tfsRequest(cfg, wiqlPath, {
       method: 'POST',
       body: { query }
     });
 
-    const ids = (wiqlRes?.workItems || []).map((w) => w.id).slice(0, 80);
+    const ids = (wiqlRes?.workItems || []).map((w) => w.id).slice(0, 100);
     if (ids.length === 0) {
       return { items: [], projects };
     }

@@ -36,10 +36,9 @@
           <button data-type="Task">Task</button>
           <button data-type="Bug">Bug</button>
         </div>
-        <label class="checkbox-label">
-          <input id="chk-hide-closed" type="checkbox" checked>
-          <span>隱藏已結案</span>
-        </label>
+        <select id="state-filter" class="filter-select" style="width:auto;flex:1;min-width:85px;height:24px;font-size:11px;" title="依工作狀態篩選">
+          <option value="__ALL_OPEN__">所有狀態</option>
+        </select>
       </div>
     </section>
 

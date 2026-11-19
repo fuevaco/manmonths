@@ -5,10 +5,11 @@
   let projectFilter = '__ALL__';
   let scope = 'mine';
   let typeFilter = 'All';
-  let hideClosed = true;
+  let stateFilter = '__ALL_OPEN__';
   let searchText = '';
   let createType = 'Task';
   let projects = []; // [{ name, description, label }]
+  let allItems = [];
   let items = [];
   let selectedItem = null;
   let searchTimer = null;
@@ -30,7 +31,7 @@
   // Filters
   const projectSelectFilter = document.getElementById('project-filter');
   const searchInput = document.getElementById('search-input');
-  const chkHideClosed = document.getElementById('chk-hide-closed');
+  const stateSelectFilter = document.getElementById('state-filter');
 
   // Settings
   const cfgUrl = document.getElementById('cfg-url');
@@ -192,6 +193,36 @@
     return cfg;
   }
 
+  function populateStateFilter(list) {
+    const prev = stateSelectFilter.value || stateFilter;
+    const states = Array.from(new Set(list.map((i) => i.state).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b, 'zh-Hant')
+    );
+    stateSelectFilter.innerHTML = '<option value="__ALL_OPEN__">所有狀態</option>';
+    for (const st of states) {
+      const opt = document.createElement('option');
+      opt.value = st;
+      opt.textContent = st;
+      stateSelectFilter.appendChild(opt);
+    }
+    if (prev && Array.from(stateSelectFilter.options).some((o) => o.value === prev)) {
+      stateSelectFilter.value = prev;
+      stateFilter = prev;
+    } else {
+      stateSelectFilter.value = '__ALL_OPEN__';
+      stateFilter = '__ALL_OPEN__';
+    }
+  }
+
+  function applyStateFilter() {
+    if (stateFilter === '__ALL_OPEN__') {
+      items = allItems;
+    } else {
+      items = allItems.filter((i) => i.state === stateFilter);
+    }
+    renderList();
+  }
+
   async function refreshWorkItems() {
     hideBanner();
     viewList.innerHTML = '<div class="empty-state">載入 TFS 工項中...</div>';
@@ -200,15 +231,17 @@
         project: projectFilter,
         scope,
         type: typeFilter,
-        hideClosed,
         search: searchText
       });
       if (res.projects) {
         populateProjectsUI(res.projects);
       }
-      items = res.items || [];
+      allItems = (res.items || []).filter(
+        (i) => !['Closed', 'Done', 'Removed'].includes(i.state)
+      );
+      populateStateFilter(allItems);
       setStatus('connected');
-      renderList();
+      applyStateFilter();
     } catch (err) {
       setStatus('error');
       viewList.innerHTML = '';
@@ -458,9 +491,9 @@
       refreshWorkItems();
     });
 
-    chkHideClosed.addEventListener('change', () => {
-      hideClosed = chkHideClosed.checked;
-      refreshWorkItems();
+    stateSelectFilter.addEventListener('change', () => {
+      stateFilter = stateSelectFilter.value;
+      applyStateFilter();
     });
 
     searchInput.addEventListener('input', () => {
