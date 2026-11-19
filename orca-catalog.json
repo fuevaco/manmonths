@@ -49,9 +49,9 @@
       ],
       "releases": [
         {
-          "version": "1.1.0",
-          "commit": "b60558f83b8117964d0a3b1e637e4ab5dc40511e",
-          "contentHash": "5e8c1bbffdf8645d073cb37ac8d26899e269f44b957d594a6ae79dee14728f14",
+          "version": "1.2.0",
+          "commit": "ec5f735d353662d801c9e3fcfcd58aaa7f3ff1a8",
+          "contentHash": "3a9c1108b0c490093d3fa2118a7ab1f70653d67717755c1300af034d82d0d6c4",
           "execution": "data",
           "minimumOrca": "1.4.245",
           "types": [
