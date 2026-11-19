@@ -393,6 +393,53 @@
     }
   }
 
+  function renderDetailStateOptions(item, openStates) {
+    detailStateSelect.innerHTML = '';
+    for (const st of openStates) {
+      const opt = document.createElement('option');
+      opt.value = st;
+      opt.textContent = st;
+      detailStateSelect.appendChild(opt);
+    }
+    if (item.state && !CLOSED_STATES.has(item.state) && !openStates.includes(item.state)) {
+      const opt = document.createElement('option');
+      opt.value = item.state;
+      opt.textContent = item.state;
+      detailStateSelect.prepend(opt);
+    }
+    // Default quick-change state to 已解決 (or Resolved) if available
+    if (openStates.includes('已解決')) {
+      detailStateSelect.value = '已解決';
+    } else if (openStates.includes('Resolved')) {
+      detailStateSelect.value = 'Resolved';
+    } else {
+      detailStateSelect.value = item.state || openStates[0] || '';
+    }
+  }
+
+  async function loadTypeStatesForItem(item) {
+    if (!item || !item.projectName || !item.type) return;
+    try {
+      const res = await callWorker('tfs.getWorkItemTypeStates', {
+        project: item.projectName,
+        type: item.type
+      });
+      // 使用者可能已切換到其他工項，避免覆蓋
+      if (!selectedItem || selectedItem.id !== item.id) return;
+      const states = (res?.states || []).filter((st) => !CLOSED_STATES.has(st));
+      if (states.length === 0) return;
+      const prevValue = detailStateSelect.value;
+      renderDetailStateOptions(item, states);
+      // 保留使用者在載入期間已手動選擇的狀態
+      if (prevValue && prevValue !== detailStateSelect.value &&
+          Array.from(detailStateSelect.options).some((o) => o.value === prevValue)) {
+        detailStateSelect.value = prevValue;
+      }
+    } catch {
+      // 取得失敗時沿用既有清單
+    }
+  }
+
   function openDetail(item) {
     selectedItem = item;
     hideBanner();
@@ -428,28 +475,9 @@
     const bodyText = stripHtml(item.type === 'Bug' ? (item.reproSteps || item.description) : (item.description || item.reproSteps));
     detailDesc.textContent = bodyText || '（無詳細說明）';
 
-    const openStates = getOpenStatesList(allItems);
-    detailStateSelect.innerHTML = '';
-    for (const st of openStates) {
-      const opt = document.createElement('option');
-      opt.value = st;
-      opt.textContent = st;
-      detailStateSelect.appendChild(opt);
-    }
-    if (item.state && !CLOSED_STATES.has(item.state) && !openStates.includes(item.state)) {
-      const opt = document.createElement('option');
-      opt.value = item.state;
-      opt.textContent = item.state;
-      detailStateSelect.prepend(opt);
-    }
-    // Default quick-change state to 已解決 (or Resolved) if available
-    if (openStates.includes('已解決')) {
-      detailStateSelect.value = '已解決';
-    } else if (openStates.includes('Resolved')) {
-      detailStateSelect.value = 'Resolved';
-    } else {
-      detailStateSelect.value = item.state || openStates[0] || '';
-    }
+    // 先以現有資料立即顯示，再非同步載入「此工項類型」的 workflow 狀態
+    renderDetailStateOptions(item, getOpenStatesList(allItems));
+    loadTypeStatesForItem(item);
     detailComment.value = '';
     showView('detail');
     loadCurrentAgentsForDetail();

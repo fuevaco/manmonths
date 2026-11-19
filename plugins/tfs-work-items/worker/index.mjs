@@ -54,6 +54,51 @@ async function fetchOpenStatesCatalog(cfg, projectSample) {
   return cachedOpenStates;
 }
 
+// 依「專案 + 工項類型」取得該類型 workflow 的完整狀態清單（含已關閉類，由呼叫端決定是否過濾）
+const cachedTypeStates = new Map(); // key -> string[]
+
+async function fetchWorkItemTypeStates(cfg, project, wiType) {
+  const proj = String(project || cfg.project || '').trim();
+  const type = String(wiType || '').trim();
+  if (!proj || !type) return [];
+
+  const cacheKey = `${cfg.tfsUrl}|${proj}|${type}|${cfg.apiVersion}`;
+  const cached = cachedTypeStates.get(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const base = `${encodeURIComponent(proj)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}`;
+  const names = [];
+  const add = (raw) => {
+    const name = String(raw || '').trim();
+    if (name && !names.includes(name)) names.push(name);
+  };
+
+  // 1) 專用 states 端點（TFS 2018+ / Azure DevOps）
+  try {
+    const res = await tfsRequest(cfg, `${base}/states?api-version=5.0-preview.1`);
+    for (const st of res?.value || []) add(st.name);
+  } catch {
+    // 忽略，改用型別定義 fallback
+  }
+
+  // 2) Fallback：讀取工項類型定義，使用 states 或 transitions 的 key
+  if (names.length === 0) {
+    const def = await tfsRequest(cfg, `${base}?api-version=${encodeURIComponent(cfg.apiVersion)}`);
+    if (Array.isArray(def?.states)) {
+      for (const st of def.states) add(typeof st === 'string' ? st : st?.name);
+    }
+    if (names.length === 0 && def?.transitions && typeof def.transitions === 'object') {
+      for (const [from, targets] of Object.entries(def.transitions)) {
+        add(from);
+        for (const t of Array.isArray(targets) ? targets : []) add(t?.to);
+      }
+    }
+  }
+
+  if (names.length > 0) cachedTypeStates.set(cacheKey, names);
+  return names;
+}
+
 let cachedProjectKey = '';
 let cachedProjects = []; // [{ name, description, label }]
 let cachedProjectMap = new Map(); // name -> { name, description, label }
@@ -362,6 +407,12 @@ export default function activate(orca) {
     const cfg = await loadConfig(orca);
     const { projects } = await fetchProjectsCatalog(cfg, Boolean(input.force));
     return { projects };
+  });
+
+  orca.panels.handle('tfs.getWorkItemTypeStates', async (input = {}) => {
+    const cfg = await loadConfig(orca);
+    const states = await fetchWorkItemTypeStates(cfg, input.project, input.type);
+    return { states };
   });
 
   orca.panels.handle('tfs.listWorkItems', async (input = {}) => {
