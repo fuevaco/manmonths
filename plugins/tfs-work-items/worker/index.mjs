@@ -512,8 +512,54 @@ export default function activate(orca) {
     return { item: normalizeWorkItem(cfg, updated, projectMap) };
   });
 
+  orca.panels.handle('tfs.listCurrentAgents', async () => {
+    const [ctx, res] = await Promise.all([
+      orca.host.call('workspace.readContext').catch(() => null),
+      orca.host.call('agents.list').catch(() => ({ agents: [] }))
+    ]);
+    const agents = (res?.agents || []).filter((a) => Boolean(a.terminalId));
+    return {
+      workspaceName: ctx?.displayName || '',
+      agents
+    };
+  });
+
   orca.panels.handle('tfs.launchAgent', async (input = {}) => {
     const cfg = await loadConfig(orca);
+    const cleanDesc = stripHtml(input.reproSteps || input.description || '');
+    const projPart = input.projectLabel
+      ? `${input.projectLabel}${input.projectName && input.projectLabel !== input.projectName ? ` (${input.projectName})` : ''}`
+      : '';
+
+    // If targeting an existing Agent terminal in the current focused window
+    if (input.terminalId) {
+      const singleLineDesc = cleanDesc.replace(/\s*\n+\s*/g, ' | ').slice(0, 1500);
+      const compactPrompt = [
+        `請協助處理 Azure DevOps ${input.type || 'Task'} #${input.id}`,
+        projPart ? `專案：${projPart}` : '',
+        `標題：${input.title || ''}`,
+        input.state ? `狀態：${input.state}` : '',
+        singleLineDesc ? `說明：${singleLineDesc}` : ''
+      ].filter(Boolean).join('；');
+
+      const sendRes = await orca.host.call('terminal.sendText', {
+        terminalId: String(input.terminalId),
+        text: compactPrompt,
+        enter: true
+      });
+      if (!sendRes?.accepted) {
+        throw makeError('無法將指令送入目標 Agent 終端機，請確認該視窗仍在開啟狀態。');
+      }
+      const ctx = await orca.host.call('workspace.readContext').catch(() => null);
+      return {
+        ok: true,
+        mode: 'existing',
+        terminalId: input.terminalId,
+        workspaceName: ctx?.displayName || '目前視窗',
+        agent: input.agentLabel || '目前視窗 Agent'
+      };
+    }
+
     const ctx = await orca.host.call('workspace.readContext');
     const listRes = await orca.host.call('workspace.list');
     const workspaces = listRes?.workspaces || [];
@@ -529,10 +575,9 @@ export default function activate(orca) {
       throw makeError('找不到可用的 Orca 工作區，請先開啟一個專案或 Worktree。', 'unavailable');
     }
 
-    const cleanDesc = stripHtml(input.reproSteps || input.description || '');
     const promptLines = [
-      `請協助處理以下 TFS ${input.type || 'Task'} 工項：`,
-      input.projectLabel ? `- 所屬專案：${input.projectLabel}${input.projectName && input.projectLabel !== input.projectName ? ` (${input.projectName})` : ''}` : '',
+      `請協助處理以下 Azure DevOps ${input.type || 'Task'} 工項：`,
+      projPart ? `- 所屬專案：${projPart}` : '',
       `- 工項編號：#${input.id}`,
       `- 標題：${input.title || ''}`,
       input.state ? `- 目前狀態：${input.state}` : '',
@@ -546,6 +591,6 @@ export default function activate(orca) {
       prompt: promptLines.join('\n')
     });
 
-    return { ok: true, terminalId: res.terminalId, workspaceName: targetWorkspace.name, agent: agentName };
+    return { ok: true, mode: 'new', terminalId: res.terminalId, workspaceName: targetWorkspace.name, agent: agentName };
   });
 }

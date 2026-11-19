@@ -70,6 +70,8 @@
   const btnUpdateState = document.getElementById('btn-update-state');
   const btnSendComment = document.getElementById('btn-send-comment');
   const btnLaunchAgent = document.getElementById('btn-launch-agent');
+  const btnRefreshAgents = document.getElementById('btn-refresh-agents');
+  const detailAgentTarget = document.getElementById('detail-agent-target');
   const btnDetailOpen = document.getElementById('btn-detail-open');
   const btnCloseDetail = document.getElementById('btn-close-detail');
 
@@ -404,6 +406,45 @@
     detailStateSelect.value = item.state || 'New';
     detailComment.value = '';
     showView('detail');
+    loadCurrentAgentsForDetail();
+  }
+
+  async function loadCurrentAgentsForDetail() {
+    if (!detailAgentTarget) return;
+    detailAgentTarget.innerHTML = '<option value="__NEW__">➕ 啟動新的 Agent</option>';
+    try {
+      const res = await callWorker('tfs.listCurrentAgents');
+      const agents = res?.agents || [];
+      const stateLabelMap = {
+        waiting: '等待輸入',
+        done: '已完成',
+        working: '執行中',
+        blocked: '待確認'
+      };
+      detailAgentTarget.innerHTML = '';
+      for (const a of agents) {
+        const opt = document.createElement('option');
+        opt.value = a.terminalId;
+        const name = a.title || a.agent || 'Agent';
+        const st = stateLabelMap[a.state] || a.state || '';
+        opt.textContent = `⚡ 目前視窗：${name}${st ? ` (${st})` : ''}`;
+        detailAgentTarget.appendChild(opt);
+      }
+      const newOpt = document.createElement('option');
+      newOpt.value = '__NEW__';
+      newOpt.textContent = `➕ 啟動新的 Agent (${cfgAgent.value || 'claude'})`;
+      detailAgentTarget.appendChild(newOpt);
+
+      // Prefer an idle/waiting/done agent in the current window if available
+      const preferred = agents.find((a) => a.state === 'waiting' || a.state === 'done') || agents[0];
+      if (preferred) {
+        detailAgentTarget.value = preferred.terminalId;
+      } else {
+        detailAgentTarget.value = '__NEW__';
+      }
+    } catch {
+      detailAgentTarget.innerHTML = '<option value="__NEW__">➕ 啟動新的 Agent</option>';
+    }
   }
 
   // --- Event Setup ---
@@ -667,13 +708,27 @@
       }
     });
 
+    if (btnRefreshAgents) {
+      btnRefreshAgents.addEventListener('click', loadCurrentAgentsForDetail);
+    }
+
     btnLaunchAgent.addEventListener('click', async () => {
       if (!selectedItem) return;
       hideBanner();
       btnLaunchAgent.disabled = true;
       try {
-        const res = await callWorker('tfs.launchAgent', selectedItem);
-        showBanner(`已在工作區「${res.workspaceName}」啟動 ${res.agent} 處理 #${res.id}`, 'success');
+        const targetVal = detailAgentTarget ? detailAgentTarget.value : '__NEW__';
+        const payload = { ...selectedItem };
+        if (targetVal && targetVal !== '__NEW__') {
+          payload.terminalId = targetVal;
+          payload.agentLabel = detailAgentTarget.options[detailAgentTarget.selectedIndex]?.textContent || '';
+        }
+        const res = await callWorker('tfs.launchAgent', payload);
+        if (res.mode === 'existing') {
+          showBanner(`已將 #${selectedItem.id} 指派給「${res.agent}」(${res.workspaceName})`, 'success');
+        } else {
+          showBanner(`已在工作區「${res.workspaceName}」啟動新 ${res.agent} 處理 #${selectedItem.id}`, 'success');
+        }
       } catch (err) {
         showBanner(err.message || String(err), 'error');
       } finally {
