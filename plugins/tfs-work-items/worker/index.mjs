@@ -3,6 +3,10 @@ import https from 'node:https';
 
 const SECRET_PAT_KEY = 'tfs_pat';
 
+let cachedProjectKey = '';
+let cachedProjects = []; // [{ name, description, label }]
+let cachedProjectMap = new Map(); // name -> { name, description, label }
+
 function normalizeBaseUrl(rawUrl) {
   return String(rawUrl || '').trim().replace(/\/+$/, '');
 }
@@ -55,7 +59,7 @@ function tfsRequest(config, relativePath, { method = 'GET', body = null, content
     const headers = {
       Authorization: `Basic ${authToken}`,
       Accept: 'application/json',
-      'User-Agent': 'Orca-TFS-WorkItems/1.0.0'
+      'User-Agent': 'Orca-TFS-WorkItems/1.1.0'
     };
 
     if (payload !== null) {
@@ -134,22 +138,58 @@ function tfsRequest(config, relativePath, { method = 'GET', body = null, content
   });
 }
 
+async function fetchProjectsCatalog(cfg, forceRefresh = false) {
+  const cacheKey = `${cfg.tfsUrl}|${cfg.apiVersion}|${cfg.allowInsecureTls}`;
+  if (!forceRefresh && cachedProjectKey === cacheKey && cachedProjects.length > 0) {
+    return { projects: cachedProjects, projectMap: cachedProjectMap };
+  }
+
+  const data = await tfsRequest(cfg, `_apis/projects?$top=500&api-version=${encodeURIComponent(cfg.apiVersion)}`);
+  const list = (data?.value || []).map((p) => {
+    const name = String(p.name || '').trim();
+    const desc = String(p.description || '').trim();
+    // Prefer description as primary display label instead of cryptic project code like pj2014
+    const label = desc || name;
+    return {
+      id: p.id,
+      name,
+      description: desc,
+      label
+    };
+  });
+
+  list.sort((a, b) => a.label.localeCompare(b.label, 'zh-Hant'));
+  cachedProjectKey = cacheKey;
+  cachedProjects = list;
+  cachedProjectMap = new Map(list.map((p) => [p.name, p]));
+  return { projects: cachedProjects, projectMap: cachedProjectMap };
+}
+
 function formatAssignedTo(raw) {
   if (!raw) return '';
   if (typeof raw === 'string') return raw;
   return raw.displayName || raw.uniqueName || '';
 }
 
-function buildWorkItemWebUrl(config, id) {
-  if (!config.tfsUrl || !config.project) return '';
-  return `${config.tfsUrl}/${encodeURIComponent(config.project)}/_workitems/edit/${id}`;
+function buildWorkItemWebUrl(config, projectName, id) {
+  if (!config.tfsUrl) return '';
+  if (projectName) {
+    return `${config.tfsUrl}/${encodeURIComponent(projectName)}/_workitems/edit/${id}`;
+  }
+  return `${config.tfsUrl}/_workitems/edit/${id}`;
 }
 
-function normalizeWorkItem(config, item) {
+function normalizeWorkItem(config, item, projectMap) {
   const f = item.fields || {};
+  const projectName = String(f['System.TeamProject'] || '').trim();
+  const projInfo = projectMap.get(projectName);
+  const projectLabel = projInfo?.label || projectName || '未分類專案';
+
   return {
     id: item.id,
     rev: item.rev,
+    projectName,
+    projectLabel,
     type: f['System.WorkItemType'] || 'Task',
     title: f['System.Title'] || '',
     state: f['System.State'] || '',
@@ -161,7 +201,7 @@ function normalizeWorkItem(config, item) {
     reproSteps: f['Microsoft.VSTS.TCM.ReproSteps'] || '',
     createdDate: f['System.CreatedDate'] || '',
     changedDate: f['System.ChangedDate'] || '',
-    webUrl: item._links?.html?.href || buildWorkItemWebUrl(config, item.id)
+    webUrl: item._links?.html?.href || buildWorkItemWebUrl(config, projectName, item.id)
   };
 }
 
@@ -179,6 +219,22 @@ function stripHtml(html) {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+const WORK_ITEM_FIELDS = [
+  'System.Id',
+  'System.TeamProject',
+  'System.Title',
+  'System.WorkItemType',
+  'System.State',
+  'System.AssignedTo',
+  'System.IterationPath',
+  'System.AreaPath',
+  'System.CreatedDate',
+  'System.ChangedDate',
+  'Microsoft.VSTS.Common.Priority',
+  'System.Description',
+  'Microsoft.VSTS.TCM.ReproSteps'
+].join(',');
 
 export default function activate(orca) {
   orca.log('TFS Work Items worker activated.');
@@ -214,6 +270,7 @@ export default function activate(orca) {
     if (typeof input.pat === 'string' && input.pat.trim()) {
       await orca.secrets.set(SECRET_PAT_KEY, input.pat.trim());
     }
+    cachedProjectKey = '';
     const cfg = await loadConfig(orca);
     return {
       ok: true,
@@ -236,51 +293,51 @@ export default function activate(orca) {
       ...(input?.pat ? { pat: String(input.pat).trim() } : {})
     };
 
-    const data = await tfsRequest(cfg, `_apis/projects?api-version=${encodeURIComponent(cfg.apiVersion)}`);
-    const projects = (data?.value || []).map((p) => p.name).sort((a, b) => a.localeCompare(b));
+    const { projects } = await fetchProjectsCatalog(cfg, true);
     return {
       ok: true,
       projects
     };
   });
 
+  orca.panels.handle('tfs.listProjects', async (input = {}) => {
+    const cfg = await loadConfig(orca);
+    const { projects } = await fetchProjectsCatalog(cfg, Boolean(input.force));
+    return { projects };
+  });
+
   orca.panels.handle('tfs.listWorkItems', async (input = {}) => {
     const cfg = await loadConfig(orca);
-    if (!cfg.project) {
-      throw makeError('請先在設定中填寫或選擇 TFS 專案名稱 (Project)。', 'invalid_params');
-    }
+    const { projects, projectMap } = await fetchProjectsCatalog(cfg, false).catch(() => ({
+      projects: cachedProjects,
+      projectMap: cachedProjectMap
+    }));
 
+    const projectFilter = String(input.project !== undefined ? input.project : cfg.project || '').trim();
     const scope = input.scope || 'mine'; // 'mine' | 'all'
     const typeFilter = input.type || 'All'; // 'All' | 'Task' | 'Bug'
     const hideClosed = input.hideClosed !== false;
     const search = String(input.search || '').trim();
 
-    // Direct #ID lookup
+    // Direct #ID lookup (collection-level, works across all projects)
     const idMatch = search.match(/^#?(\d+)$/);
     if (idMatch) {
       const targetId = Number(idMatch[1]);
-      const fields = [
-        'System.Id',
-        'System.Title',
-        'System.WorkItemType',
-        'System.State',
-        'System.AssignedTo',
-        'System.IterationPath',
-        'System.AreaPath',
-        'System.CreatedDate',
-        'System.ChangedDate',
-        'Microsoft.VSTS.Common.Priority',
-        'System.Description',
-        'Microsoft.VSTS.TCM.ReproSteps'
-      ].join(',');
       const item = await tfsRequest(
         cfg,
-        `${encodeURIComponent(cfg.project)}/_apis/wit/workitems/${targetId}?fields=${encodeURIComponent(fields)}&api-version=${encodeURIComponent(cfg.apiVersion)}`
+        `_apis/wit/workitems/${targetId}?fields=${encodeURIComponent(WORK_ITEM_FIELDS)}&api-version=${encodeURIComponent(cfg.apiVersion)}`
       );
-      return { items: item ? [normalizeWorkItem(cfg, item)] : [] };
+      return {
+        items: item ? [normalizeWorkItem(cfg, item, projectMap)] : [],
+        projects
+      };
     }
 
-    const conditions = [`[System.TeamProject] = '${cfg.project.replace(/'/g, "''")}'`];
+    const conditions = [];
+
+    if (projectFilter && projectFilter !== '__ALL__') {
+      conditions.push(`[System.TeamProject] = '${projectFilter.replace(/'/g, "''")}'`);
+    }
 
     if (scope === 'mine') {
       conditions.push('[System.AssignedTo] = @Me');
@@ -300,51 +357,40 @@ export default function activate(orca) {
       conditions.push(`[System.Title] CONTAINS '${search.replace(/'/g, "''")}'`);
     }
 
-    const query = `SELECT [System.Id] FROM WorkItems WHERE ${conditions.join(' AND ')} ORDER BY [System.ChangedDate] DESC`;
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const query = `SELECT [System.Id] FROM WorkItems ${whereClause} ORDER BY [System.ChangedDate] DESC`;
 
-    const wiqlRes = await tfsRequest(
-      cfg,
-      `${encodeURIComponent(cfg.project)}/_apis/wit/wiql?$top=50&api-version=${encodeURIComponent(cfg.apiVersion)}`,
-      {
-        method: 'POST',
-        body: { query }
-      }
-    );
+    // Collection-level WIQL endpoint works across ALL projects when projectFilter is empty
+    const wiqlPath =
+      projectFilter && projectFilter !== '__ALL__'
+        ? `${encodeURIComponent(projectFilter)}/_apis/wit/wiql?$top=80&api-version=${encodeURIComponent(cfg.apiVersion)}`
+        : `_apis/wit/wiql?$top=80&api-version=${encodeURIComponent(cfg.apiVersion)}`;
 
-    const ids = (wiqlRes?.workItems || []).map((w) => w.id).slice(0, 50);
+    const wiqlRes = await tfsRequest(cfg, wiqlPath, {
+      method: 'POST',
+      body: { query }
+    });
+
+    const ids = (wiqlRes?.workItems || []).map((w) => w.id).slice(0, 80);
     if (ids.length === 0) {
-      return { items: [] };
+      return { items: [], projects };
     }
-
-    const fields = [
-      'System.Id',
-      'System.Title',
-      'System.WorkItemType',
-      'System.State',
-      'System.AssignedTo',
-      'System.IterationPath',
-      'System.AreaPath',
-      'System.CreatedDate',
-      'System.ChangedDate',
-      'Microsoft.VSTS.Common.Priority',
-      'System.Description',
-      'Microsoft.VSTS.TCM.ReproSteps'
-    ].join(',');
 
     const batchRes = await tfsRequest(
       cfg,
-      `${encodeURIComponent(cfg.project)}/_apis/wit/workitems?ids=${ids.join(',')}&fields=${encodeURIComponent(fields)}&api-version=${encodeURIComponent(cfg.apiVersion)}`
+      `_apis/wit/workitems?ids=${ids.join(',')}&fields=${encodeURIComponent(WORK_ITEM_FIELDS)}&api-version=${encodeURIComponent(cfg.apiVersion)}`
     );
 
-    const byId = new Map((batchRes?.value || []).map((item) => [item.id, normalizeWorkItem(cfg, item)]));
+    const byId = new Map((batchRes?.value || []).map((item) => [item.id, normalizeWorkItem(cfg, item, projectMap)]));
     const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
-    return { items: ordered };
+    return { items: ordered, projects };
   });
 
   orca.panels.handle('tfs.createWorkItem', async (input = {}) => {
     const cfg = await loadConfig(orca);
-    if (!cfg.project) {
-      throw makeError('請先設定 TFS 專案名稱。', 'invalid_params');
+    const targetProject = String(input.project || cfg.project || '').trim();
+    if (!targetProject || targetProject === '__ALL__') {
+      throw makeError('請選擇要建立工項的目標專案。', 'invalid_params');
     }
 
     const type = input.type === 'Bug' ? 'Bug' : 'Task';
@@ -399,7 +445,7 @@ export default function activate(orca) {
 
     const created = await tfsRequest(
       cfg,
-      `${encodeURIComponent(cfg.project)}/_apis/wit/workitems/$${type}?api-version=${encodeURIComponent(cfg.apiVersion)}`,
+      `${encodeURIComponent(targetProject)}/_apis/wit/workitems/$${type}?api-version=${encodeURIComponent(cfg.apiVersion)}`,
       {
         method: 'POST',
         body: patch,
@@ -407,9 +453,10 @@ export default function activate(orca) {
       }
     );
 
-    const normalized = normalizeWorkItem(cfg, created);
+    const { projectMap } = await fetchProjectsCatalog(cfg, false).catch(() => ({ projectMap: cachedProjectMap }));
+    const normalized = normalizeWorkItem(cfg, created, projectMap);
     orca.host.call('notifications.show', {
-      title: `已建立 TFS ${normalized.type} #${normalized.id}`,
+      title: `已建立 TFS ${normalized.type} #${normalized.id} (${normalized.projectLabel})`,
       body: normalized.title
     }).catch(() => {});
 
@@ -443,7 +490,7 @@ export default function activate(orca) {
 
     const updated = await tfsRequest(
       cfg,
-      `${encodeURIComponent(cfg.project)}/_apis/wit/workitems/${id}?api-version=${encodeURIComponent(cfg.apiVersion)}`,
+      `_apis/wit/workitems/${id}?api-version=${encodeURIComponent(cfg.apiVersion)}`,
       {
         method: 'PATCH',
         body: patch,
@@ -451,7 +498,8 @@ export default function activate(orca) {
       }
     );
 
-    return { item: normalizeWorkItem(cfg, updated) };
+    const { projectMap } = await fetchProjectsCatalog(cfg, false).catch(() => ({ projectMap: cachedProjectMap }));
+    return { item: normalizeWorkItem(cfg, updated, projectMap) };
   });
 
   orca.panels.handle('tfs.launchAgent', async (input = {}) => {
@@ -474,6 +522,7 @@ export default function activate(orca) {
     const cleanDesc = stripHtml(input.reproSteps || input.description || '');
     const promptLines = [
       `請協助處理以下 TFS ${input.type || 'Task'} 工項：`,
+      input.projectLabel ? `- 所屬專案：${input.projectLabel}${input.projectName && input.projectLabel !== input.projectName ? ` (${input.projectName})` : ''}` : '',
       `- 工項編號：#${input.id}`,
       `- 標題：${input.title || ''}`,
       input.state ? `- 目前狀態：${input.state}` : '',

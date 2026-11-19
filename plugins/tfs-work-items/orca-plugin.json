@@ -4,7 +4,7 @@
   "id": "tfs-work-items",
   "publisher": "manmonths",
   "name": "TFS 工項管理 (Work Items)",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "人月維護的地端 TFS / Azure DevOps Server 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
   "author": {
     "name": "人月",
@@ -37,11 +37,11 @@
       },
       {
         "key": "project",
-        "title": "專案名稱 (Project)",
-        "description": "預設要查詢與新增工項的 TFS Team Project 名稱。",
+        "title": "預設專案名稱 (選填)",
+        "description": "選填；若留空則預設查詢整個 Collection 的所有專案工項，並可在面板內依專案分類篩選。",
         "type": "string",
         "default": "",
-        "placeholder": "MyProject"
+        "placeholder": "留空代表全部專案"
       },
       {
         "key": "apiVersion",

@@ -22,6 +22,9 @@
 
     <!-- Filter Bar (List View) -->
     <section id="filters-bar" class="filters">
+      <select id="project-filter" class="filter-select" title="依專案分類篩選">
+        <option value="__ALL__">📁 所有專案（依專案分類顯示）</option>
+      </select>
       <input id="search-input" class="search-input" type="text" placeholder="搜尋標題或輸入 #ID（如 #1234）...">
       <div class="filter-row">
         <div class="pill-group" id="scope-pills">
@@ -80,8 +83,8 @@
           <button id="btn-test-conn" class="btn" type="button">🔌 測試連線並載入專案</button>
         </div>
         <div class="field">
-          <label>專案名稱 (Project)</label>
-          <input id="cfg-project" type="text" list="project-list" placeholder="輸入或選擇 TFS 專案名稱">
+          <label>預設專案名稱（選填，留空則顯示所有專案）</label>
+          <input id="cfg-project" type="text" list="project-list" placeholder="留空代表全部專案">
           <datalist id="project-list"></datalist>
         </div>
         <div class="field">
@@ -98,6 +101,10 @@
         <div class="panel-box-title">
           <span>新增 TFS 工項</span>
           <button id="btn-close-create" class="btn btn-sm">✕</button>
+        </div>
+        <div class="field">
+          <label>所屬專案 *</label>
+          <select id="create-project"></select>
         </div>
         <div class="field">
           <label>工項類型</label>

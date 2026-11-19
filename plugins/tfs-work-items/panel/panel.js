@@ -2,11 +2,13 @@
   'use strict';
 
   // --- State ---
+  let projectFilter = '__ALL__';
   let scope = 'mine';
   let typeFilter = 'All';
   let hideClosed = true;
   let searchText = '';
   let createType = 'Task';
+  let projects = []; // [{ name, description, label }]
   let items = [];
   let selectedItem = null;
   let searchTimer = null;
@@ -26,6 +28,7 @@
   const btnSettings = document.getElementById('btn-settings');
 
   // Filters
+  const projectSelectFilter = document.getElementById('project-filter');
   const searchInput = document.getElementById('search-input');
   const chkHideClosed = document.getElementById('chk-hide-closed');
 
@@ -44,6 +47,7 @@
   const btnCloseSettings = document.getElementById('btn-close-settings');
 
   // Create
+  const createProject = document.getElementById('create-project');
   const createTitle = document.getElementById('create-title');
   const createDesc = document.getElementById('create-desc');
   const createDescLabel = document.getElementById('create-desc-label');
@@ -119,6 +123,52 @@
     document.body.classList.toggle('dark', !isLight);
   }
 
+  function populateProjectsUI(list) {
+    if (!Array.isArray(list) || list.length === 0) return;
+    projects = list;
+
+    // 1. Filter dropdown
+    const prevFilter = projectSelectFilter.value || projectFilter;
+    projectSelectFilter.innerHTML = '<option value="__ALL__">📁 所有專案（依專案分類顯示）</option>';
+    for (const p of projects) {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.description ? `${p.description}` : p.name;
+      opt.title = p.name;
+      projectSelectFilter.appendChild(opt);
+    }
+    if (prevFilter && Array.from(projectSelectFilter.options).some((o) => o.value === prevFilter)) {
+      projectSelectFilter.value = prevFilter;
+    } else {
+      projectSelectFilter.value = '__ALL__';
+      projectFilter = '__ALL__';
+    }
+
+    // 2. Create form dropdown
+    const prevCreate = createProject.value;
+    createProject.innerHTML = '';
+    for (const p of projects) {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.description ? `${p.description} (${p.name})` : p.name;
+      createProject.appendChild(opt);
+    }
+    if (prevCreate && Array.from(createProject.options).some((o) => o.value === prevCreate)) {
+      createProject.value = prevCreate;
+    } else if (projectFilter !== '__ALL__' && Array.from(createProject.options).some((o) => o.value === projectFilter)) {
+      createProject.value = projectFilter;
+    }
+
+    // 3. Settings datalist
+    projectList.innerHTML = '';
+    for (const p of projects) {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      if (p.description) opt.label = p.description;
+      projectList.appendChild(opt);
+    }
+  }
+
   // --- Data & Rendering ---
   async function loadConfigIntoForm() {
     const cfg = await callWorker('tfs.getConfig');
@@ -135,6 +185,9 @@
       cfgPatStatus.textContent = '尚未儲存 PAT';
       btnClearPat.classList.add('hidden');
     }
+    if (cfg.project) {
+      projectFilter = cfg.project;
+    }
     return cfg;
   }
 
@@ -143,11 +196,15 @@
     viewList.innerHTML = '<div class="empty-state">載入 TFS 工項中...</div>';
     try {
       const res = await callWorker('tfs.listWorkItems', {
+        project: projectFilter,
         scope,
         type: typeFilter,
         hideClosed,
         search: searchText
       });
+      if (res.projects) {
+        populateProjectsUI(res.projects);
+      }
       items = res.items || [];
       setStatus('connected');
       renderList();
@@ -158,6 +215,57 @@
     }
   }
 
+  function createWorkItemCard(item, showProjectBadge) {
+    const card = document.createElement('div');
+    card.className = 'wi-card';
+
+    const meta = document.createElement('div');
+    meta.className = 'wi-meta';
+
+    const idSpan = document.createElement('span');
+    idSpan.className = 'wi-id';
+    idSpan.textContent = `#${item.id}`;
+
+    const typeBadge = document.createElement('span');
+    typeBadge.className = `badge ${item.type === 'Bug' ? 'badge-bug' : 'badge-task'}`;
+    typeBadge.textContent = item.type;
+
+    meta.append(idSpan, typeBadge);
+
+    if (showProjectBadge && item.projectLabel) {
+      const projBadge = document.createElement('span');
+      projBadge.className = 'badge badge-project';
+      projBadge.textContent = item.projectLabel;
+      projBadge.title = item.projectName || item.projectLabel;
+      meta.appendChild(projBadge);
+    }
+
+    const stateBadge = document.createElement('span');
+    stateBadge.className = 'badge badge-state';
+    stateBadge.textContent = item.state;
+    meta.appendChild(stateBadge);
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'wi-title';
+    titleDiv.textContent = item.title;
+
+    const subDiv = document.createElement('div');
+    subDiv.className = 'wi-sub';
+
+    const ownerSpan = document.createElement('span');
+    ownerSpan.textContent = item.assignedTo ? `👤 ${item.assignedTo}` : '未指派';
+
+    const iterSpan = document.createElement('span');
+    const shortIter = item.iterationPath ? item.iterationPath.split('\\').pop() : '';
+    iterSpan.textContent = shortIter;
+
+    subDiv.append(ownerSpan, iterSpan);
+
+    card.append(meta, titleDiv, subDiv);
+    card.addEventListener('click', () => openDetail(item));
+    return card;
+  }
+
   function renderList() {
     viewList.innerHTML = '';
     if (items.length === 0) {
@@ -165,46 +273,48 @@
       return;
     }
 
-    for (const item of items) {
-      const card = document.createElement('div');
-      card.className = 'wi-card';
+    // Group by project description when showing all projects
+    if (projectFilter === '__ALL__') {
+      const groups = new Map();
+      for (const item of items) {
+        const key = item.projectName || 'unknown';
+        if (!groups.has(key)) {
+          groups.set(key, {
+            label: item.projectLabel || key,
+            name: item.projectName || '',
+            items: []
+          });
+        }
+        groups.get(key).items.push(item);
+      }
 
-      const meta = document.createElement('div');
-      meta.className = 'wi-meta';
+      const sortedGroups = Array.from(groups.values()).sort((a, b) =>
+        a.label.localeCompare(b.label, 'zh-Hant')
+      );
 
-      const idSpan = document.createElement('span');
-      idSpan.className = 'wi-id';
-      idSpan.textContent = `#${item.id}`;
+      for (const group of sortedGroups) {
+        const header = document.createElement('div');
+        header.className = 'project-group-header';
+        header.title = group.name;
 
-      const typeBadge = document.createElement('span');
-      typeBadge.className = `badge ${item.type === 'Bug' ? 'badge-bug' : 'badge-task'}`;
-      typeBadge.textContent = item.type;
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = `📁 ${group.label}`;
 
-      const stateBadge = document.createElement('span');
-      stateBadge.className = 'badge badge-state';
-      stateBadge.textContent = item.state;
+        const countSpan = document.createElement('span');
+        countSpan.className = 'project-group-count';
+        countSpan.textContent = String(group.items.length);
 
-      meta.append(idSpan, typeBadge, stateBadge);
+        header.append(titleSpan, countSpan);
+        viewList.appendChild(header);
 
-      const titleDiv = document.createElement('div');
-      titleDiv.className = 'wi-title';
-      titleDiv.textContent = item.title;
-
-      const subDiv = document.createElement('div');
-      subDiv.className = 'wi-sub';
-
-      const ownerSpan = document.createElement('span');
-      ownerSpan.textContent = item.assignedTo ? `👤 ${item.assignedTo}` : '未指派';
-
-      const iterSpan = document.createElement('span');
-      const shortIter = item.iterationPath ? item.iterationPath.split('\\').pop() : '';
-      iterSpan.textContent = shortIter;
-
-      subDiv.append(ownerSpan, iterSpan);
-
-      card.append(meta, titleDiv, subDiv);
-      card.addEventListener('click', () => openDetail(item));
-      viewList.appendChild(card);
+        for (const item of group.items) {
+          viewList.appendChild(createWorkItemCard(item, false));
+        }
+      }
+    } else {
+      for (const item of items) {
+        viewList.appendChild(createWorkItemCard(item, false));
+      }
     }
   }
 
@@ -217,10 +327,20 @@
     const typeBadge = document.createElement('span');
     typeBadge.className = `badge ${item.type === 'Bug' ? 'badge-bug' : 'badge-task'}`;
     typeBadge.textContent = item.type;
+    detailBadges.appendChild(typeBadge);
+
+    if (item.projectLabel) {
+      const projBadge = document.createElement('span');
+      projBadge.className = 'badge badge-project';
+      projBadge.textContent = item.projectLabel;
+      projBadge.title = item.projectName || item.projectLabel;
+      detailBadges.appendChild(projBadge);
+    }
+
     const stateBadge = document.createElement('span');
     stateBadge.className = 'badge badge-state';
     stateBadge.textContent = item.state;
-    detailBadges.append(typeBadge, stateBadge);
+    detailBadges.appendChild(stateBadge);
 
     detailTitle.textContent = item.title;
     const infoParts = [
@@ -233,7 +353,6 @@
     const bodyText = stripHtml(item.type === 'Bug' ? (item.reproSteps || item.description) : (item.description || item.reproSteps));
     detailDesc.textContent = bodyText || '（無詳細說明）';
 
-    // Ensure current state is in dropdown
     const hasOption = Array.from(detailStateSelect.options).some((o) => o.value === item.state);
     if (!hasOption && item.state) {
       const opt = document.createElement('option');
@@ -275,17 +394,9 @@
           allowInsecureTls: cfgInsecureTls.checked,
           ...(cfgPat.value.trim() ? { pat: cfgPat.value.trim() } : {})
         });
-        projectList.innerHTML = '';
-        for (const proj of res.projects || []) {
-          const opt = document.createElement('option');
-          opt.value = proj;
-          projectList.appendChild(opt);
-        }
-        if (!cfgProject.value && res.projects?.length === 1) {
-          cfgProject.value = res.projects[0];
-        }
+        populateProjectsUI(res.projects || []);
         setStatus('connected');
-        showBanner(`連線成功！共找到 ${res.projects.length} 個專案，請選擇後儲存設定。`, 'success');
+        showBanner(`連線成功！共載入 ${(res.projects || []).length} 個專案（若預設專案留空將顯示所有專案）。`, 'success');
       } catch (err) {
         setStatus('error');
         showBanner(err.message || String(err), 'error');
@@ -313,6 +424,7 @@
           defaultAgent: cfgAgent.value,
           ...(cfgPat.value.trim() ? { pat: cfgPat.value.trim() } : {})
         });
+        projectFilter = cfgProject.value.trim() || '__ALL__';
         showView('list');
         await refreshWorkItems();
       } catch (err) {
@@ -323,6 +435,11 @@
     });
 
     // Filters
+    projectSelectFilter.addEventListener('change', () => {
+      projectFilter = projectSelectFilter.value;
+      refreshWorkItems();
+    });
+
     document.getElementById('scope-pills').addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-scope]');
       if (!btn) return;
@@ -351,8 +468,20 @@
     });
 
     // Create View
-    btnNew.addEventListener('click', () => {
+    btnNew.addEventListener('click', async () => {
       hideBanner();
+      if (projects.length === 0) {
+        try {
+          const res = await callWorker('tfs.listProjects', {});
+          populateProjectsUI(res.projects || []);
+        } catch (err) {
+          showBanner(err.message || String(err), 'error');
+          return;
+        }
+      }
+      if (projectFilter !== '__ALL__' && Array.from(createProject.options).some((o) => o.value === projectFilter)) {
+        createProject.value = projectFilter;
+      }
       createTitle.value = '';
       createDesc.value = '';
       showView('create');
@@ -376,6 +505,11 @@
 
     btnSubmitCreate.addEventListener('click', async () => {
       hideBanner();
+      const targetProj = createProject.value;
+      if (!targetProj) {
+        showBanner('請選擇所屬專案！', 'error');
+        return;
+      }
       const title = createTitle.value.trim();
       if (!title) {
         showBanner('請輸入工項標題！', 'error');
@@ -385,6 +519,7 @@
       btnSubmitCreate.textContent = '建立中...';
       try {
         const res = await callWorker('tfs.createWorkItem', {
+          project: targetProj,
           type: createType,
           title,
           description: createDesc.value,
@@ -393,7 +528,7 @@
           iterationPath: createIteration.value
         });
         showView('list');
-        showBanner(`成功建立 ${res.item.type} #${res.item.id}：${res.item.title}`, 'success');
+        showBanner(`成功建立 ${res.item.type} #${res.item.id} (${res.item.projectLabel})：${res.item.title}`, 'success');
         await refreshWorkItems();
       } catch (err) {
         showBanner(err.message || String(err), 'error');
@@ -463,7 +598,7 @@
       btnLaunchAgent.disabled = true;
       try {
         const res = await callWorker('tfs.launchAgent', selectedItem);
-        showBanner(`已在工作區「${res.workspaceName}」啟動 ${res.agent} 處理 #${selectedItem.id}`, 'success');
+        showBanner(`已在工作區「${res.workspaceName}」啟動 ${res.agent} 處理 #${res.id}`, 'success');
       } catch (err) {
         showBanner(err.message || String(err), 'error');
       } finally {
@@ -485,9 +620,9 @@
 
     try {
       const cfg = await loadConfigIntoForm();
-      if (!cfg.tfsUrl || !cfg.hasPat || !cfg.project) {
+      if (!cfg.tfsUrl || !cfg.hasPat) {
         showView('settings');
-        showBanner('請先設定地端 TFS Collection 網址、PAT 與專案名稱。', 'info');
+        showBanner('請先設定地端 TFS Collection 網址與 PAT（專案名稱可留空以檢視所有專案）。', 'info');
       } else {
         showView('list');
         await refreshWorkItems();
