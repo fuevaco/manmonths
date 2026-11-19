@@ -1,10 +1,10 @@
 {
   "catalogVersion": 2,
   "name": "人月外掛庫",
-  "owner": "fuevaco",
+  "owner": "manmonths",
   "plugins": [
     {
-      "id": "fuevaco.marp-mermaid-preview",
+      "id": "manmonths.marp-mermaid-preview",
       "source": {
         "kind": "git",
         "url": "https://github.com/fuevaco/manmonths.git",
@@ -18,8 +18,8 @@
       "releases": [
         {
           "version": "1.0.0",
-          "commit": "b60558f83b8117964d0a3b1e637e4ab5dc40511e",
-          "contentHash": "107232c072a43c2142229afcbca1671a4ca0c2758fe25db328f20ae3e74ce06d",
+          "commit": "36498b3a9efbd64ef127f0a7de73fe97d047ec8d",
+          "contentHash": "972e92a4eb0dce7071ad71c57585f402cc8d5e1e0a2118856329fe43dc494280",
           "execution": "sandboxed-ui",
           "minimumOrca": "1.4.248",
           "types": [
@@ -36,7 +36,7 @@
       ]
     },
     {
-      "id": "fuevaco.zh-tw",
+      "id": "manmonths.zh-tw",
       "source": {
         "kind": "git",
         "url": "https://github.com/fuevaco/manmonths.git",
@@ -50,8 +50,8 @@
       "releases": [
         {
           "version": "1.2.0",
-          "commit": "ec5f735d353662d801c9e3fcfcd58aaa7f3ff1a8",
-          "contentHash": "3a9c1108b0c490093d3fa2118a7ab1f70653d67717755c1300af034d82d0d6c4",
+          "commit": "36498b3a9efbd64ef127f0a7de73fe97d047ec8d",
+          "contentHash": "2cfc8fb595b699b9e508b474631b56102b52935835102f16014919fca7a35718",
           "execution": "data",
           "minimumOrca": "1.4.245",
           "types": [
