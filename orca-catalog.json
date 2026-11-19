@@ -7,7 +7,7 @@
       "id": "fuevaco.marp-mermaid-preview",
       "source": {
         "kind": "git",
-        "url": "https://github.com/fuevaco/orca-tw.git",
+        "url": "https://github.com/fuevaco/manmonths.git",
         "ref": "main",
         "path": "plugins/marp-mermaid-preview"
       },
@@ -18,8 +18,8 @@
       "releases": [
         {
           "version": "1.0.0",
-          "commit": "c240a29b378ff2d2da012c976e314a9ec84b4719",
-          "contentHash": "d6fbc0708979634a68b5dc362ddb0bdfeb0895360e8852574477ce6efa9a213b",
+          "commit": "b60558f83b8117964d0a3b1e637e4ab5dc40511e",
+          "contentHash": "107232c072a43c2142229afcbca1671a4ca0c2758fe25db328f20ae3e74ce06d",
           "execution": "sandboxed-ui",
           "minimumOrca": "1.4.248",
           "types": [
@@ -39,7 +39,7 @@
       "id": "fuevaco.zh-tw",
       "source": {
         "kind": "git",
-        "url": "https://github.com/fuevaco/orca-tw.git",
+        "url": "https://github.com/fuevaco/manmonths.git",
         "ref": "main",
         "path": "plugins/zh-tw"
       },
@@ -50,8 +50,8 @@
       "releases": [
         {
           "version": "1.1.0",
-          "commit": "c240a29b378ff2d2da012c976e314a9ec84b4719",
-          "contentHash": "9c2523257e1a06a9c854163c761e8699b21ec13ed531a00a942e160f8d173615",
+          "commit": "b60558f83b8117964d0a3b1e637e4ab5dc40511e",
+          "contentHash": "5e8c1bbffdf8645d073cb37ac8d26899e269f44b957d594a6ae79dee14728f14",
           "execution": "data",
           "minimumOrca": "1.4.245",
           "types": [
