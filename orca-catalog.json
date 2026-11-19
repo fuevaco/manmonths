@@ -43,15 +43,15 @@
         "ref": "main",
         "path": "plugins/tfs-work-items"
       },
-      "description": "人月維護的地端 TFS / Azure DevOps Server 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
+      "description": "人月維護的 Azure DevOps / 地端 TFS 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
       "categories": [
         "tools"
       ],
       "releases": [
         {
-          "version": "1.1.4",
-          "commit": "dd9f47ebc5e5a390784776c7a36cc8bcf8f9be37",
-          "contentHash": "01ba894adf70993b64b24e2a84b48845fe1e791f38025c23aad3454046aa982e",
+          "version": "1.2.0",
+          "commit": "1aeff2e3b9566a3ee43db17159b98e025dda960b",
+          "contentHash": "c8568e31fa1cbda14b9b6cd3bfffb0c72afaf4132507b0c1188aec15fe74e210",
           "execution": "trusted-worker",
           "minimumOrca": "1.4.248",
           "types": [
@@ -61,7 +61,7 @@
           "contributes": [
             {
               "kind": "panels",
-              "name": "TFS 工項"
+              "name": "Azure DevOps"
             }
           ]
         }
