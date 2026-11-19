@@ -688,6 +688,8 @@ export default function activate(orca) {
     };
   });
 
+  // 把工項內容「放進」Agent 的輸入框但不送出，由使用者確認後自行按 Enter。
+  // 有指定現有終端機就送給它；否則開新的 CLI。
   orca.panels.handle('tfs.launchAgent', async (input = {}) => {
     const cfg = await loadConfig(orca);
     const cleanDesc = stripHtml(input.reproSteps || input.description || '');
@@ -695,35 +697,51 @@ export default function activate(orca) {
       ? `${input.projectLabel}${input.projectName && input.projectLabel !== input.projectName ? ` (${input.projectName})` : ''}`
       : '';
 
-    // If targeting an existing Agent terminal in the current focused window
-    if (input.terminalId) {
-      const singleLineDesc = cleanDesc.replace(/\s*\n+\s*/g, ' | ').slice(0, 1500);
-      const compactPrompt = [
-        `請協助處理 Azure DevOps ${input.type || 'Task'} #${input.id}`,
-        projPart ? `專案：${projPart}` : '',
-        `標題：${input.title || ''}`,
-        input.state ? `狀態：${input.state}` : '',
-        singleLineDesc ? `說明：${singleLineDesc}` : ''
-      ].filter(Boolean).join('；');
+    // 上層路徑（需求 > 工作 ...），取得失敗就略過
+    const ancestors = await fetchWorkItemAncestors(cfg, input.id).catch(() => []);
+    const ancestorText = ancestors
+      .slice()
+      .reverse()
+      .map((p) => `${p.type} #${p.id} ${p.title}`)
+      .join(' > ');
 
+    // 單行文字：避免換行被終端機當成 Enter 而提前送出
+    const singleLineDesc = cleanDesc.replace(/\s*\n+\s*/g, ' | ').slice(0, 1500);
+    const draftPrompt = [
+      `Azure DevOps ${input.type || 'Task'} #${input.id}`,
+      projPart ? `專案：${projPart}` : '',
+      ancestorText ? `上層：${ancestorText}` : '',
+      `標題：${input.title || ''}`,
+      input.state ? `狀態：${input.state}` : '',
+      singleLineDesc ? `說明：${singleLineDesc}` : '',
+      '請先閱讀並理解以上工項，等我確認後再開始動手。'
+    ].filter(Boolean).join('；').slice(0, 4000);
+
+    const typeIntoTerminal = async (terminalId) => {
       const sendRes = await orca.host.call('terminal.sendText', {
-        terminalId: String(input.terminalId),
-        text: compactPrompt,
-        enter: true
+        terminalId: String(terminalId),
+        text: draftPrompt,
+        enter: false
       });
       if (!sendRes?.accepted) {
-        throw makeError('無法將指令送入目標 Agent 終端機，請確認該視窗仍在開啟狀態。');
+        throw makeError('無法將工項內容放入輸入框，請確認該終端機仍在開啟狀態。');
       }
+    };
+
+    // 送給現有 Agent
+    if (input.terminalId) {
+      await typeIntoTerminal(input.terminalId);
       const ctx = await orca.host.call('workspace.readContext').catch(() => null);
       return {
         ok: true,
         mode: 'existing',
         terminalId: input.terminalId,
         workspaceName: ctx?.displayName || '目前視窗',
-        agent: input.agentLabel || '目前視窗 Agent'
+        agent: '目前視窗的 Agent'
       };
     }
 
+    // 沒有現有 Agent：開新的 CLI
     const ctx = await orca.host.call('workspace.readContext');
     const listRes = await orca.host.call('workspace.list');
     const workspaces = listRes?.workspaces || [];
@@ -739,22 +757,37 @@ export default function activate(orca) {
       throw makeError('找不到可用的 Orca 工作區，請先開啟一個專案或 Worktree。', 'unavailable');
     }
 
-    const promptLines = [
-      `請協助處理以下 Azure DevOps ${input.type || 'Task'} 工項：`,
-      projPart ? `- 所屬專案：${projPart}` : '',
-      `- 工項編號：#${input.id}`,
-      `- 標題：${input.title || ''}`,
-      input.state ? `- 目前狀態：${input.state}` : '',
-      cleanDesc ? `\n詳細說明：\n${cleanDesc}` : ''
-    ].filter(Boolean);
-
     const agentName = String(input.agent || cfg.defaultAgent || 'claude').trim();
+
+    // 不帶 prompt 啟動（帶 prompt 時 Orca 會自動送出），待 CLI 就緒後只輸入文字、不按 Enter
     const res = await orca.host.call('agent.launch', {
       workspaceId: targetWorkspace.id,
-      agent: agentName,
-      prompt: promptLines.join('\n')
+      agent: agentName
+    });
+
+    await waitForAgentReady(orca, targetWorkspace.id, res.terminalId);
+    await typeIntoTerminal(res.terminalId).catch(() => {
+      throw makeError('已開啟新的 CLI，但無法將工項內容放入輸入框，請到該終端機手動貼上。');
     });
 
     return { ok: true, mode: 'new', terminalId: res.terminalId, workspaceName: targetWorkspace.name, agent: agentName };
   });
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 等 Agent CLI 進入可輸入狀態（waiting / done）；偵測不到時最多等 timeoutMs 後仍繼續
+async function waitForAgentReady(orca, workspaceId, terminalId, timeoutMs = 15000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    let res = await orca.host.call('agents.list', { workspaceId }).catch(() => null);
+    if (!res) res = await orca.host.call('agents.list', {}).catch(() => null);
+    const agent = (res?.agents || []).find((a) => a.terminalId === terminalId);
+    if (agent && (agent.state === 'waiting' || agent.state === 'done')) {
+      await sleep(800); // 讓輸入框完成渲染
+      return true;
+    }
+    await sleep(500);
+  }
+  return false;
 }

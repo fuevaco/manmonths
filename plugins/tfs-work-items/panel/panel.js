@@ -76,14 +76,12 @@
   const detailTitle = document.getElementById('detail-title');
   const detailInfo = document.getElementById('detail-info');
   const detailDesc = document.getElementById('detail-desc');
-  const detailStateSelect = document.getElementById('detail-state-select');
-  const detailComment = document.getElementById('detail-comment');
-  const btnUpdateState = document.getElementById('btn-update-state');
   const detailParents = document.getElementById('detail-parents');
-  const btnSendComment = document.getElementById('btn-send-comment');
-  const btnLaunchAgent = document.getElementById('btn-launch-agent');
-  const btnRefreshAgents = document.getElementById('btn-refresh-agents');
+  const detailParentsWrap = document.getElementById('detail-parents-wrap');
   const detailAgentTarget = document.getElementById('detail-agent-target');
+  const btnRefreshAgents = document.getElementById('btn-refresh-agents');
+  const btnLaunchAgent = document.getElementById('btn-launch-agent');
+  const launchAgentHint = document.getElementById('launch-agent-hint');
   const btnDetailOpen = document.getElementById('btn-detail-open');
   const btnCloseDetail = document.getElementById('btn-close-detail');
 
@@ -394,53 +392,6 @@
     }
   }
 
-  function renderDetailStateOptions(item, openStates) {
-    detailStateSelect.innerHTML = '';
-    for (const st of openStates) {
-      const opt = document.createElement('option');
-      opt.value = st;
-      opt.textContent = st;
-      detailStateSelect.appendChild(opt);
-    }
-    if (item.state && !CLOSED_STATES.has(item.state) && !openStates.includes(item.state)) {
-      const opt = document.createElement('option');
-      opt.value = item.state;
-      opt.textContent = item.state;
-      detailStateSelect.prepend(opt);
-    }
-    // Default quick-change state to 已解決 (or Resolved) if available
-    if (openStates.includes('已解決')) {
-      detailStateSelect.value = '已解決';
-    } else if (openStates.includes('Resolved')) {
-      detailStateSelect.value = 'Resolved';
-    } else {
-      detailStateSelect.value = item.state || openStates[0] || '';
-    }
-  }
-
-  async function loadTypeStatesForItem(item) {
-    if (!item || !item.projectName || !item.type) return;
-    try {
-      const res = await callWorker('tfs.getWorkItemTypeStates', {
-        project: item.projectName,
-        type: item.type
-      });
-      // 使用者可能已切換到其他工項，避免覆蓋
-      if (!selectedItem || selectedItem.id !== item.id) return;
-      const states = (res?.states || []).filter((st) => !CLOSED_STATES.has(st));
-      if (states.length === 0) return;
-      const prevValue = detailStateSelect.value;
-      renderDetailStateOptions(item, states);
-      // 保留使用者在載入期間已手動選擇的狀態
-      if (prevValue && prevValue !== detailStateSelect.value &&
-          Array.from(detailStateSelect.options).some((o) => o.value === prevValue)) {
-        detailStateSelect.value = prevValue;
-      }
-    } catch {
-      // 取得失敗時沿用既有清單
-    }
-  }
-
   function openExternalUrl(url) {
     if (!url || !/^https?:\/\//i.test(url)) return;
     if (window.orca?.shell?.openExternal) {
@@ -450,26 +401,35 @@
     }
   }
 
-  // 顯示上層父項，由最上層（需求）排到最近的父項
+  function makeBadge(text, cls) {
+    const el = document.createElement('span');
+    el.className = `badge ${cls}`;
+    el.textContent = text;
+    return el;
+  }
+
+  // 上層路徑：由最上層（需求）往下排，最後一列是目前這筆工項
   async function loadAncestorsForItem(item) {
-    const box = detailParents;
-    box.innerHTML = '';
-    box.classList.add('hidden');
+    detailParents.innerHTML = '';
+    detailParentsWrap.classList.add('hidden');
     if (!item) return;
     try {
       const res = await callWorker('tfs.getWorkItemAncestors', { id: item.id });
       if (!selectedItem || selectedItem.id !== item.id) return;
       const list = (res?.ancestors || []).slice().reverse();
       if (list.length === 0) return;
+
       list.forEach((p, idx) => {
         const row = document.createElement('div');
         row.className = 'parent-row';
-        row.style.paddingLeft = `${idx * 12}px`;
-
-        const typeBadge = document.createElement('span');
-        typeBadge.className = 'badge badge-project';
-        typeBadge.textContent = p.type || '工項';
-        row.appendChild(typeBadge);
+        row.style.paddingLeft = `${idx * 14}px`;
+        if (idx > 0) {
+          const glyph = document.createElement('span');
+          glyph.className = 'parent-glyph';
+          glyph.textContent = '└';
+          row.appendChild(glyph);
+        }
+        row.appendChild(makeBadge(p.type || '工項', p.isRequirement ? 'badge-req' : 'badge-level'));
 
         const link = document.createElement('button');
         link.type = 'button';
@@ -478,71 +438,47 @@
         link.title = '在瀏覽器中開啟';
         link.addEventListener('click', () => openExternalUrl(p.webUrl));
         row.appendChild(link);
-
-        box.appendChild(row);
+        detailParents.appendChild(row);
       });
-      box.classList.remove('hidden');
+
+      // 目前工項
+      const cur = document.createElement('div');
+      cur.className = 'parent-row is-current';
+      cur.style.paddingLeft = `${list.length * 14}px`;
+      const glyph = document.createElement('span');
+      glyph.className = 'parent-glyph';
+      glyph.textContent = '└';
+      cur.appendChild(glyph);
+      cur.appendChild(makeBadge('目前', 'badge-current'));
+      const text = document.createElement('span');
+      text.className = 'parent-text';
+      text.textContent = `#${item.id} ${item.title}`;
+      cur.appendChild(text);
+      detailParents.appendChild(cur);
+
+      detailParentsWrap.classList.remove('hidden');
     } catch {
       // 取得失敗時不顯示上層資訊，不影響其他操作
     }
   }
 
-  function openDetail(item) {
-    selectedItem = item;
-    hideBanner();
-    detailHeaderId.textContent = `#${item.id}`;
-
-    detailBadges.innerHTML = '';
-    const typeBadge = document.createElement('span');
-    typeBadge.className = `badge ${item.type === 'Bug' ? 'badge-bug' : 'badge-task'}`;
-    typeBadge.textContent = item.type;
-    detailBadges.appendChild(typeBadge);
-
-    if (item.projectLabel) {
-      const projBadge = document.createElement('span');
-      projBadge.className = 'badge badge-project';
-      projBadge.textContent = item.projectLabel;
-      projBadge.title = item.projectName || item.projectLabel;
-      detailBadges.appendChild(projBadge);
-    }
-
-    const stateBadge = document.createElement('span');
-    stateBadge.className = 'badge badge-state';
-    stateBadge.textContent = item.state;
-    detailBadges.appendChild(stateBadge);
-
-    detailTitle.textContent = item.title;
-    const infoParts = [
-      item.assignedTo ? `指派給：${item.assignedTo}` : '未指派',
-      item.priority ? `優先權：P${item.priority}` : '',
-      item.iterationPath ? `Iteration：${item.iterationPath}` : ''
-    ].filter(Boolean);
-    detailInfo.textContent = infoParts.join(' · ');
-
-    const bodyText = stripHtml(item.type === 'Bug' ? (item.reproSteps || item.description) : (item.description || item.reproSteps));
-    detailDesc.textContent = bodyText || '（無詳細說明）';
-
-    // 先以現有資料立即顯示，再非同步載入「此工項類型」的 workflow 狀態
-    renderDetailStateOptions(item, getOpenStatesList(allItems));
-    loadTypeStatesForItem(item);
-    loadAncestorsForItem(item);
-    detailComment.value = '';
-    showView('detail');
-    loadCurrentAgentsForDetail();
-  }
-
+  // 偵測目前視窗的 Agent：有就預設送給它，沒有就開新的 CLI
   async function loadCurrentAgentsForDetail() {
-    if (!detailAgentTarget) return;
-    detailAgentTarget.innerHTML = '<option value="__NEW__">➕ 啟動新的 Agent</option>';
+    const newLabel = `➕ 開新的 ${cfgAgent.value || 'claude'} CLI`;
+    const setNewOnly = () => {
+      detailAgentTarget.innerHTML = '';
+      const opt = document.createElement('option');
+      opt.value = '__NEW__';
+      opt.textContent = newLabel;
+      detailAgentTarget.appendChild(opt);
+      detailAgentTarget.value = '__NEW__';
+    };
+    setNewOnly();
     try {
       const res = await callWorker('tfs.listCurrentAgents');
       const agents = res?.agents || [];
-      const stateLabelMap = {
-        waiting: '等待輸入',
-        done: '已完成',
-        working: '執行中',
-        blocked: '待確認'
-      };
+      if (agents.length === 0) return;
+      const stateLabelMap = { waiting: '等待輸入', done: '已完成', working: '執行中', blocked: '待確認' };
       detailAgentTarget.innerHTML = '';
       for (const a of agents) {
         const opt = document.createElement('option');
@@ -554,19 +490,54 @@
       }
       const newOpt = document.createElement('option');
       newOpt.value = '__NEW__';
-      newOpt.textContent = `➕ 啟動新的 Agent (${cfgAgent.value || 'claude'})`;
+      newOpt.textContent = newLabel;
       detailAgentTarget.appendChild(newOpt);
-
-      // Prefer an idle/waiting/done agent in the current window if available
       const preferred = agents.find((a) => a.state === 'waiting' || a.state === 'done') || agents[0];
-      if (preferred) {
-        detailAgentTarget.value = preferred.terminalId;
-      } else {
-        detailAgentTarget.value = '__NEW__';
-      }
+      detailAgentTarget.value = preferred.terminalId;
     } catch {
-      detailAgentTarget.innerHTML = '<option value="__NEW__">➕ 啟動新的 Agent</option>';
+      setNewOnly();
     }
+  }
+
+  function addInfoRow(label, value) {
+    if (!value) return;
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    detailInfo.appendChild(dt);
+    detailInfo.appendChild(dd);
+  }
+
+  function openDetail(item) {
+    selectedItem = item;
+    hideBanner();
+    detailHeaderId.textContent = `#${item.id}`;
+
+    detailBadges.innerHTML = '';
+    detailBadges.appendChild(makeBadge(item.type, item.type === 'Bug' ? 'badge-bug' : 'badge-task'));
+    if (item.projectLabel) {
+      const projBadge = makeBadge(item.projectLabel, 'badge-project');
+      projBadge.title = item.projectName || item.projectLabel;
+      detailBadges.appendChild(projBadge);
+    }
+    detailBadges.appendChild(makeBadge(item.state, 'badge-state'));
+
+    detailTitle.textContent = item.title;
+
+    detailInfo.innerHTML = '';
+    addInfoRow('指派給', item.assignedTo || '未指派');
+    addInfoRow('優先權', item.priority ? `P${item.priority}` : '');
+    addInfoRow('Iteration', item.iterationPath);
+    addInfoRow('Area', item.areaPath);
+
+    const bodyText = stripHtml(item.type === 'Bug' ? (item.reproSteps || item.description) : (item.description || item.reproSteps));
+    detailDesc.textContent = bodyText || '（無詳細說明）';
+
+    launchAgentHint.textContent = '內容只會放進輸入框，不會自動送出，由你確認後按 Enter';
+    loadAncestorsForItem(item);
+    loadCurrentAgentsForDetail();
+    showView('detail');
   }
 
   // --- Event Setup ---
@@ -785,71 +756,23 @@
       }
     });
 
-    btnUpdateState.addEventListener('click', async () => {
-      if (!selectedItem) return;
-      hideBanner();
-      btnUpdateState.disabled = true;
-      try {
-        const res = await callWorker('tfs.updateWorkItem', {
-          id: selectedItem.id,
-          state: detailStateSelect.value
-        });
-        if (CLOSED_STATES.has(res.item.state)) {
-          allItems = allItems.filter((i) => i.id !== res.item.id);
-        } else {
-          allItems = allItems.map((i) => (i.id === res.item.id ? res.item : i));
-        }
-        populateStateFilter(allItems);
-        openDetail(res.item);
-        showBanner(`已將 #${res.item.id} 狀態更新為 ${res.item.state}`, 'success');
-      } catch (err) {
-        showBanner(err.message || String(err), 'error');
-      } finally {
-        btnUpdateState.disabled = false;
-      }
-    });
-
-    btnSendComment.addEventListener('click', async () => {
-      if (!selectedItem) return;
-      const comment = detailComment.value.trim();
-      if (!comment) return;
-      hideBanner();
-      btnSendComment.disabled = true;
-      try {
-        const res = await callWorker('tfs.updateWorkItem', {
-          id: selectedItem.id,
-          comment
-        });
-        detailComment.value = '';
-        openDetail(res.item);
-        showBanner(`已送出留言至 #${res.item.id}`, 'success');
-      } catch (err) {
-        showBanner(err.message || String(err), 'error');
-      } finally {
-        btnSendComment.disabled = false;
-      }
-    });
-
-    if (btnRefreshAgents) {
-      btnRefreshAgents.addEventListener('click', loadCurrentAgentsForDetail);
-    }
+    btnRefreshAgents.addEventListener('click', loadCurrentAgentsForDetail);
 
     btnLaunchAgent.addEventListener('click', async () => {
       if (!selectedItem) return;
       hideBanner();
       btnLaunchAgent.disabled = true;
       try {
-        const targetVal = detailAgentTarget ? detailAgentTarget.value : '__NEW__';
+        const targetVal = detailAgentTarget.value;
         const payload = { ...selectedItem };
         if (targetVal && targetVal !== '__NEW__') {
           payload.terminalId = targetVal;
-          payload.agentLabel = detailAgentTarget.options[detailAgentTarget.selectedIndex]?.textContent || '';
         }
         const res = await callWorker('tfs.launchAgent', payload);
         if (res.mode === 'existing') {
-          showBanner(`已將 #${selectedItem.id} 指派給「${res.agent}」(${res.workspaceName})`, 'success');
+          showBanner(`#${selectedItem.id} 的內容已放入「${res.agent}」的輸入框，確認後請自行按 Enter 送出`, 'success');
         } else {
-          showBanner(`已在工作區「${res.workspaceName}」啟動新 ${res.agent} 處理 #${selectedItem.id}`, 'success');
+          showBanner(`已在工作區「${res.workspaceName}」開啟新的 ${res.agent} CLI，#${selectedItem.id} 的內容已放入輸入框，確認後請自行按 Enter 送出`, 'success');
         }
       } catch (err) {
         showBanner(err.message || String(err), 'error');

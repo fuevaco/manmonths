@@ -149,53 +149,37 @@
       </section>
 
       <!-- Detail View -->
-      <section id="view-detail" class="panel-box hidden">
-        <div class="panel-box-title">
-          <span id="detail-header-id">#0</span>
-          <div style="display:flex;gap:4px;">
+      <section id="view-detail" class="detail-view hidden">
+        <div class="detail-topbar">
+          <span id="detail-header-id" class="detail-id">#0</span>
+          <div class="detail-top-actions">
             <button id="btn-detail-open" class="btn btn-sm" title="在瀏覽器中開啟 TFS 頁面">↗ 開啟</button>
             <button id="btn-close-detail" class="btn btn-sm">← 返回</button>
           </div>
         </div>
+
         <div id="detail-badges" class="wi-meta"></div>
-        <div id="detail-title" style="font-weight:600;font-size:14px;"></div>
-        <div id="detail-info" style="font-size:11px;color:var(--muted);"></div>
-        <div id="detail-parents" class="detail-parents hidden"></div>
-        <div id="detail-desc" class="detail-desc"></div>
+        <h2 id="detail-title" class="detail-title"></h2>
+        <dl id="detail-info" class="detail-info"></dl>
 
-        <div class="field">
-          <label>快速變更狀態</label>
-          <div style="display:flex;gap:6px;">
-            <select id="detail-state-select">
-              <option value="New">New</option>
-              <option value="Active">Active</option>
-              <option value="Resolved">Resolved</option>
-              <option value="Closed">Closed</option>
-              <option value="To Do">To Do</option>
-              <option value="Doing">Doing</option>
-              <option value="Done">Done</option>
-            </select>
-            <button id="btn-update-state" class="btn" type="button">更新狀態</button>
-          </div>
+        <div id="detail-parents-wrap" class="detail-section hidden">
+          <div class="detail-section-label">上層需求</div>
+          <div id="detail-parents" class="detail-parents"></div>
         </div>
 
-        <div class="field">
-          <label>新增討論留言</label>
-          <textarea id="detail-comment" style="min-height:54px;" placeholder="輸入要寫入 TFS 的留言..."></textarea>
-          <div class="form-actions">
-            <button id="btn-send-comment" class="btn" type="button">送出留言</button>
-          </div>
+        <div class="detail-section">
+          <div class="detail-section-label">說明 / 重現步驟</div>
+          <div id="detail-desc" class="detail-desc"></div>
         </div>
 
-        <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:11px;font-weight:600;color:var(--muted);">派工給 Agent</span>
-            <button id="btn-refresh-agents" class="btn btn-sm" type="button" title="重新偵測目前視窗的 Agent">🔄 偵測</button>
+        <div class="detail-actions">
+          <div class="detail-section-label">傳送給 Agent</div>
+          <div class="detail-agent-row">
+            <select id="detail-agent-target" class="filter-select"></select>
+            <button id="btn-refresh-agents" class="btn btn-sm" type="button" title="重新偵測目前視窗的 Agent">↻</button>
           </div>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <select id="detail-agent-target" class="filter-select" style="flex:1;"></select>
-            <button id="btn-launch-agent" class="btn btn-primary" type="button">🤖 派工</button>
-          </div>
+          <button id="btn-launch-agent" class="btn btn-primary btn-block" type="button">💬 傳送到聊天視窗</button>
+          <div id="launch-agent-hint" class="detail-hint">內容只會放進輸入框，不會自動送出，由你確認後按 Enter</div>
         </div>
       </section>
 

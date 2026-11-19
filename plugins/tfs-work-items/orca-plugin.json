@@ -4,7 +4,7 @@
   "id": "tfs-work-items",
   "publisher": "manmonths",
   "name": "Azure DevOps",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "人月維護的 Azure DevOps / 地端 TFS 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
   "author": {
     "name": "人月",
@@ -67,7 +67,7 @@
       {
         "key": "defaultAgent",
         "title": "一鍵派工預設 Agent",
-        "description": "從工項點擊「派工給 Agent」時使用的預設 Coding Agent（例如 claude、codex）。",
+        "description": "從工項點擊「傳送到聊天視窗」時開啟的預設 Coding Agent（例如 claude、codex）。",
         "type": "string",
         "default": "claude",
         "placeholder": "claude"
