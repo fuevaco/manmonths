@@ -1,0 +1,84 @@
+{
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
+  "id": "tfs-work-items",
+  "publisher": "manmonths",
+  "name": "TFS 工項管理 (Work Items)",
+  "version": "1.0.0",
+  "description": "人月維護的地端 TFS / Azure DevOps Server 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
+  "author": {
+    "name": "人月",
+    "url": "https://github.com/fuevaco"
+  },
+  "repository": "https://github.com/fuevaco/manmonths",
+  "engines": {
+    "orca": ">=1.4.248"
+  },
+  "pluginApi": 1,
+  "main": "worker/index.mjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "tfs-work-items",
+        "title": "TFS 工項",
+        "icon": "blocks",
+        "entry": "panel/index.html",
+        "ui": "html"
+      }
+    ],
+    "settings": [
+      {
+        "key": "tfsUrl",
+        "title": "TFS Collection 網址",
+        "description": "地端 TFS 或 Azure DevOps Server 的 Collection URL（例如：https://tfs.company.com/tfs/DefaultCollection）。",
+        "type": "string",
+        "default": "",
+        "placeholder": "https://tfs.company.com/tfs/DefaultCollection"
+      },
+      {
+        "key": "project",
+        "title": "專案名稱 (Project)",
+        "description": "預設要查詢與新增工項的 TFS Team Project 名稱。",
+        "type": "string",
+        "default": "",
+        "placeholder": "MyProject"
+      },
+      {
+        "key": "apiVersion",
+        "title": "TFS REST API 版本",
+        "description": "依地端 TFS / Azure DevOps Server 版本選擇（2018u2+ 建議 5.0；2020+ 建議 6.0；2022+ 建議 7.0）。",
+        "type": "string",
+        "default": "5.0",
+        "enum": ["4.1", "5.0", "6.0", "7.0"],
+        "enumLabels": [
+          "4.1 (TFS 2018)",
+          "5.0 (TFS 2018 Update 2 / Server 2019)",
+          "6.0 (Azure DevOps Server 2020)",
+          "7.0 (Azure DevOps Server 2022+)"
+        ]
+      },
+      {
+        "key": "allowInsecureTls",
+        "title": "允許內網自簽 HTTPS 憑證",
+        "description": "若公司地端 TFS 使用自簽或未受系統信任的 SSL 憑證，請開啟此選項。",
+        "type": "boolean",
+        "default": false
+      },
+      {
+        "key": "defaultAgent",
+        "title": "一鍵派工預設 Agent",
+        "description": "從工項點擊「派工給 Agent」時使用的預設 Coding Agent（例如 claude、codex）。",
+        "type": "string",
+        "default": "claude",
+        "placeholder": "claude"
+      }
+    ]
+  },
+  "capabilities": [
+    { "kind": "settings:own" },
+    { "kind": "secrets:own" },
+    { "kind": "workspace:read" },
+    { "kind": "agent:launch" },
+    { "kind": "notifications:show" }
+  ]
+}

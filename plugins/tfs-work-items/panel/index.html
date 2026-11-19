@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TFS 工項管理</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="header-title">
+        <span id="status-dot" class="status-dot" title="TFS 連線狀態"></span>
+        <span>TFS 工項</span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-new" class="btn btn-primary" title="新增 Task 或 Bug 到 TFS">＋ 新增</button>
+        <button id="btn-refresh" class="btn" title="重新載入工項列表">🔄</button>
+        <button id="btn-settings" class="btn" title="TFS 連線與 PAT 設定">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Filter Bar (List View) -->
+    <section id="filters-bar" class="filters">
+      <input id="search-input" class="search-input" type="text" placeholder="搜尋標題或輸入 #ID（如 #1234）...">
+      <div class="filter-row">
+        <div class="pill-group" id="scope-pills">
+          <button data-scope="mine" class="active">指派給我</button>
+          <button data-scope="all">全部</button>
+        </div>
+        <div class="pill-group" id="type-pills">
+          <button data-type="All" class="active">全部</button>
+          <button data-type="Task">Task</button>
+          <button data-type="Bug">Bug</button>
+        </div>
+        <label class="checkbox-label">
+          <input id="chk-hide-closed" type="checkbox" checked>
+          <span>隱藏已結案</span>
+        </label>
+      </div>
+    </section>
+
+    <main class="content">
+      <div id="banner" class="banner hidden"></div>
+
+      <!-- Settings View -->
+      <section id="view-settings" class="panel-box hidden">
+        <div class="panel-box-title">
+          <span>TFS 連線與 PAT 設定</span>
+          <button id="btn-close-settings" class="btn btn-sm">✕</button>
+        </div>
+        <div class="field">
+          <label>TFS Collection 網址</label>
+          <input id="cfg-url" type="url" placeholder="https://tfs.company.com/tfs/DefaultCollection">
+        </div>
+        <div class="field">
+          <label>PAT (Personal Access Token)</label>
+          <input id="cfg-pat" type="password" placeholder="輸入新的 PAT（留空則保留已儲存的 PAT）">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted);">
+            <span id="cfg-pat-status">尚未儲存 PAT</span>
+            <button id="btn-clear-pat" class="btn btn-sm btn-danger hidden" type="button">清除 PAT</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>TFS REST API 版本</label>
+          <select id="cfg-api-version">
+            <option value="4.1">4.1 (TFS 2018)</option>
+            <option value="5.0" selected>5.0 (TFS 2018 Update 2 / Server 2019)</option>
+            <option value="6.0">6.0 (Azure DevOps Server 2020)</option>
+            <option value="7.0">7.0 (Azure DevOps Server 2022+)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--fg);font-weight:400;">
+            <input id="cfg-insecure-tls" type="checkbox">
+            <span>允許內網自簽 HTTPS 憑證</span>
+          </label>
+        </div>
+        <div class="form-actions" style="justify-content:flex-start;">
+          <button id="btn-test-conn" class="btn" type="button">🔌 測試連線並載入專案</button>
+        </div>
+        <div class="field">
+          <label>專案名稱 (Project)</label>
+          <input id="cfg-project" type="text" list="project-list" placeholder="輸入或選擇 TFS 專案名稱">
+          <datalist id="project-list"></datalist>
+        </div>
+        <div class="field">
+          <label>一鍵派工預設 Agent</label>
+          <input id="cfg-agent" type="text" placeholder="claude">
+        </div>
+        <div class="form-actions">
+          <button id="btn-save-settings" class="btn btn-primary" type="button">儲存設定</button>
+        </div>
+      </section>
+
+      <!-- Create Work Item View -->
+      <section id="view-create" class="panel-box hidden">
+        <div class="panel-box-title">
+          <span>新增 TFS 工項</span>
+          <button id="btn-close-create" class="btn btn-sm">✕</button>
+        </div>
+        <div class="field">
+          <label>工項類型</label>
+          <div class="pill-group" id="create-type-pills">
+            <button type="button" data-type="Task" class="active">Task</button>
+            <button type="button" data-type="Bug">Bug</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>標題 *</label>
+          <input id="create-title" type="text" placeholder="輸入工項標題...">
+        </div>
+        <div class="field">
+          <label id="create-desc-label">說明 (Description)</label>
+          <textarea id="create-desc" placeholder="輸入詳細內容、需求或重現步驟..."></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field">
+            <label>優先權 (Priority)</label>
+            <select id="create-priority">
+              <option value="">預設</option>
+              <option value="1">1 - 最高</option>
+              <option value="2" selected>2 - 高</option>
+              <option value="3">3 - 中</option>
+              <option value="4">4 - 低</option>
+            </select>
+          </div>
+          <div class="field" style="justify-content:flex-end;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--fg);font-weight:400;padding-bottom:6px;">
+              <input id="create-assign-me" type="checkbox" checked>
+              <span>指派給我</span>
+            </label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Iteration Path（選填，留空使用專案預設）</label>
+          <input id="create-iteration" type="text" placeholder="例如：MyProject\Sprint 1">
+        </div>
+        <div class="form-actions">
+          <button id="btn-cancel-create" class="btn" type="button">取消</button>
+          <button id="btn-submit-create" class="btn btn-primary" type="button">建立工項</button>
+        </div>
+      </section>
+
+      <!-- Detail View -->
+      <section id="view-detail" class="panel-box hidden">
+        <div class="panel-box-title">
+          <span id="detail-header-id">#0</span>
+          <div style="display:flex;gap:4px;">
+            <button id="btn-detail-open" class="btn btn-sm" title="在瀏覽器中開啟 TFS 頁面">↗ 開啟</button>
+            <button id="btn-close-detail" class="btn btn-sm">← 返回</button>
+          </div>
+        </div>
+        <div id="detail-badges" class="wi-meta"></div>
+        <div id="detail-title" style="font-weight:600;font-size:14px;"></div>
+        <div id="detail-info" style="font-size:11px;color:var(--muted);"></div>
+        <div id="detail-desc" class="detail-desc"></div>
+
+        <div class="field">
+          <label>快速變更狀態</label>
+          <div style="display:flex;gap:6px;">
+            <select id="detail-state-select">
+              <option value="New">New</option>
+              <option value="Active">Active</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Closed">Closed</option>
+              <option value="To Do">To Do</option>
+              <option value="Doing">Doing</option>
+              <option value="Done">Done</option>
+            </select>
+            <button id="btn-update-state" class="btn" type="button">更新狀態</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>新增討論留言</label>
+          <textarea id="detail-comment" style="min-height:54px;" placeholder="輸入要寫入 TFS 的留言..."></textarea>
+          <div class="form-actions">
+            <button id="btn-send-comment" class="btn" type="button">送出留言</button>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11px;color:var(--muted);">交由 Orca Agent 處理</span>
+          <button id="btn-launch-agent" class="btn btn-primary" type="button">🤖 派工給 Agent</button>
+        </div>
+      </section>
+
+      <!-- Work Items List -->
+      <section id="view-list"></section>
+    </main>
+  </div>
+
+  <script src="panel.js"></script>
+</body>
+</html>
