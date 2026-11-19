@@ -3,6 +3,57 @@ import https from 'node:https';
 
 const SECRET_PAT_KEY = 'tfs_pat';
 
+const CLOSED_STATES = new Set([
+  'Closed',
+  'Done',
+  'Removed',
+  '已關閉',
+  '已完成',
+  '完成',
+  '已移除'
+]);
+
+const CLOSED_STATES_WIQL = Array.from(CLOSED_STATES)
+  .map((s) => `'${s}'`)
+  .join(', ');
+
+let cachedStatesKey = '';
+let cachedOpenStates = [];
+
+async function fetchOpenStatesCatalog(cfg, projectSample) {
+  const proj = projectSample || cfg.project;
+  const cacheKey = `${cfg.tfsUrl}|${proj}|${cfg.apiVersion}`;
+  if (cachedStatesKey === cacheKey && cachedOpenStates.length > 0) {
+    return cachedOpenStates;
+  }
+
+  const found = [];
+  if (proj) {
+    for (const wiType of ['Task', 'Bug']) {
+      try {
+        const res = await tfsRequest(
+          cfg,
+          `${encodeURIComponent(proj)}/_apis/wit/workitemtypes/${wiType}/states?api-version=5.0-preview.1`
+        );
+        for (const st of res?.value || []) {
+          const name = String(st.name || '').trim();
+          if (name && !CLOSED_STATES.has(name) && !found.includes(name)) {
+            found.push(name);
+          }
+        }
+      } catch {
+        // Older TFS may not expose /states preview endpoint; ignore and fall back
+      }
+    }
+  }
+
+  if (found.length > 0) {
+    cachedStatesKey = cacheKey;
+    cachedOpenStates = found;
+  }
+  return cachedOpenStates;
+}
+
 let cachedProjectKey = '';
 let cachedProjects = []; // [{ name, description, label }]
 let cachedProjectMap = new Map(); // name -> { name, description, label }
@@ -356,8 +407,8 @@ export default function activate(orca) {
       conditions.push(`[System.WorkItemType] IN ('Task', 'Bug')`);
     }
 
-    // Always exclude closed/done/removed items from the list
-    conditions.push(`[System.State] NOT IN ('Closed', 'Done', 'Removed')`);
+    // Always exclude closed/done/removed items (both English and Chinese TFS states)
+    conditions.push(`[System.State] NOT IN (${CLOSED_STATES_WIQL})`);
 
     if (stateFilter && stateFilter !== '__ALL_OPEN__') {
       conditions.push(`[System.State] = '${stateFilter.replace(/'/g, "''")}'`);
@@ -381,9 +432,12 @@ export default function activate(orca) {
       body: { query }
     });
 
+    const sampleProj = (projectFilter && projectFilter !== '__ALL__') ? projectFilter : projects[0]?.name;
+    const openStates = await fetchOpenStatesCatalog(cfg, sampleProj);
+
     const ids = (wiqlRes?.workItems || []).map((w) => w.id).slice(0, 100);
     if (ids.length === 0) {
-      return { items: [], projects };
+      return { items: [], projects, openStates };
     }
 
     const batchRes = await tfsRequest(
@@ -393,7 +447,7 @@ export default function activate(orca) {
 
     const byId = new Map((batchRes?.value || []).map((item) => [item.id, normalizeWorkItem(cfg, item, projectMap)]));
     const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
-    return { items: ordered, projects };
+    return { items: ordered, projects, openStates };
   });
 
   orca.panels.handle('tfs.createWorkItem', async (input = {}) => {

@@ -2,6 +2,16 @@
   'use strict';
 
   // --- State ---
+  const CLOSED_STATES = new Set([
+    'Closed',
+    'Done',
+    'Removed',
+    '已關閉',
+    '已完成',
+    '完成',
+    '已移除'
+  ]);
+
   let projectFilter = '__ALL__';
   let scope = 'mine';
   let typeFilter = 'All';
@@ -9,6 +19,7 @@
   let searchText = '';
   let createType = 'Task';
   let projects = []; // [{ name, description, label }]
+  let catalogOpenStates = [];
   let allItems = [];
   let items = [];
   let selectedItem = null;
@@ -195,11 +206,29 @@
     return cfg;
   }
 
+  function getOpenStatesList(list) {
+    const merged = [];
+    const add = (st) => {
+      if (st && !CLOSED_STATES.has(st) && !merged.includes(st)) {
+        merged.push(st);
+      }
+    };
+    for (const st of catalogOpenStates) add(st);
+    for (const item of list) add(item.state);
+    // If TFS didn't return /states catalog, ensure standard open states are present
+    if (catalogOpenStates.length === 0) {
+      const hasZh = merged.some((s) => /[\u4e00-\u9fff]/.test(s));
+      const fallback = hasZh
+        ? ['新增', '使用中', '已解決']
+        : ['New', 'Active', 'Resolved'];
+      for (const st of fallback) add(st);
+    }
+    return merged;
+  }
+
   function populateStateFilter(list) {
     const prev = stateSelectFilter.value || stateFilter;
-    const states = Array.from(new Set(list.map((i) => i.state).filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b, 'zh-Hant')
-    );
+    const states = getOpenStatesList(list);
     stateSelectFilter.innerHTML = '<option value="__ALL_OPEN__">所有狀態</option>';
     for (const st of states) {
       const opt = document.createElement('option');
@@ -238,10 +267,13 @@
       if (res.projects) {
         populateProjectsUI(res.projects);
       }
+      if (Array.isArray(res.openStates) && res.openStates.length > 0) {
+        catalogOpenStates = res.openStates;
+      }
       let list = (res.items || []).filter(
-        (i) => !['Closed', 'Done', 'Removed'].includes(i.state)
+        (i) => !CLOSED_STATES.has(i.state)
       );
-      if (ensureItem && !['Closed', 'Done', 'Removed'].includes(ensureItem.state)) {
+      if (ensureItem && !CLOSED_STATES.has(ensureItem.state)) {
         if (!list.some((i) => i.id === ensureItem.id)) {
           list = [ensureItem, ...list];
         }
@@ -396,14 +428,28 @@
     const bodyText = stripHtml(item.type === 'Bug' ? (item.reproSteps || item.description) : (item.description || item.reproSteps));
     detailDesc.textContent = bodyText || '（無詳細說明）';
 
-    const hasOption = Array.from(detailStateSelect.options).some((o) => o.value === item.state);
-    if (!hasOption && item.state) {
+    const openStates = getOpenStatesList(allItems);
+    detailStateSelect.innerHTML = '';
+    for (const st of openStates) {
+      const opt = document.createElement('option');
+      opt.value = st;
+      opt.textContent = st;
+      detailStateSelect.appendChild(opt);
+    }
+    if (item.state && !CLOSED_STATES.has(item.state) && !openStates.includes(item.state)) {
       const opt = document.createElement('option');
       opt.value = item.state;
       opt.textContent = item.state;
       detailStateSelect.prepend(opt);
     }
-    detailStateSelect.value = item.state || 'New';
+    // Default quick-change state to 已解決 (or Resolved) if available
+    if (openStates.includes('已解決')) {
+      detailStateSelect.value = '已解決';
+    } else if (openStates.includes('Resolved')) {
+      detailStateSelect.value = 'Resolved';
+    } else {
+      detailStateSelect.value = item.state || openStates[0] || '';
+    }
     detailComment.value = '';
     showView('detail');
     loadCurrentAgentsForDetail();
@@ -672,7 +718,7 @@
           id: selectedItem.id,
           state: detailStateSelect.value
         });
-        if (['Closed', 'Done', 'Removed'].includes(res.item.state)) {
+        if (CLOSED_STATES.has(res.item.state)) {
           allItems = allItems.filter((i) => i.id !== res.item.id);
         } else {
           allItems = allItems.map((i) => (i.id === res.item.id ? res.item : i));
