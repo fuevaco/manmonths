@@ -728,9 +728,14 @@ export default function activate(orca) {
       }
     };
 
+    // agent.launch 是在背景開啟分頁，不會自動切換；這裡主動切到該終端機讓使用者看見
+    const focusTerminal = (terminalId) =>
+      orca.host.call('terminal.focus', { terminalId: String(terminalId) }).catch(() => null);
+
     // 送給現有 Agent
     if (input.terminalId) {
       await typeIntoTerminal(input.terminalId);
+      await focusTerminal(input.terminalId);
       const ctx = await orca.host.call('workspace.readContext').catch(() => null);
       return {
         ok: true,
@@ -765,10 +770,14 @@ export default function activate(orca) {
       agent: agentName
     });
 
+    // 先切過去，讓使用者看到 CLI 正在啟動
+    await focusTerminal(res.terminalId);
+
     await waitForAgentReady(orca, targetWorkspace.id, res.terminalId);
     await typeIntoTerminal(res.terminalId).catch(() => {
       throw makeError('已開啟新的 CLI，但無法將工項內容放入輸入框，請到該終端機手動貼上。');
     });
+    await focusTerminal(res.terminalId);
 
     return { ok: true, mode: 'new', terminalId: res.terminalId, workspaceName: targetWorkspace.name, agent: agentName };
   });
