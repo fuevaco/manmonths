@@ -134,17 +134,20 @@ export function generateCatalog() {
     const summary = deriveContributionSummary(manifest);
     const relPath = `plugins/${entry.name}`;
 
+    const publisher = manifest.publisher || 'manmonths';
+    const qualifiedId = `${publisher}.${manifest.id}`;
+
     // Look up previous release commit if contentHash didn't change
     let releaseCommit = commit;
     if (existingCatalog?.plugins) {
-      const prev = existingCatalog.plugins.find((p) => p.id === `fuevaco.${manifest.id}`);
+      const prev = existingCatalog.plugins.find((p) => p.id === qualifiedId);
       if (prev?.releases?.[0] && prev.releases[0].contentHash === treeHash.hash) {
         releaseCommit = prev.releases[0].commit;
       }
     }
 
     pluginEntries.push({
-      id: `fuevaco.${manifest.id}`,
+      id: qualifiedId,
       source: {
         kind: 'git',
         url: 'https://github.com/fuevaco/manmonths.git',
@@ -172,7 +175,7 @@ export function generateCatalog() {
   const catalog = {
     catalogVersion: 2,
     name: '人月外掛庫',
-    owner: 'fuevaco',
+    owner: 'manmonths',
     plugins: pluginEntries
   };
 

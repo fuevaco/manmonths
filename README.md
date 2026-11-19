@@ -23,8 +23,8 @@
 
 | 套件 ID | 目錄路徑 | 類型 | 說明 |
 | :--- | :--- | :--- | :--- |
-| **`fuevaco.zh-tw`** | [`plugins/zh-tw`](./plugins/zh-tw) | `interface-language` | Orca 繁體中文（台灣，zh-TW）介面語言套件 |
-| **`fuevaco.marp-mermaid-preview`** | [`plugins/marp-mermaid-preview`](./plugins/marp-mermaid-preview) | `editor` | Markdown Marp 簡報與 Mermaid 圖表增強預覽自訂編輯器 |
+| **`manmonths.zh-tw`** | [`plugins/zh-tw`](./plugins/zh-tw) | `interface-language` | Orca 繁體中文（台灣，zh-TW）介面語言套件 |
+| **`manmonths.marp-mermaid-preview`** | [`plugins/marp-mermaid-preview`](./plugins/marp-mermaid-preview) | `editor` | Markdown Marp 簡報與 Mermaid 圖表增強預覽自訂編輯器 |
 
 ---
 

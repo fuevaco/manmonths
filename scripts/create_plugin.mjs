@@ -34,7 +34,7 @@ const manifest = {
   manifestVersion: 2,
   execution: execution,
   id: id,
-  publisher: "fuevaco",
+  publisher: "manmonths",
   name: name || id,
   version: "1.0.0",
   description: `${name || id}（人月維護）。`,
@@ -86,7 +86,7 @@ const readmeContent = `# ${name || id}
 
 由 **人月** 維護的 Orca 外掛套件。
 
-- **外掛 ID**：\`fuevaco.${id}\`
+- **外掛 ID**：\`manmonths.${id}\`
 - **版本**：\`1.0.0\`
 `;
 writeFileSync(join(pluginDir, 'README.md'), readmeContent, 'utf8');
