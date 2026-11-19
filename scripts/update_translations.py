@@ -422,7 +422,7 @@ def main():
     new_tree = build_tree(en)
 
     # Validate catalog against parsePluginLanguagePackArtifact rules
-    PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES = 20_000
+    PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES = 50_000
     PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH = 16
     DANGEROUS_KEYS = {'__proto__', 'prototype', 'constructor'}
 
