@@ -133,8 +133,8 @@
     for (const p of projects) {
       const opt = document.createElement('option');
       opt.value = p.name;
-      opt.textContent = p.description ? `${p.description}` : p.name;
-      opt.title = p.name;
+      opt.textContent = p.label || p.name;
+      opt.title = p.description ? `${p.description} (${p.name})` : p.name;
       projectSelectFilter.appendChild(opt);
     }
     if (prevFilter && Array.from(projectSelectFilter.options).some((o) => o.value === prevFilter)) {
@@ -150,7 +150,8 @@
     for (const p of projects) {
       const opt = document.createElement('option');
       opt.value = p.name;
-      opt.textContent = p.description ? `${p.description} (${p.name})` : p.name;
+      opt.textContent = p.label && p.label !== p.name ? `${p.label} (${p.name})` : p.name;
+      opt.title = p.description ? `${p.description} (${p.name})` : p.name;
       createProject.appendChild(opt);
     }
     if (prevCreate && Array.from(createProject.options).some((o) => o.value === prevCreate)) {

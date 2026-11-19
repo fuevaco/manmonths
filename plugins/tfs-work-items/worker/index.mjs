@@ -138,6 +138,13 @@ function tfsRequest(config, relativePath, { method = 'GET', body = null, content
   });
 }
 
+function truncateText(text, maxChars = 20) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const chars = Array.from(clean);
+  return chars.length > maxChars ? `${chars.slice(0, maxChars).join('')}…` : clean;
+}
+
 async function fetchProjectsCatalog(cfg, forceRefresh = false) {
   const cacheKey = `${cfg.tfsUrl}|${cfg.apiVersion}|${cfg.allowInsecureTls}`;
   if (!forceRefresh && cachedProjectKey === cacheKey && cachedProjects.length > 0) {
@@ -147,9 +154,9 @@ async function fetchProjectsCatalog(cfg, forceRefresh = false) {
   const data = await tfsRequest(cfg, `_apis/projects?$top=500&api-version=${encodeURIComponent(cfg.apiVersion)}`);
   const list = (data?.value || []).map((p) => {
     const name = String(p.name || '').trim();
-    const desc = String(p.description || '').trim();
-    // Prefer description as primary display label instead of cryptic project code like pj2014
-    const label = desc || name;
+    const desc = String(p.description || '').replace(/\s+/g, ' ').trim();
+    // Prefer description (truncated to 20 chars) as primary display label instead of cryptic code like pj2014
+    const label = truncateText(desc, 20) || name;
     return {
       id: p.id,
       name,
