@@ -4,7 +4,7 @@
   "id": "marp-mermaid-preview",
   "publisher": "manmonths",
   "name": "Markdown Marp & Mermaid 預覽",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "人月維護的 Orca Markdown 增強預覽自訂編輯器，支援 Marp 投影片簡報、Mermaid 流程架構圖表與 GitHub 風格排版。",
   "author": {
     "name": "人月",

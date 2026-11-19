@@ -8,7 +8,7 @@
   // --- State ---
   let rawMarkdown = '';
   let viewMode = 'auto'; // 'auto' | 'marp' | 'doc'
-  let slideMode = 'single'; // 'single' | 'continuous'
+  let slideMode = 'continuous'; // 'single' | 'continuous'
   let currentSlide = 1;
   let totalSlides = 1;
   let zoomLevel = 1.0;
