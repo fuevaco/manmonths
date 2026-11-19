@@ -1,6 +1,6 @@
-# orca-plugins (Orca 外掛 Monorepo)
+# 人月外掛庫 (Orca 外掛 Monorepo)
 
-這是由 **[fuevaco](https://github.com/fuevaco)** 維護的 [Orca](https://github.com/stablyai/orca) 外掛合集儲存庫。本專案採用最新版 Orca 官方規格的 **Monorepo** 架構與 **`orca-catalog.json` (Catalog v2)**，支援在同一個來源儲存庫中獨立維護、發布多個不同的外掛套件。
+這是由 **[人月](https://github.com/fuevaco)** 維護的 [Orca](https://github.com/stablyai/orca) 外掛合集儲存庫。本專案採用最新版 Orca 官方規格的 **Monorepo** 架構與 **`orca-catalog.json` (Catalog v2)**，支援在同一個來源儲存庫中獨立維護、發布多個不同的外掛套件。
 
 > [!WARNING]
 > **使用須知與免責提示**：

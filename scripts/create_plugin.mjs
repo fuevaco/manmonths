@@ -37,9 +37,9 @@ const manifest = {
   publisher: "fuevaco",
   name: name || id,
   version: "1.0.0",
-  description: `${name || id} by fuevaco for Orca.`,
+  description: `${name || id}（人月維護）。`,
   author: {
-    name: "fuevaco",
+    name: "人月",
     url: "https://github.com/fuevaco"
   },
   repository: "https://github.com/fuevaco/orca-tw",
@@ -84,7 +84,7 @@ writeFileSync(join(pluginDir, 'orca-plugin.json'), JSON.stringify(manifest, null
 
 const readmeContent = `# ${name || id}
 
-由 **fuevaco** 維護的 Orca 外掛套件。
+由 **人月** 維護的 Orca 外掛套件。
 
 - **外掛 ID**：\`fuevaco.${id}\`
 - **版本**：\`1.0.0\`

@@ -5,9 +5,9 @@
   "publisher": "fuevaco",
   "name": "繁體中文 (台灣)",
   "version": "1.1.0",
-  "description": "fuevaco 維護的 Orca 繁體中文（台灣）語言套件。",
+  "description": "人月維護的 Orca 繁體中文（台灣）語言套件。",
   "author": {
-    "name": "fuevaco",
+    "name": "人月",
     "url": "https://github.com/fuevaco"
   },
   "repository": "https://github.com/fuevaco/orca-tw",
