@@ -17,9 +17,9 @@
       ],
       "releases": [
         {
-          "version": "1.0.0",
-          "commit": "36498b3a9efbd64ef127f0a7de73fe97d047ec8d",
-          "contentHash": "972e92a4eb0dce7071ad71c57585f402cc8d5e1e0a2118856329fe43dc494280",
+          "version": "1.0.1",
+          "commit": "b1b00ae8779c0290db2c128486b593d5ed739166",
+          "contentHash": "445171b8b9173fbddd76890da8fab946c4451e9466bea0a1bb44e56709bf1d65",
           "execution": "sandboxed-ui",
           "minimumOrca": "1.4.248",
           "types": [
@@ -49,9 +49,9 @@
       ],
       "releases": [
         {
-          "version": "1.2.0",
-          "commit": "36498b3a9efbd64ef127f0a7de73fe97d047ec8d",
-          "contentHash": "2cfc8fb595b699b9e508b474631b56102b52935835102f16014919fca7a35718",
+          "version": "1.2.1",
+          "commit": "b1b00ae8779c0290db2c128486b593d5ed739166",
+          "contentHash": "fa952506752fc862f37f907a043b42220d2c9a9c68fb4034ae939ec7c24d6656",
           "execution": "data",
           "minimumOrca": "1.4.245",
           "types": [
