@@ -36,6 +36,38 @@
       ]
     },
     {
+      "id": "manmonths.tfs-work-items",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/fuevaco/manmonths.git",
+        "ref": "main",
+        "path": "plugins/tfs-work-items"
+      },
+      "description": "人月維護的地端 TFS / Azure DevOps Server 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
+      "categories": [
+        "tools"
+      ],
+      "releases": [
+        {
+          "version": "1.0.0",
+          "commit": "9d0b142d292cd3872b6eb829a3a471d28f16548b",
+          "contentHash": "b069f3c6c5da07faf94e67025205de8b66af559f0d7b012b52b6fee577a0be1c",
+          "execution": "trusted-worker",
+          "minimumOrca": "1.4.248",
+          "types": [
+            "panel",
+            "worker"
+          ],
+          "contributes": [
+            {
+              "kind": "panels",
+              "name": "TFS 工項"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "manmonths.zh-tw",
       "source": {
         "kind": "git",
