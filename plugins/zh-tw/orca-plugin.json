@@ -4,8 +4,9 @@
   "id": "zh-tw",
   "publisher": "manmonths",
   "name": "繁體中文 (台灣)",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "人月維護的 Orca 繁體中文（台灣）語言套件。",
+  "icon": "assets/icon.png",
   "author": {
     "name": "人月",
     "url": "https://github.com/fuevaco"
