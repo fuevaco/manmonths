@@ -88,38 +88,6 @@
       ]
     },
     {
-      "id": "manmonths.skill-sync",
-      "source": {
-        "kind": "git",
-        "url": "https://github.com/fuevaco/manmonths.git",
-        "ref": "main",
-        "path": "plugins/skill-sync"
-      },
-      "description": "人月維護的 Skill 同步面板：從符合 Skills Registry API 標準的技能庫取得 skill 清單，逐項檢閱後同步到全域或指定的 Orca 專案（含所有工作樹），並驗證每個檔案的雜湊。",
-      "categories": [
-        "tools"
-      ],
-      "releases": [
-        {
-          "version": "1.0.0",
-          "commit": "96ecafd6f4cba1a90403aa0fb800362a9f7f17d8",
-          "contentHash": "3a26830ef4d0b1aeada951d83ca93380da261f6a16da1715d9cdc46428efae1c",
-          "execution": "trusted-worker",
-          "minimumOrca": "1.4.259",
-          "types": [
-            "panel",
-            "worker"
-          ],
-          "contributes": [
-            {
-              "kind": "panels",
-              "name": "Skill 同步"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "id": "manmonths.tfs-work-items",
       "source": {
         "kind": "git",
