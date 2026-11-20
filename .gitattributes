@@ -1,0 +1,5 @@
+# 外掛內容的雜湊（orca-catalog.json 的 contentHash）是對檔案「原始位元組」計算的，
+# Orca 安裝時也會對下載到的檔案重算並比對。若讓 Git 依各人的 core.autocrlf 轉換換行，
+# 每個人 checkout 出來的位元組就不同、雜湊會對不上（Orca 顯示「無法讀取其存取權限」）。
+# 因此外掛目錄一律不做換行轉換，checkout 出來的就是 Git 裡存的原樣。
+plugins/** -text
