@@ -6,6 +6,7 @@
   "name": "Azure DevOps",
   "version": "1.2.9",
   "description": "人月維護的 Azure DevOps / 地端 TFS 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
+  "icon": "assets/icon.png",
   "author": {
     "name": "人月",
     "url": "https://github.com/fuevaco"

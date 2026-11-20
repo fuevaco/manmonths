@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skill 同步</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="header-title">
+        <span id="status-dot" class="status-dot" title="技能庫連線狀態"></span>
+        <span id="title-text">Skill 同步</span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh" class="btn" title="重新讀取技能庫清單與本機狀態">🔄</button>
+        <button id="btn-settings" class="btn" title="技能庫網址、Token 與同步選項">⚙️</button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner hidden"></div>
+
+    <!-- 設定 -->
+    <section id="view-settings" class="content hidden">
+      <div class="panel-box">
+        <div class="panel-box-title">
+          <span>技能庫連線設定</span>
+          <button id="btn-close-settings" class="btn btn-sm">✕</button>
+        </div>
+        <div class="field">
+          <label for="cfg-url">API 網址</label>
+          <input id="cfg-url" type="url" placeholder="https://skills.example.com/api/v1/" spellcheck="false">
+          <div class="hint">符合 Skills Registry API 標準 v1，會讀取其下的 index.json。</div>
+        </div>
+        <div class="field">
+          <label for="cfg-token">Token（API 金鑰）</label>
+          <input id="cfg-token" type="password" autocomplete="off" placeholder="" spellcheck="false">
+          <div id="token-hint" class="hint">以 Authorization: Bearer 傳送，加密儲存在系統金鑰圈，不會寫進設定檔。</div>
+        </div>
+        <div class="field">
+          <label for="cfg-linkdirs">連結到哪些 Agent 資料夾</label>
+          <input id="cfg-linkdirs" type="text" placeholder=".claude/skills" spellcheck="false">
+          <div class="hint">實體檔案放在 .agents/skills/；這裡填的資料夾會建立連結（逗號分隔），且只連結到已經存在的資料夾。</div>
+        </div>
+        <label class="check"><input id="cfg-gitexclude" type="checkbox"> 專案內的 skill 不顯示在 git status（寫入 .git/info/exclude）</label>
+        <label class="check"><input id="cfg-tls" type="checkbox"> 允許內網自簽 HTTPS 憑證</label>
+        <label class="check"><input id="cfg-http" type="checkbox"> 允許未加密 HTTP（Token 會以明文傳送）</label>
+        <div class="row">
+          <button id="btn-save" class="btn btn-primary">儲存並載入</button>
+          <button id="btn-verify" class="btn" title="逐項檢查這個 API 是否符合標準，並驗證每個檔案的雜湊">驗證 API</button>
+          <button id="btn-clear-token" class="btn btn-danger">清除 Token</button>
+        </div>
+        <div id="verify-result" class="verify hidden"></div>
+      </div>
+    </section>
+
+    <!-- 主畫面 -->
+    <section id="view-main" class="content hidden">
+      <details id="targets-box" class="panel-box compact" open>
+        <summary>同步到哪裡 <span id="targets-summary" class="muted"></span></summary>
+        <label class="check"><input id="tgt-global" type="checkbox"> 全域（所有專案都能用，寫入家目錄 .agents/skills）</label>
+        <div class="proj-tools">
+          <input id="proj-search" type="text" placeholder="搜尋專案…" spellcheck="false">
+          <button id="btn-proj-all" class="btn btn-sm">全選</button>
+          <button id="btn-proj-none" class="btn btn-sm">全不選</button>
+        </div>
+        <div id="proj-list" class="proj-list"></div>
+        <div class="hint">選專案＝寫入專案根目錄與它底下所有本機工作樹（每個 worktree 是獨立資料夾）。遠端 SSH 專案不會寫入。</div>
+      </details>
+
+      <div class="toolbar">
+        <input id="search" type="text" placeholder="搜尋 skill 名稱、說明、標籤…" spellcheck="false">
+        <div class="pill-group" id="filter-pills">
+          <button data-filter="all" class="active">全部</button>
+          <button data-filter="new">新</button>
+          <button data-filter="update">有更新</button>
+          <button data-filter="conflict">有衝突</button>
+          <button data-filter="selected">已選</button>
+        </div>
+      </div>
+      <div class="list-head">
+        <label class="check"><input id="sel-all" type="checkbox"> 全選目前篩選結果</label>
+        <span id="count" class="muted"></span>
+      </div>
+      <div id="skill-list" class="skill-list"></div>
+    </section>
+
+    <!-- 同步前檢閱 -->
+    <section id="view-review" class="content hidden">
+      <div class="panel-box">
+        <div class="panel-box-title">
+          <span>同步前檢閱</span>
+          <button id="btn-review-cancel" class="btn btn-sm">✕</button>
+        </div>
+        <div id="review-body"></div>
+        <div class="row">
+          <button id="btn-review-confirm" class="btn btn-primary">確認同步</button>
+          <button id="btn-review-back" class="btn">返回</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 結果 -->
+    <section id="view-result" class="content hidden">
+      <div class="panel-box">
+        <div class="panel-box-title">
+          <span id="result-title">同步結果</span>
+          <button id="btn-result-close" class="btn btn-sm">✕</button>
+        </div>
+        <div id="result-body"></div>
+        <div class="row"><button id="btn-result-done" class="btn btn-primary">完成</button></div>
+      </div>
+    </section>
+
+    <footer id="actionbar" class="actionbar hidden">
+      <span id="sel-count" class="muted"></span>
+      <div class="row tight">
+        <button id="btn-remove" class="btn btn-danger" title="從所選目標移除所選 skill（你改過的會保留）">移除</button>
+        <button id="btn-sync" class="btn btn-primary">檢閱並同步</button>
+      </div>
+    </footer>
+  </div>
+  <script src="panel.js"></script>
+</body>
+</html>
