@@ -104,6 +104,61 @@ function deriveContributionSummary(manifest) {
   return items;
 }
 
+function getImageDimensions(buf, filePath) {
+  // PNG: 8-byte signature + IHDR chunk (width at 16..20, height at 20..24)
+  if (
+    buf.length >= 24 &&
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+    buf.toString('ascii', 12, 16) === 'IHDR'
+  ) {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  }
+  // WEBP: RIFF....WEBP
+  if (buf.length >= 30 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') {
+    const chunk = buf.toString('ascii', 12, 16);
+    if (chunk === 'VP8X') {
+      const width = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
+      const height = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
+      return { width, height };
+    }
+    if (chunk === 'VP8 ' && buf.length >= 30) {
+      const width = buf.readUInt16LE(26) & 0x3fff;
+      const height = buf.readUInt16LE(28) & 0x3fff;
+      return { width, height };
+    }
+    if (chunk === 'VP8L' && buf.length >= 25) {
+      const bits = buf.readUInt32LE(21);
+      return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+    }
+  }
+  throw new Error(`Unsupported or invalid icon image format (expected PNG or WEBP): ${filePath}`);
+}
+
+function deriveIconCatalogEntry(manifest, pluginFolder, relPath) {
+  if (!manifest.icon) return null;
+  const iconRel = manifest.icon.replace(/\\/g, '/');
+  const iconAbs = join(pluginFolder, iconRel);
+  if (!existsSync(iconAbs)) {
+    throw new Error(`Icon file not found: ${iconAbs}`);
+  }
+  const buf = readFileSync(iconAbs);
+  if (buf.length > 256 * 1024) {
+    throw new Error(`Icon exceeds 256 KB limit (${buf.length} bytes): ${iconAbs}`);
+  }
+  const { width, height } = getImageDimensions(buf, iconAbs);
+  if (width !== height || width < 128) {
+    throw new Error(`Icon must be square and at least 128x128 (got ${width}x${height}): ${iconAbs}`);
+  }
+  const sha256 = createHash('sha256').update(buf).digest('hex');
+  return {
+    path: `${relPath}/${iconRel}`,
+    alt: `${manifest.name || manifest.id} icon`,
+    sha256,
+    width,
+    height
+  };
+}
+
 export function generateCatalog() {
   const commit = getGitHeadCommit();
   if (!existsSync(PLUGINS_DIR)) {
@@ -133,6 +188,7 @@ export function generateCatalog() {
     const types = deriveCatalogTypes(manifest);
     const summary = deriveContributionSummary(manifest);
     const relPath = `plugins/${entry.name}`;
+    const iconEntry = deriveIconCatalogEntry(manifest, pluginFolder, relPath);
 
     const publisher = manifest.publisher || 'manmonths';
     const qualifiedId = `${publisher}.${manifest.id}`;
@@ -163,8 +219,10 @@ export function generateCatalog() {
           contentHash: treeHash.hash,
           execution: manifest.execution || 'data',
           minimumOrca: manifest.engines?.orca?.replace(/^>=/, '') || '1.4.0',
-          types: types.length > 0 ? types : ['interface-language'],
-          ...(summary.length > 0 ? { contributes: summary } : {})
+          ...(manifest.name ? { name: manifest.name } : {}),
+          ...(types.length > 0 ? { types } : { types: ['interface-language'] }),
+          ...(summary.length > 0 ? { contributes: summary } : {}),
+          ...(iconEntry ? { images: { icon: iconEntry } } : {})
         }
       ]
     });

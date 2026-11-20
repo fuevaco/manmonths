@@ -6,6 +6,7 @@
   "name": "Skill 同步",
   "version": "1.0.0",
   "description": "人月維護的 Skill 同步面板：從符合 Skills Registry API 標準的技能庫取得 skill 清單，逐項檢閱後同步到全域或指定的 Orca 專案（含所有工作樹），並驗證每個檔案的雜湊。",
+  "icon": "assets/icon.png",
   "author": {
     "name": "人月",
     "url": "https://github.com/fuevaco"

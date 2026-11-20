@@ -17,11 +17,12 @@
       ],
       "releases": [
         {
-          "version": "1.0.1",
-          "commit": "5f6df65215d89c0c7118cdfebe158174c41b7c60",
-          "contentHash": "c10544e602dd66a6c3a2726dc53953a8207c94ef5a525959a5464c5b2f69b2b1",
+          "version": "1.0.2",
+          "commit": "ce0017a971f58ca4703242b45d74ea448f0b77e1",
+          "contentHash": "a1871bf228b85a74a528362f8231714ead45f18c1529a60f97c3d0ed6c0deac6",
           "execution": "sandboxed-ui",
           "minimumOrca": "1.4.248",
+          "name": "Markdown Marp & Mermaid 預覽",
           "types": [
             "editor"
           ],
@@ -31,7 +32,58 @@
               "name": "Marp & Mermaid 預覽",
               "detail": ".md, .markdown, .marp, .mmd, .mermaid"
             }
-          ]
+          ],
+          "images": {
+            "icon": {
+              "path": "plugins/marp-mermaid-preview/assets/icon.png",
+              "alt": "Markdown Marp & Mermaid 預覽 icon",
+              "sha256": "45e8b797007d4f0ce47ec380fa3c88b4cb65452f294079a005bfd480ffa61db9",
+              "width": 256,
+              "height": 256
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "manmonths.skill-sync",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/fuevaco/manmonths.git",
+        "ref": "main",
+        "path": "plugins/skill-sync"
+      },
+      "description": "人月維護的 Skill 同步面板：從符合 Skills Registry API 標準的技能庫取得 skill 清單，逐項檢閱後同步到全域或指定的 Orca 專案（含所有工作樹），並驗證每個檔案的雜湊。",
+      "categories": [
+        "tools"
+      ],
+      "releases": [
+        {
+          "version": "1.0.0",
+          "commit": "ce0017a971f58ca4703242b45d74ea448f0b77e1",
+          "contentHash": "69efbe6e487a6627df887512629045cb1e07de380f5d6f51ea446f5bcb9c9127",
+          "execution": "trusted-worker",
+          "minimumOrca": "1.4.259",
+          "name": "Skill 同步",
+          "types": [
+            "panel",
+            "worker"
+          ],
+          "contributes": [
+            {
+              "kind": "panels",
+              "name": "Skill 同步"
+            }
+          ],
+          "images": {
+            "icon": {
+              "path": "plugins/skill-sync/assets/icon.png",
+              "alt": "Skill 同步 icon",
+              "sha256": "a005c2e950083490cbd8d0f86e822612715341aeeb3aa7acfda1018e9f0aa5b3",
+              "width": 256,
+              "height": 256
+            }
+          }
         }
       ]
     },
@@ -49,11 +101,12 @@
       ],
       "releases": [
         {
-          "version": "1.2.8",
-          "commit": "f208d0801b81328f493852d59f1399fd0d65f666",
-          "contentHash": "6dcd46429aaf1607bf177d61efa7974311fdcf0e3f6fb1efeb52b308d285ea45",
+          "version": "1.2.9",
+          "commit": "ce0017a971f58ca4703242b45d74ea448f0b77e1",
+          "contentHash": "215067dfb8bee34ef6fa27639bc95344a14807b23c4a32ab42f1e33305590809",
           "execution": "trusted-worker",
-          "minimumOrca": "1.4.248",
+          "minimumOrca": "1.4.259",
+          "name": "Azure DevOps",
           "types": [
             "panel",
             "worker"
@@ -63,7 +116,16 @@
               "kind": "panels",
               "name": "Azure DevOps"
             }
-          ]
+          ],
+          "images": {
+            "icon": {
+              "path": "plugins/tfs-work-items/assets/icon.png",
+              "alt": "Azure DevOps icon",
+              "sha256": "48235316292bbad4d1143f77d425500f0e686652b7d872589cbe0457345ecf36",
+              "width": 256,
+              "height": 256
+            }
+          }
         }
       ]
     },
@@ -81,11 +143,12 @@
       ],
       "releases": [
         {
-          "version": "1.3.0",
-          "commit": "d76dff8cc746afb1ef112a236a1f9dcd2b58bdbf",
-          "contentHash": "c47c3243727c697566d80a626ec4b7f3db2c93eee64eb9d3dd0f63b0b65151dd",
+          "version": "1.3.1",
+          "commit": "ce0017a971f58ca4703242b45d74ea448f0b77e1",
+          "contentHash": "9a861c9f5d9fce22b2302c8952d3ebfd10d48aa829eaa91d8ebdee47212a0664",
           "execution": "data",
           "minimumOrca": "1.4.245",
+          "name": "繁體中文 (台灣)",
           "types": [
             "interface-language"
           ],
@@ -94,7 +157,16 @@
               "kind": "languagePacks",
               "name": "zh-TW"
             }
-          ]
+          ],
+          "images": {
+            "icon": {
+              "path": "plugins/zh-tw/assets/icon.png",
+              "alt": "繁體中文 (台灣) icon",
+              "sha256": "edbda42c81897b7b6fbc6b001bd8d854281042e6e97799def827bc295f50aefc",
+              "width": 256,
+              "height": 256
+            }
+          }
         }
       ]
     }
