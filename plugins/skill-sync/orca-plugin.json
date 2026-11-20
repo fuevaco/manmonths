@@ -1,0 +1,76 @@
+{
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
+  "id": "skill-sync",
+  "publisher": "manmonths",
+  "name": "Skill 同步",
+  "version": "1.0.0",
+  "description": "人月維護的 Skill 同步面板：從符合 Skills Registry API 標準的技能庫取得 skill 清單，逐項檢閱後同步到全域或指定的 Orca 專案（含所有工作樹），並驗證每個檔案的雜湊。",
+  "author": {
+    "name": "人月",
+    "url": "https://github.com/fuevaco"
+  },
+  "repository": "https://github.com/fuevaco/manmonths",
+  "engines": {
+    "orca": ">=1.4.259"
+  },
+  "pluginApi": 1,
+  "main": "worker/index.mjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "skill-sync",
+        "title": "Skill 同步",
+        "icon": "package",
+        "entry": "panel/index.html",
+        "ui": "html"
+      }
+    ],
+    "settings": [
+      {
+        "key": "baseUrl",
+        "title": "技能庫 API 網址",
+        "description": "符合 Skills Registry API 標準 v1 的網址，會讀取其下的 index.json（例如：https://skills.example.com/api/v1/）。Token 請在面板的設定畫面輸入，會加密儲存。",
+        "type": "string",
+        "default": "",
+        "placeholder": "https://skills.example.com/api/v1/"
+      },
+      {
+        "key": "linkDirs",
+        "title": "連結到哪些 Agent 資料夾",
+        "description": "實體檔案一律放在 .agents/skills/（Codex 等 Agent 直接讀取）。這裡填的資料夾會建立連結，以逗號分隔；只會連結到「已經存在」的 Agent 資料夾。",
+        "type": "string",
+        "default": ".claude/skills",
+        "placeholder": ".claude/skills"
+      },
+      {
+        "key": "gitExclude",
+        "title": "專案內的 skill 不顯示在 git status",
+        "description": "同步到專案時，把這些路徑寫入該 repo 的 .git/info/exclude（只在本機生效，不會改 .gitignore，也不會被 commit）。",
+        "type": "boolean",
+        "default": true
+      },
+      {
+        "key": "allowInsecureTls",
+        "title": "允許內網自簽 HTTPS 憑證",
+        "description": "技能庫使用自簽或未受系統信任的憑證時開啟。",
+        "type": "boolean",
+        "default": false
+      },
+      {
+        "key": "allowHttp",
+        "title": "允許未加密 HTTP",
+        "description": "預設只有本機（localhost）能使用 http；其他主機若不用 https，Token 會以明文傳送，請只在可信任的內網開啟。",
+        "type": "boolean",
+        "default": false
+      }
+    ]
+  },
+  "capabilities": [
+    { "kind": "settings:own" },
+    { "kind": "secrets:own" },
+    { "kind": "storage:own" },
+    { "kind": "workspace:read" },
+    { "kind": "notifications:show" }
+  ]
+}

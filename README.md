@@ -26,6 +26,7 @@
 | **`manmonths.zh-tw`** | [`plugins/zh-tw`](./plugins/zh-tw) | `interface-language` | Orca 繁體中文（台灣，zh-TW）介面語言套件 |
 | **`manmonths.marp-mermaid-preview`** | [`plugins/marp-mermaid-preview`](./plugins/marp-mermaid-preview) | `editor` | Markdown Marp 簡報與 Mermaid 圖表增強預覽自訂編輯器 |
 | **`manmonths.tfs-work-items`** | [`plugins/tfs-work-items`](./plugins/tfs-work-items) | `panel` / `worker` | Azure DevOps / 地端 TFS 工項互動面板（支援 Task / Bug 查詢、新增、狀態篩選與派工） |
+| **`manmonths.skill-sync`** | [`plugins/skill-sync`](./plugins/skill-sync) | `panel` / `worker` | Skill 同步面板：從符合 [Skills Registry API 標準](./plugins/skill-sync/docs/SKILLS-API-SPEC.md) 的技能庫取得清單，檢閱後同步到全域或指定專案（含驗證與 API 一致性檢查工具） |
 
 ---
 
