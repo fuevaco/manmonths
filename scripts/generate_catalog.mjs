@@ -45,6 +45,53 @@ function hashPluginTree(root) {
   return { hash: hash.digest('hex'), files: files.length, totalBytes };
 }
 
+// Orca 安裝外掛時，會對下載到的檔案「原始位元組」重算 contentHash 並與 catalog 比對。
+// 因此 contentHash 必須來自 Git 實際存的內容：若工作目錄的檔案被換行轉換（core.autocrlf）
+// 或有未提交的修改，算出來的值別人就驗證不過（Orca 會顯示「無法讀取其存取權限」）。
+// 這裡在計算前逐檔核對：工作目錄的每個檔案，位元組必須與 HEAD 提交裡的 blob 完全相同。
+function gitBlobSha1(bytes) {
+  return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+}
+
+function assertPluginMatchesGit(pluginFolder, relPath) {
+  let out;
+  try {
+    out = execSync(`git ls-tree -r -z HEAD -- ${relPath}`, { cwd: ROOT_DIR, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  } catch {
+    throw new Error(`無法讀取 ${relPath} 在 HEAD 的內容。請先把外掛提交（commit）後再產生 catalog。`);
+  }
+  const committed = new Map();
+  for (const rec of out.split('\0').filter(Boolean)) {
+    const m = /^\d+ blob ([0-9a-f]{40})\t(.+)$/.exec(rec);
+    if (m) committed.set(m[2], m[1]);
+  }
+  const problems = [];
+  const seen = new Set();
+  (function walk(dir) {
+    for (const ent of readdirSync(dir, { withFileTypes: true })) {
+      if (ent.name === '.git' || ent.name === 'node_modules' || ent.name === '.orca') continue;
+      const full = join(dir, ent.name);
+      if (ent.isDirectory()) walk(full);
+      else if (ent.isFile()) {
+        const rel = relative(ROOT_DIR, full).replace(/\\/g, '/');
+        seen.add(rel);
+        const want = committed.get(rel);
+        if (!want) problems.push(`${rel}（尚未提交）`);
+        else if (gitBlobSha1(readFileSync(full)) !== want) problems.push(`${rel}（與已提交內容不同：未提交的修改或換行被轉換）`);
+      }
+    }
+  })(pluginFolder);
+  for (const rel of committed.keys()) if (!seen.has(rel)) problems.push(`${rel}（已提交但工作目錄沒有）`);
+  if (problems.length) {
+    throw new Error(
+      `${relPath} 的工作目錄與 Git 內容不一致，已中止（否則 contentHash 會讓使用者驗證失敗）：\n  - ` +
+        problems.slice(0, 10).join('\n  - ') +
+        (problems.length > 10 ? `\n  …另外 ${problems.length - 10} 個` : '') +
+        '\n請先 commit 所有修改；若是換行問題，請確認根目錄 .gitattributes 有 `plugins/** -text`，並重新 checkout 該資料夾。'
+    );
+  }
+}
+
 function getGitHeadCommit() {
   try {
     return execSync('git rev-parse HEAD', { cwd: ROOT_DIR, encoding: 'utf8' }).trim();
@@ -184,18 +231,20 @@ export function generateCatalog() {
     if (!existsSync(manifestPath)) continue;
 
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const relPath = `plugins/${entry.name}`;
+    assertPluginMatchesGit(pluginFolder, relPath);
     const treeHash = hashPluginTree(pluginFolder);
     const types = deriveCatalogTypes(manifest);
     const summary = deriveContributionSummary(manifest);
-    const relPath = `plugins/${entry.name}`;
     const iconEntry = deriveIconCatalogEntry(manifest, pluginFolder, relPath);
 
     const publisher = manifest.publisher || 'manmonths';
     const qualifiedId = `${publisher}.${manifest.id}`;
 
     // Look up previous release commit if contentHash didn't change
+    // （--repin：不沿用舊 commit，全部改指向目前 HEAD；內容沒變時 hash 也不會變）
     let releaseCommit = commit;
-    if (existingCatalog?.plugins) {
+    if (!process.argv.includes('--repin') && existingCatalog?.plugins) {
       const prev = existingCatalog.plugins.find((p) => p.id === qualifiedId);
       if (prev?.releases?.[0] && prev.releases[0].contentHash === treeHash.hash) {
         releaseCommit = prev.releases[0].commit;
