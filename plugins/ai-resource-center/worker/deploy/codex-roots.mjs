@@ -2,6 +2,7 @@
 // 唯讀：名稱只縮小候選範圍，設定檔（config.toml 或 auth.json）才是判準；不建立任何檔案或目錄。
 import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { createPathRules, isCaseInsensitive } from './canonical-root.mjs';
 import { HostRootBaseIds } from './host-profiles.mjs';
 
@@ -60,10 +61,47 @@ export function locateCodexRoots({ userHome = os.homedir(), env = process.env, m
   return [...roots.values()].sort((a, b) => (b.isPrimary - a.isPrimary) || (a.displayPath < b.displayPath ? -1 : a.displayPath > b.displayPath ? 1 : 0));
 }
 
-/** 舊 Codex 家目錄收據的落點：根即家目錄時，技能在 .agents、其餘在 .codex；新設定根直接承載。 */
+/** 只讀檢查可建立共用技能目錄的最近上層，不建立探測用檔案。 */
+export function checkSharedSkillsDirectory(userHome) {
+  const directory = path.join(userHome, '.agents', 'skills');
+  let current = directory;
+  try {
+    for (;;) {
+      const entry = fs.lstatSync(current, { throwIfNoEntry: false });
+      if (entry) {
+        if (!fs.statSync(current).isDirectory()) throw new Error('應為資料夾的位置已有檔案');
+        if (process.platform === 'win32') {
+          // accessSync on Windows ignores directory ACLs. Opening an existing directory for
+          // write access checks the token against its ACL without changing it.
+          fs.closeSync(fs.openSync(current, fs.constants.O_WRONLY));
+        } else {
+          fs.accessSync(current, fs.constants.W_OK | fs.constants.X_OK);
+        }
+        return null;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) throw new Error('找不到可用的上層資料夾');
+      current = parent;
+    }
+  } catch (e) {
+    return { directory, path: current, reason: e.message };
+  }
+}
+
+export function isSharedSkillPath(userHome, id, destination, rules) {
+  const api = rules.path;
+  const skills = api.join(userHome, '.agents', 'skills');
+  const expected = api.join(skills, id), actual = api.resolve(destination);
+  const equals = rules.caseInsensitive ? expected.toLowerCase() === actual.toLowerCase() : expected === actual;
+  if (!equals || api.basename(id) !== id || id === '.' || id === '..') return false;
+  const physical = rules.normalize(skills);
+  return rules.isWithin(physical, api.join(physical, id));
+}
+
 export function resolveCodexBase(root, userHome, rootBaseId, rules) {
   if (rootBaseId !== HostRootBaseIds.codexConfigRoot && rootBaseId !== HostRootBaseIds.codexSkillsRoot) return root;
+  if (rootBaseId === HostRootBaseIds.codexSkillsRoot) return rules.path.join(userHome, '.agents');
   return rules.normalize(root) === rules.normalize(userHome)
-    ? rules.path.join(root, rootBaseId === HostRootBaseIds.codexSkillsRoot ? '.agents' : '.codex')
+    ? rules.path.join(root, '.codex')
     : root;
 }

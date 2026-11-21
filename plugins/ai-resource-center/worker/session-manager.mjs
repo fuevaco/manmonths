@@ -11,6 +11,7 @@
 // - stop：終態；取消進行中的請求與等待，之後不送請求、不發事件、不存檔。
 // - 機密：refresh token 只在記憶體與儲存處；結果、事件、例外都不含 token。
 
+import { logAuthDiagnostic } from './auth.mjs';
 import { ErrorCode } from './contract.mjs';
 import { HttpError, parseJson, send } from './http.mjs';
 import { apiUrl } from './market-url.mjs';
@@ -101,7 +102,7 @@ function classify(status, text) {
  * @param {(ms: number, signal: AbortSignal) => Promise<void>} [opts.delay]
  * @param {number} [opts.requestTimeoutMs]
  */
-export function createSessionManager({ session, store, transport = send, now = () => Date.now(), delay = realDelay, requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS }) {
+export function createSessionManager({ session, store, transport = send, now = () => Date.now(), delay = realDelay, requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, log = () => {} }) {
   const refreshUrl = apiUrl(session.marketUrl, 'api/auth/refresh');
   const lifetime = new AbortController();
   const listeners = { refreshed: new Set(), rejected: new Set() };
@@ -129,9 +130,11 @@ export function createSessionManager({ session, store, transport = send, now = (
     try {
       const res = await transport({ method: 'POST', url: refreshUrl, json: { refreshToken }, timeoutMs: requestTimeoutMs, signal: lifetime.signal });
       if (lifetime.signal.aborted) throw stoppedError();
+      if (res.status !== 200) logAuthDiagnostic(log, 'refresh', res, [refreshToken, current.token]);
       return classify(res.status, res.text);
     } catch (e) {
       if (lifetime.signal.aborted) throw stoppedError();
+      logAuthDiagnostic(log, 'refresh', e, [refreshToken, current.token]);
       if (e instanceof HttpError && e.notSent) return { result: R.transient, possiblyDelivered: false };
       return { result: R.transient, possiblyDelivered: true }; // 逾時、連線中斷、其他非預期錯誤
     }

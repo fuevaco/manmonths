@@ -1,6 +1,7 @@
 // 帳密登入（對照 LC-AI-Pack GUI AuthService）：POST {market}/api/auth/login，client 固定為 "gui"。
 import { ErrorCode, RcError } from './contract.mjs';
 import { HttpError, parseJson } from './http.mjs';
+import { createSecretMasker } from './setup/masker.mjs';
 import { apiUrl } from './market-url.mjs';
 
 const isoUtc = (v) => {
@@ -22,7 +23,7 @@ export function problemText(text, fallback) {
 export function unreachableError(err, marketUrl) {
   const origin = new URL(marketUrl).origin;
   if (err instanceof HttpError && err.tls) {
-    return new RcError(ErrorCode.unreachable, `無法與 ${origin} 建立安全連線（憑證不受信任或 TLS 錯誤），請確認網址後重試`);
+    return new RcError(ErrorCode.unreachable, `無法與 ${origin} 建立安全連線（憑證不受信任或安全連線發生錯誤），請確認網址後重試`);
   }
   if (err instanceof HttpError && err.kind === 'timeout') {
     return new RcError(ErrorCode.unreachable, `連線 ${origin} 逾時，請確認網路或網址後重試`);
@@ -32,23 +33,21 @@ export function unreachableError(err, marketUrl) {
 
 /** 非 2xx 回應 → 依狀態碼分類的錯誤。 */
 export function statusError(status, text, fallback) {
-  const message = status === 403
-    ? `沒有權限：${problemText(text, '權限不足')}（HTTP 403）`
-    : `${problemText(text, fallback)}（HTTP ${status}）`;
-  if (status === 401) return new RcError(ErrorCode.invalidCredentials, message);
-  if (status === 403) return new RcError(ErrorCode.forbidden, message);
-  if (status === 404 || status === 405) {
-    return new RcError(ErrorCode.invalidUrl, `這個網址找不到市集服務，請確認網址是否正確（HTTP ${status}）`);
-  }
-  if (status === 422 || status === 400) return new RcError(ErrorCode.invalidParams, message);
-  if (status >= 500) return new RcError(ErrorCode.serviceUnavailable, message);
-  return new RcError(ErrorCode.marketError, message);
+  const serverText = problemText(text, '');
+  // 伺服器可能回傳英文框架錯誤或狀態碼；這些只供紀錄，不送到面板。
+  const friendly = fallback => serverText && !/[a-z]|\b[1-5]\d{2}\b/i.test(serverText) ? serverText : fallback;
+  if (status === 401) return new RcError(ErrorCode.invalidCredentials, '帳號或密碼錯誤');
+  if (status === 403) return new RcError(ErrorCode.forbidden, `沒有權限：${friendly('權限不足')}`);
+  if (status === 404 || status === 405) return new RcError(ErrorCode.invalidUrl, '這個網址找不到市集服務，請確認網址是否正確');
+  if (status === 422 || status === 400) return new RcError(ErrorCode.invalidParams, friendly('登入資料格式不正確，請重新輸入'));
+  if (status >= 500) return new RcError(ErrorCode.serviceUnavailable, friendly('市集服務暫時無法使用，請稍後再試'));
+  return new RcError(ErrorCode.marketError, friendly(`${fallback}，請稍後再試`));
 }
 
 /**
  * @returns {Promise<object>} 新的工作階段（尚未儲存）
  */
-export async function login({ marketUrl, username, password, transport, now, timeoutMs }) {
+export async function login({ marketUrl, username, password, transport, now, timeoutMs, log = () => {} }) {
   let res;
   try {
     res = await transport({
@@ -58,10 +57,14 @@ export async function login({ marketUrl, username, password, transport, now, tim
       timeoutMs
     });
   } catch (e) {
+    logAuthDiagnostic(log, 'login', e, [password]);
     throw unreachableError(e, marketUrl);
   }
 
-  if (res.status < 200 || res.status >= 300) throw statusError(res.status, res.text, '登入失敗');
+  if (res.status < 200 || res.status >= 300) {
+    logAuthDiagnostic(log, 'login', res, [password]);
+    throw statusError(res.status, res.text, '登入失敗');
+  }
 
   const body = parseJson(res.text);
   const token = typeof body?.token === 'string' ? body.token : '';
@@ -79,4 +82,13 @@ export async function login({ marketUrl, username, password, transport, now, tim
     session.lastRefreshedAt = new Date(now()).toISOString();
   }
   return session;
+}
+
+// 僅記錄錯誤的狀態與診斷欄位；不記錄帳密、請求本文或成功回應。
+export function logAuthDiagnostic(log, operation, response, secrets = []) {
+  response ??= {};
+  const body = parseJson(response.text);
+  const masker = createSecretMasker();
+  for (const value of [...secrets, body?.token, body?.refreshToken, body?.password]) masker.register(value);
+  log(masker.mask(`[auth.${operation}] ${response.status ?? response.code ?? response.kind ?? 'connection'} ${problemText(response.text, response.message ?? '')}`));
 }

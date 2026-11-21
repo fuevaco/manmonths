@@ -36,11 +36,13 @@ export async function setupMulti(t, { packages = { 'pkg-a': ['1.0.0', '1.1.0'] }
   const versionsOf = (spec) => Array.isArray(spec) ? spec : Object.keys(spec);
   const market = await startFakeMarket({ packages: Object.entries(packages).map(([k, v]) => ({ packageKey: k, name: k, type: 'skill', description: 'Synthetic', latestReleaseVersion: versionsOf(v).at(-1) })) });
   const installs = [];
+  const recommended = {};
   for (const [key, spec] of Object.entries(packages)) {
     const versions = versionsOf(spec);
+    recommended[key] = versions[0];
     const zips = Array.isArray(spec) ? Object.fromEntries(versions.map(v => [v, build(key, v)])) : spec;
     market.override(`GET /api/market/packages/${key}`, () => ({ status: 200, body: { packageKey: key, name: key, type: 'skill', description: 'Synthetic',
-      recommendedVersion: versions.at(-1), versions: versions.map(v => ({ version: v, isEnabled: true, channel: 'release', status: 'active', hosts: ['codex', 'claude-code'], sha256: sha(zips[v]) })) } }));
+      recommendedVersion: recommended[key], versions: versions.filter(v => v <= recommended[key]).map(v => ({ version: v, isEnabled: true, channel: 'release', status: 'active', hosts: ['codex', 'claude-code'], sha256: sha(zips[v]) })) } }));
     for (const v of versions) {
       market.override(`GET /api/market/packages/${key}/versions/${v}/readme`, () => ({ status: 200, body: { readme: '# 合成' } }));
       market.override(`GET /api/market/packages/${key}/versions/${v}/download`, () => ({ status: 200, raw: zips[v], headers: { 'X-Checksum-Sha256': sha(zips[v]) }, contentType: 'application/zip' }));
@@ -51,17 +53,21 @@ export async function setupMulti(t, { packages = { 'pkg-a': ['1.0.0', '1.1.0'] }
   t.after(async () => { worker.dispose(); await market.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   await worker.call('rc.session.signIn', { marketUrl: market.url, username: 'alice', password: 'pw-alice' });
   const receipts = () => { try { return JSON.parse(fs.readFileSync(path.join(lcaipackHome, 'receipts.json'), 'utf8')).receipts; } catch { return []; } };
-  const dest = (root, name = 'demo-skill') => path.join(rules.normalize(root), 'skills', name);
+  const dest = (root, name = 'demo-skill') => path.join(rules.normalize(root === roots.codex ? path.join(userHome, '.agents') : root), 'skills', name);
 
-  /** 以三個全域目標規劃：回傳每個根的目標 id。 */
-  async function targets(extra = {}) {
-    const { targets: list } = await worker.call('rc.deploy.listTargets', extra);
-    const byRoot = (root) => list.find(x => rules.normalize(x.rootPath) === rules.normalize(root) && x.surfaceId !== 'claude-desktop');
-    return { list, codex: byRoot(roots.codex), claude: byRoot(roots.claude), claudeWork: byRoot(roots.claudeWork) };
+  const recommend = (key, version) => { recommended[key] = version; };
+  const run = (packageKey = 'pkg-a', action = 'install', extra = {}) => worker.call('rc.install.run', { packageKey, action, ...extra });
+  const confirm = (review, packageKey = 'pkg-a', action = 'install') => run(packageKey, action, { confirmedPlanId: review.planId });
+  // 模擬工具稍後才出現：先只提供需要預裝的根，安裝仍經由公開一鍵請求。
+  async function seed(packageKey, selectedRoots) {
+    fs.mkdirSync(lcaipackHome, { recursive: true });
+    const config = path.join(lcaipackHome, 'config.json');
+    fs.writeFileSync(config, JSON.stringify({ excludedClientRoots: {
+      codex: selectedRoots.includes(roots.codex) ? [] : [roots.codex],
+      'claude-code': [roots.claude, roots.claudeWork].filter(r => !selectedRoots.includes(r))
+    } }));
+    try { const review = await run(packageKey); return review.needsConfirmation ? await confirm(review, packageKey) : review; }
+    finally { fs.unlinkSync(config); }
   }
-  async function plan(packageKey, version, targetIds, extra = {}) {
-    return worker.call('rc.deploy.plan', { packageKey, version, targets: targetIds, ...extra });
-  }
-  const apply = (summary, targetIds) => worker.call('rc.deploy.apply', { planDigest: summary.planDigest, targets: targetIds });
-  return { dir, userHome, roots, lcaipackHome, market, installs, worker, receipts, dest, targets, plan, apply };
+  return { dir, userHome, roots, lcaipackHome, market, installs, worker, receipts, dest, recommend, run, confirm, seed };
 }

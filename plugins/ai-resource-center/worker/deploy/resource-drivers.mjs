@@ -3,7 +3,7 @@
 import { ofBytes, ofText, ofTree } from './digest.mjs';
 import { renderArtifact } from './artifact-dialects.mjs';
 import { HostRootBaseIds, MutationKind, isSafeTemplate } from './host-profiles.mjs';
-import { resolveCodexBase } from './codex-roots.mjs';
+import { isSharedSkillPath, resolveCodexBase } from './codex-roots.mjs';
 import { observe, observeTree, PathState } from './observer.mjs';
 import { ProblemCodes, blocking } from './problems.mjs';
 import fs from 'node:fs';
@@ -13,6 +13,9 @@ import { Missing } from './observer.mjs';
 import { resolveClaudeUserConfigDirectory } from './claude-code-roots.mjs';
 
 export const PlannedChange = Object.freeze({ create: 'Create', replace: 'Replace', merge: 'Merge', noOp: 'NoOp' });
+const backupExplanation = kind => kind === 'skill'
+  ? '已授權備份後覆蓋。技能資料夾會先備份至 LC-AI-Pack 資料目錄下的 backups。'
+  : '已授權備份後覆蓋。原檔案會先備份至原位置旁，檔名加上 .bak-lcaipack-<時間戳>。';
 
 /** 同一 target 內穩定且可排序的 mutation id。 */
 export const mutationId = (ctx, contentId, destination) =>
@@ -37,7 +40,9 @@ export function resolveDestination(route, ctx, contentId) {
   const api = ctx.rules.path;
   const expanded = template.replaceAll('{root}', rootBase).replaceAll('{id}', contentId).replaceAll('/', api.sep);
   const full = api.resolve(expanded);
-  if (!ctx.rules.isWithin(rootBase, full)) {
+  const contained = route.rootBaseFor(ctx.scope) === HostRootBaseIds.codexSkillsRoot
+    ? isSharedSkillPath(ctx.userHome, contentId, full, ctx.rules) : ctx.rules.isWithin(rootBase, full);
+  if (!contained) {
     return { problem: blocking(ProblemCodes.pathEscape, `目的地逃出 canonical root：${full}`, `canonical root 為 ${rootBase}；不接受逃出 root 的目的地。`,
       { host: ctx.host, scope: ctx.scope, contentId, path: full }) };
   }
@@ -60,7 +65,7 @@ export function evaluateConflict(content, ctx, destination, before, ownership, p
       { host: ctx.host, scope: ctx.scope, contentId: content.id, path: destination, existingOwner: ownership,
         resolutions: ['以 BackupAndReplace 重新 Plan', '先手動移除或改名既有內容'] });
     if (!ctx.allowBackupAndReplace) { problems.push(p); return false; }
-    problems.push({ ...p, severity: 'Warning', explanation: '已授權備份後覆蓋；原內容會先複製為 .bak-lcaipack-<時間戳>。' });
+    problems.push({ ...p, severity: 'Warning', explanation: backupExplanation(content.kind) });
     return true;
   }
   return evaluateLocalModification(content, ctx, destination, before, ownership, problems);
@@ -78,7 +83,7 @@ export function evaluateLocalModification(content, ctx, destination, before, own
     { host: ctx.host, scope: ctx.scope, contentId: content.id, path: destination, existingOwner: ownership,
       resolutions: ['以 BackupAndReplace 重新 Plan', '手動還原本機修改後重新 Plan'] });
   if (!ctx.allowBackupAndReplace) { problems.push(p); return false; }
-  problems.push({ ...p, severity: 'Warning', explanation: '已授權備份後覆蓋；本機修改會先複製為 .bak-lcaipack-<時間戳>。' });
+  problems.push({ ...p, severity: 'Warning', explanation: backupExplanation(content.kind) });
   return true;
 }
 
@@ -152,7 +157,9 @@ const mcpDriver = Object.freeze({ kind: 'mcp', expand(content, route, ctx) {
     });
     adapter.applyPatch(local, exists, patch); // 在規劃時確認可安全 render；不寫檔。
   } catch {
-    throw new CanonicalPackageError(ProblemCodes.configConflict, `目標設定檔無法安全解析或寫入：${destination}`);
+    return { mutations: [], configuration: [], artifacts: [], problems: [blocking(ProblemCodes.configConflict,
+      `目標設定檔無法安全解析或寫入：${destination}`, '請修正設定檔後重試。',
+      { host: ctx.host, scope: ctx.scope, contentId: content.id, path: destination, configPath: destination })] };
   }
   const current = exists ? adapter.readNodeJson(local, patch.nodePath) : null;
   const stamp = json => json === null ? Missing : { state: PathState.configNode, sha256: ofText(json), treeSha256: null, length: Object.keys(JSON.parse(json)).length, lastWriteUtc: null };

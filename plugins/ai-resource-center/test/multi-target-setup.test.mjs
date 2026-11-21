@@ -24,47 +24,25 @@ async function environment(t, { fail }) {
   } };
   const e = await setupMulti(t, { packages: { 'pkg-a': ['1.0.0'], 'bundle-s': { '1.0.0': bundle('1.0.0') } },
     workerDeps: { commandExecutor, runners: fakeRunners, setupEnvironment: { operatingSystem: 'windows', architecture: 'x64' }, platform: 'win32' } });
-  const targets = await e.targets();
-  // pkg-a 先占用第二個 Claude Code 根的 demo-skill，使組合包在該目標因他包擁有而受阻。
-  const first = await e.plan('pkg-a', '1.0.0', [targets.claudeWork.id]);
-  assert.equal((await e.apply(first, [targets.claudeWork.id])).status, 'succeeded');
-  const ids = [targets.codex.id, targets.claude.id, targets.claudeWork.id];
-  return { ...e, calls, ids };
+  assert.equal((await e.seed('pkg-a', [e.roots.claudeWork])).ok, true);
+  return { ...e, calls };
 }
-
-test('設定命令成功：命令只執行一次，兩個可部署目標完成、受阻目標維持原狀', async (t) => {
-  const e = await environment(t, { fail: false });
-  const summary = await e.plan('bundle-s', '1.0.0', e.ids);
-  assert.equal(summary.canApply, true, JSON.stringify(summary.problems));
-  assert.deepEqual([summary.deployableCount, summary.blockedCount], [2, 1]);
-  assert.equal(e.calls.length, 0);
-
-  const result = await e.apply(summary, e.ids);
-
-  assert.equal(result.status, 'partial');
+for (const fail of [false, true]) test(`設定命令${fail ? '失敗' : '成功'}：只執行一次，受阻部署目標保持自己的原因`, async t => {
+  const e = await environment(t, { fail }); const before = e.receipts();
+  const review = await e.run('bundle-s');
+  assert.equal(review.plan.deployableCount, 2); assert.equal(review.plan.blockedTargets.length, 1);
+  assert.deepEqual(e.calls, []);
+  const result = await e.confirm(review, 'bundle-s');
   assert.deepEqual(e.calls, ['prepare']);
-  assert.deepEqual(result.targets.map(x => x.status).sort(), ['skipped', 'succeeded', 'succeeded']);
-  assert.equal(e.receipts().filter(r => r.packageKey === 'bundle-s').length, 2);
-});
-
-test('設定命令失敗：只有依賴它的可部署目標成為未部署（原因為命令失敗）；受阻目標仍列出自己的衝突原因', async (t) => {
-  const e = await environment(t, { fail: true });
-  const before = e.receipts();
-  const summary = await e.plan('bundle-s', '1.0.0', e.ids);
-  const result = await e.apply(summary, e.ids);
-
-  assert.equal(result.status, 'failed');
-  assert.deepEqual(e.calls, ['prepare']);
-  const byId = Object.fromEntries(result.targets.map(x => [x.id, x]));
-  for (const id of [e.ids[0], e.ids[1]]) {
-    assert.equal(byId[id].status, 'notDeployed');
-    assert.match(byId[id].problems[0].summary, /設定命令 '準備環境' 未成功/);
-  }
-  assert.equal(byId[e.ids[2]].status, 'skipped');
-  assert.ok(byId[e.ids[2]].problems.some(p => p.code === 'deployment.ownership-collision'));
-  assert.ok(byId[e.ids[2]].problems.every(p => !/設定命令/.test(p.summary)));
-  assert.deepEqual(e.receipts(), before);
-  assert.equal(fs.existsSync(path.join(e.dest(e.roots.codex), 'SKILL.md')), false);
-  assert.equal(fs.existsSync(path.join(e.dest(e.roots.claude), 'SKILL.md')), false);
-  assert.equal(sha(fs.readFileSync(path.join(e.dest(e.roots.claudeWork), 'SKILL.md'))).length, 64);
+  assert.equal(result.ok, !fail);
+  assert.equal(result.succeeded.length, fail ? 0 : 2);
+  assert.equal(result.failed.length, fail ? 2 : 0); assert.equal(result.skipped.length, 1);
+  const blocked = result.skipped.find(t => t.rootPath === e.roots.claudeWork);
+  assert.ok(blocked.detail.some(p => p.code === 'deployment.ownership-collision'));
+  assert.ok(blocked.detail.every(p => p.code !== 'deployment.setup-command-failed'));
+  if (fail) {
+    for (const target of result.failed.filter(t => t !== blocked)) assert.ok(target.detail.some(p => p.code === 'deployment.setup-command-failed'));
+    assert.deepEqual(e.receipts(), before);
+    for (const root of [e.roots.codex, e.roots.claude]) assert.equal(fs.existsSync(path.join(e.dest(root), 'SKILL.md')), false);
+  } else assert.equal(e.receipts().filter(r => r.packageKey === 'bundle-s').length, 2);
 });

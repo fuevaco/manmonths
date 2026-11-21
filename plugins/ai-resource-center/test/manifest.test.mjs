@@ -8,6 +8,13 @@ import { fileURLToPath } from 'node:url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await fs.readFile(path.join(root, 'orca-plugin.json'), 'utf8'));
 
+test('外掛說明保留人月、市集與獨立登入，介紹一鍵安裝而不提供下載', () => {
+  assert.match(manifest.description, /^人月維護/);
+  assert.match(manifest.description, /有權使用的資源市集.*獨立登入/);
+  assert.match(manifest.description, /一鍵安裝 Skills、Agents、MCP 與組合包到 Codex、Claude Code 與桌面工具/);
+  assert.doesNotMatch(manifest.description, /下載/);
+});
+
 test('外掛識別、入口與右側欄面板「資源中心」', async () => {
   assert.equal(manifest.id, 'ai-resource-center');
   assert.equal(manifest.publisher, 'manmonths');

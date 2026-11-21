@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHostState, startWorker, leakedSecrets } from './harness.mjs';
 import { startFakeMarket } from './fake-market.mjs';
+import { HttpError } from '../worker/http.mjs';
 import { resolveLcAiPackHome } from '../worker/paths.mjs';
 
 const cleanup = [];
@@ -62,9 +63,9 @@ test('登入失敗各自顯示可辨識的原因，修正後可重試', async ()
   await assert.rejects(signIn('', 'alice', 'pw-alice'), { code: 'invalid_params', message: '請填寫市集網址、帳號與密碼' });
   await assert.rejects(signIn('market.example', 'alice', 'pw-alice'), { code: 'invalid_url', message: /網址格式不正確/ });
   await assert.rejects(signIn('ftp://market.example', 'alice', 'pw-alice'), { code: 'invalid_url' });
-  await assert.rejects(signIn(`${m.url}/not-a-market`, 'alice', 'pw-alice'), { code: 'invalid_url', message: /找不到市集服務.*HTTP 404/ });
+  await assert.rejects(signIn(`${m.url}/not-a-market`, 'alice', 'pw-alice'), { code: 'invalid_url', message: /找不到市集服務/ });
   await assert.rejects(signIn(goneUrl, 'alice', 'pw-alice'), { code: 'unreachable', message: /無法連線到 http:\/\/127\.0\.0\.1:\d+/ });
-  await assert.rejects(signIn(m.url, 'alice', 'wrong'), { code: 'invalid_credentials', message: '帳號或密碼錯誤（HTTP 401）' });
+  await assert.rejects(signIn(m.url, 'alice', 'wrong'), { code: 'invalid_credentials', message: '帳號或密碼錯誤' });
 
   assert.equal(w.state.secrets.size, 0, '失敗時不儲存任何工作階段');
   assert.equal(w.state.settings.get('marketUrl'), '', '失敗時不改動已儲存的網址');
@@ -89,7 +90,8 @@ test('登入成功即保留，不做權限探測；沒有權限時在讀取目�
   assert.equal(m.requests.some((r) => r.route === '/api/market/categories'), false, '登入後不送權限探測');
   assert.equal(m.requests.some((r) => r.route === '/api/auth/logout'), false);
 
-  await assert.rejects(w.call('rc.catalog.list'), { code: 'forbidden', message: '沒有權限：權限不足（HTTP 403）' });
+  await assert.rejects(w.call('rc.catalog.list'), { code: 'forbidden', message: '沒有權限：權限不足' });
+  assert.ok(w.state.logs.some(line => line.includes('403') && line.includes('權限不足')));
 
   const after = await w.call('rc.session.getState');
   assert.equal(after.signedIn, true, '沒有權限不會登出');
@@ -105,7 +107,7 @@ test('伺服器暫時無法驗證（503）與非市集回應各自分類', async
   m.override('POST /api/auth/login', () => ({ status: 503, body: { title: '驗證服務暫時無法使用', status: 503 } }));
   await assert.rejects(
     w.call('rc.session.signIn', { marketUrl: m.url, username: 'alice', password: 'pw-alice' }),
-    { code: 'service_unavailable', message: '驗證服務暫時無法使用（HTTP 503）' }
+    { code: 'service_unavailable', message: '驗證服務暫時無法使用' }
   );
   m.override('POST /api/auth/login', () => ({ status: 200, raw: '<html>portal</html>' }));
   await assert.rejects(
@@ -366,6 +368,30 @@ test('登入失敗訊息保留伺服器說明，但絕不包含 refresh token', 
   const w = startWorker();
   await assert.rejects(
     w.call('rc.session.signIn', { marketUrl: m.url, username: 'alice', password: 'pw-alice' }),
-    (e) => e.message === '帳號或密碼錯誤（HTTP 401）' && !JSON.stringify({ ...e, m: e.message, s: e.stack }).includes('lcrt_')
+    (e) => e.message === '帳號或密碼錯誤' && !JSON.stringify({ ...e, m: e.message, s: e.stack }).includes('lcrt_')
   );
 });
+
+for (const [status, expected] of [[401, '帳號或密碼錯誤'], [403, '沒有權限：權限不足'], [404, '這個網址找不到市集服務，請確認網址是否正確'], [405, '這個網址找不到市集服務，請確認網址是否正確'], [400, '登入資料格式不正確，請重新輸入'], [422, '登入資料格式不正確，請重新輸入'], [429, '登入失敗，請稍後再試'], [503, '市集服務暫時無法使用，請稍後再試']]) {
+  test(`登入 ${status} 的原始診斷只進紀錄，面向使用者維持繁中`, async () => {
+    const m = await market();
+    const technical = 'Synthetic authentication service HTTP ' + status;
+    m.override('POST /api/auth/login', () => ({ status, body: { detail: technical, refreshToken: 'synthetic-secret-token' } }));
+    const w = startWorker(); cleanup.push(() => w.dispose());
+    await assert.rejects(w.call('rc.session.signIn', { marketUrl: m.url, username: 'alice', password: 'pw-alice' }), { message: expected });
+    assert.ok(w.state.logs.some(line => line.includes(String(status)) && line.includes(technical)));
+    assert.deepEqual(leakedSecrets([...w.state.transcript, ...w.state.logs], ['pw-alice', 'synthetic-secret-token']), []);
+  });
+}
+
+for (const error of [new HttpError('not_sent', 'synthetic TLS certificate', { tls: true }), new HttpError('timeout', 'synthetic timeout'), new Error('synthetic network detail')]) {
+  test(`登入連線錯誤僅顯示繁中提示：${error.message}`, async () => {
+    const w = startWorker({ deps: { transport: async () => { throw error; } } }); cleanup.push(() => w.dispose());
+    await assert.rejects(w.call('rc.session.signIn', { marketUrl: 'https://market.example.com', username: 'alice', password: 'secret-password' }), e => {
+      assert.equal(e.code, 'unreachable');
+      assert.doesNotMatch(e.message.replace('https://market.example.com', ''), /[a-z]/i);
+      return true;
+    });
+    assert.ok(w.state.logs.some(line => line.includes(error.message)));
+  });
+}

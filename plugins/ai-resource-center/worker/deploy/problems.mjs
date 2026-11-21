@@ -6,6 +6,7 @@ export const ProblemCodes = Object.freeze({
   ignoredContentFields: 'deployment.ignored-content-fields',
   unsupportedHost: 'deployment.unsupported-host',
   unsupportedRoute: 'deployment.unsupported-route',
+  sharedSkillsUnavailable: 'deployment.shared-skills-unavailable',
   pathEscape: 'deployment.path-escape',
   destinationCollision: 'deployment.destination-collision',
   ownershipCollision: 'deployment.ownership-collision',
@@ -26,7 +27,8 @@ export const ProblemCodes = Object.freeze({
   planStale: 'deployment.plan-stale',
   lockUnavailable: 'deployment.lock-unavailable',
   applyFailed: 'deployment.apply-failed',
-  rollbackFailed: 'deployment.rollback-failed'
+  rollbackFailed: 'deployment.rollback-failed',
+  orcaClaudeMcpCleanupSkipped: 'deployment.orca-claude-mcp-cleanup-skipped'
 });
 
 /** 建立結構化問題；面板不需要解析例外訊息。 */

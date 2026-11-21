@@ -4,7 +4,7 @@
 //   一致才在獨立交易中寫入，允許部分成功。
 //
 // intent 形狀（對照 DeploymentIntent）：
-//   { package: {bytes, expectedSha256}, scope: 'global'|'project', projectRoot, hosts: [{hostId, surfaceId}],
+//   { package: {bytes, expectedSha256}, scope: 'global', hosts: [{hostId, surfaceId}],
 //     existingContent: 'Block'|'BackupAndReplace', allowScopeShadowing, hostRoots: [{host, canonicalRoots: []}], localSourcePath }
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,6 +15,7 @@ import { openCanonicalPackage, CanonicalPackageError } from './canonical-package
 import { ReceiptStore } from './receipts.mjs';
 import { buildOwnershipIndex } from './ownership-index.mjs';
 import { computePlanDigest, computeTargetDigest, ContractVersion } from './plan-digest.mjs';
+import { checkSharedSkillsDirectory } from './codex-roots.mjs';
 import { getDriver } from './resource-drivers.mjs';
 import { ProblemCodes, blocking, warning, problem as makeProblem } from './problems.mjs';
 import { ofBytes, ofText, ordinal } from './digest.mjs';
@@ -89,7 +90,7 @@ export function createDeploymentPlanner(options) {
     if (!setup || ((setup.parameters?.length ?? 0) + (setup.commands?.length ?? 0)) === 0) return { setupPlan: null };
     try {
       return { setupPlan: planSetup({ setup, packageKey: pkg.identity.key, packageVersion: pkg.identity.version, scope: intent.scope,
-        projectRoot: intent.scope === Scope.project ? intent.projectRoot : null, home: opts.home, userHome, secrets: secrets(), rules,
+        projectRoot: null, home: opts.home, userHome, secrets: secrets(), rules,
         intent: setupIntent, runners: setupRunners, environment: setupEnvironment, scriptSha256: script => ofBytes(pkg.readFile(script)) }) };
     } catch (e) {
       if (e instanceof CanonicalPackageError) return { problem: { ...e.toProblem(), explanation: `設定命令的腳本不在資源包內：${e.message}` } };
@@ -119,26 +120,27 @@ export function createDeploymentPlanner(options) {
       }
       return { roots: [...new Set(roots.map(r => rules.normalize(r)))].sort(ordinal) };
     }
-    if (!intent.projectRoot || !String(intent.projectRoot).trim()) {
-      return { problem: blocking(ProblemCodes.invalidPackage, 'Project 安裝必須提供 project root', '請指定要安裝到哪個專案資料夾。') };
-    }
-    let exists = false;
-    try { exists = fs.statSync(intent.projectRoot).isDirectory(); } catch { exists = false; }
-    if (!exists) return { problem: blocking(ProblemCodes.invalidPackage, `專案資料夾不存在：${intent.projectRoot}`, '請先建立或改指向存在的專案資料夾。') };
-    return { roots: [rules.normalize(intent.projectRoot)] };
+    return { problem: blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請使用 LC-AI-Pack。') };
   }
 
-  const storeFor = (intent) => intent.scope === Scope.global
-    ? ReceiptStore.forGlobal({ home: opts.home, userProfile: userHome, rules })
-    : ReceiptStore.forProject({ projectRoot: intent.projectRoot, rules });
-
-  const shadowingStores = (intent) => intent.scope === Scope.project
-    ? [ReceiptStore.forGlobal({ home: opts.home, userProfile: userHome, rules })]
-    : (opts.shadowingProjectRoots ?? []).map(root => ReceiptStore.forProject({ projectRoot: root, rules }));
+  const storeFor = () => ReceiptStore.forGlobal({ home: opts.home, userProfile: userHome, rules });
+  // 只讀其他範圍的收據，以揭露載入優先順序；不將它們當作部署目標。
+  const shadowingStores = () => (opts.shadowingProjectRoots ?? []).map(root => ReceiptStore.forProject({ projectRoot: root, rules }));
 
   function destinationsOverlap(mutation, otherPath, otherContentId, otherIsConfigPatch) {
     return rules.normalize(mutation.destinationPath) === rules.normalize(otherPath) &&
       (mutation.mutationKind !== MutationKind.patchConfig || !otherIsConfigPatch || mutation.contentId === otherContentId);
+  }
+
+  function deploymentRoots(pkg, intent, host, requested) {
+    if (host.hostId !== HostIds.codex || intent.scope !== Scope.global) return requested;
+    const home = rules.normalize(userHome);
+    const receipts = storeFor().load().receipts.filter(r => r.packageKey === pkg.identity.key &&
+      r.hostId === host.hostId && r.surfaceId === host.surfaceId && r.scope === Scope.global);
+    const hasRootContent = pkg.contents.some(c => c.kind !== 'skill');
+    const roots = requested.filter(root => intent.codexContent !== 'SharedSkills' && (hasRootContent || receipts.some(r => r.canonicalRoot === root && r.kind !== 'skill')));
+    if (intent.codexContent !== 'RootContent' && (pkg.contents.some(c => c.kind === 'skill') || receipts.some(r => r.canonicalRoot === home && r.kind === 'skill'))) roots.push(home);
+    return [...new Set(roots)];
   }
 
   function planTarget(pkg, intent, host, canonicalRoot, setupPlan = null) {
@@ -158,7 +160,22 @@ export function createDeploymentPlanner(options) {
       allowBackupAndReplace: intent.existingContent === 'BackupAndReplace' };
 
     const mutations = [], problems = [], configuration = [], artifacts = new Map();
-    for (const content of pkg.contents) {
+    const codexGlobal = host.hostId === HostIds.codex && intent.scope === Scope.global;
+    const missingContentOnly = (intent.hostRoots ?? []).some(s => sameHost(s.host, host) &&
+      s.missingContentRoots?.some(root => rules.normalize(root) === canonicalRoot));
+    const handlesSkills = !codexGlobal || (intent.codexContent !== 'RootContent' && canonicalRoot === ctx.userHome);
+    const handlesRootContent = !codexGlobal || (intent.codexContent !== 'SharedSkills' && (canonicalRoot !== ctx.userHome || (ctx.rootOrigin !== 'SharedSkills' && intent.hostRoots
+      .some(s => sameHost(s.host, host) && s.canonicalRoots.some(r => rules.normalize(r) === canonicalRoot)))));
+    const unavailable = codexGlobal && !missingContentOnly && intent.codexContent !== 'RootContent' && pkg.contents.some(c => c.kind === 'skill')
+      ? checkSharedSkillsDirectory(userHome) : null;
+    if (unavailable) problems.push(blocking(ProblemCodes.sharedSkillsUnavailable, `無法使用 Codex 共用技能目錄：${unavailable.directory}`,
+      unavailable.reason, { host, scope: intent.scope, path: unavailable.path }));
+    const installedIds = new Set(missingContentOnly ? receiptStore.forTarget(host, intent.scope, canonicalRoot)
+      .filter(r => r.packageKey === pkg.identity.key).map(r => `${r.kind}|${r.contentId}`) : []);
+    const targetContents = pkg.contents.filter(c => c.kind === 'skill' ? handlesSkills : handlesRootContent)
+      .filter(c => !missingContentOnly || (!(codexGlobal && c.kind === 'skill') && !installedIds.has(`${c.kind}|${c.id}`)));
+    for (const content of targetContents) {
+      if (unavailable) break;
       const route = HostProfiles.findRoute(surface, content.kind);
       if (!route) {
         const severity = surface.unsupportedRouteSeverity;
@@ -200,7 +217,7 @@ export function createDeploymentPlanner(options) {
           '請從原部署分佈更新或移除，再安裝到新的根目錄；備份覆寫不能繞過既有收據。', { host, scope: intent.scope, contentId: m.contentId, path: m.destinationPath }));
       }
     }
-    const shadowed = ownership.findShadowing(pkg.contents.map(c => c.id));
+    const shadowed = ownership.findShadowing(targetContents.map(c => c.id));
     if (shadowed.length) {
       const allow = intent.allowScopeShadowing === true;
       problems.push(makeProblem(ProblemCodes.scopeShadowing, allow ? Severity.warning : Severity.blocking, `${host.hostId} 已在其他安裝範圍管理相同內容`,
@@ -211,14 +228,14 @@ export function createDeploymentPlanner(options) {
           shadowed: shadowed.map(r => ({ contentId: r.contentId, kind: r.kind, scope: r.scope, destinationPath: r.destinationPath, canonicalRoot: r.canonicalRoot,
             packageKey: r.packageKey, packageVersion: r.packageVersion })) }));
     }
-    for (const c of pkg.contents.filter(c => c.kind === 'agent')) {
+    for (const c of targetContents.filter(c => c.kind === 'agent')) {
       const ignored = c.ignoredFrontmatterKeys.map(key => `frontmatter '${key}'`);
       if (host.hostId === HostIds.codex && c.hostOverrides.codex?.tools != null) ignored.push('hosts.codex.tools');
       if (ignored.length) problems.push(warning(ProblemCodes.ignoredContentFields, `Agent '${c.id}' 有 ${ignored.length} 個宣告欄位不會寫入 ${host.hostId}`,
         `不落地的欄位：${ignored.join('、')}。內容檔 frontmatter 只有 name 與 description 會成為 native 顯示 metadata，且 native 的 name 一律由 contents[].id 決定；該平台不接受的欄位不會寫入，維持平台預設。`,
         { host, scope: intent.scope, contentId: c.id }));
     }
-    for (const c of pkg.contents.filter(c => c.kind === 'skill' && c.nonStandardFrontmatterKeys.length)) {
+    for (const c of targetContents.filter(c => c.kind === 'skill' && c.nonStandardFrontmatterKeys.length)) {
       problems.push(warning(ProblemCodes.nonStandardContentFields, `Skill '${c.id}' 使用 ${c.nonStandardFrontmatterKeys.length} 個非標準 frontmatter 欄位`,
         `非標準欄位：${c.nonStandardFrontmatterKeys.join('、')}。Agent Skills 開放標準只定義 name、description、license、compatibility、metadata、allowed-tools、disable-model-invocation、argument-hint；其餘欄位原樣寫入落地檔案，不改寫也不映射，不認得的平台會忽略。`,
         { host, scope: intent.scope, contentId: c.id }));
@@ -239,7 +256,7 @@ export function createDeploymentPlanner(options) {
       configuration: configuration.sort((a, b) => ordinal(a.path, b.path) || ordinal(a.contentId, b.contentId)),
       problems: sortedProblems, canApply: sortedProblems.every(p => !isBlocking(p))
     };
-    return { planned: { target, artifacts, receiptStore } };
+    return { planned: { target, artifacts, receiptStore, handlesSkills, handlesRootContent, missingContentOnly } };
   }
 
   function detectIncomingCollisions(mutations, ctx) {
@@ -264,10 +281,7 @@ export function createDeploymentPlanner(options) {
     }
     const planProblems = [];
     if (!intent.hosts?.length) planProblems.push(blocking(ProblemCodes.unsupportedHost, '未選擇任何 AI 工具', '請至少選擇一個 Host／Surface。'));
-    if (intent.scope === Scope.project) {
-      const r = resolveCanonicalRoots(intent, { hostId: '', surfaceId: '' });
-      if (r.problem) return rejected(intent, r.problem, pkg);
-    }
+    if (intent.scope !== Scope.global) return rejected(intent, blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請使用 LC-AI-Pack。'), pkg);
     const { setupPlan = null, problem: setupProblem } = planSetupFor(pkg, intent);
     if (setupProblem) planProblems.push(setupProblem);
     if (setupPlan) planProblems.push(...setupPlan.problems);
@@ -278,7 +292,7 @@ export function createDeploymentPlanner(options) {
     for (const host of hosts) {
       const r = resolveCanonicalRoots(intent, host);
       if (r.problem) return rejected(intent, r.problem, pkg);
-      for (const root of r.roots) {
+      for (const root of deploymentRoots(pkg, intent, host, r.roots)) {
         const t = planTarget(pkg, intent, host, root, setupPlan);
         if (t.problem) planProblems.push(t.problem); else targets.push(t.planned.target);
       }
@@ -349,7 +363,7 @@ export function createDeploymentPlanner(options) {
     for (const t of reviewedPlan.targets) {
       const r = resolveCanonicalRoots(reviewedPlan.intent, t.host);
       if (r.problem) return rejectedApply(reviewedPlan, r.problem);
-      if (!r.roots.includes(t.canonicalRoot)) {
+      if (!deploymentRoots(pkg, reviewedPlan.intent, t.host, r.roots).includes(t.canonicalRoot)) {
         return rejectedApply(reviewedPlan, blocking(ProblemCodes.planStale, 'Plan target 不屬於已審核的 Host 根目錄集合', 'DeploymentIntent 與 target 的 Host／canonical root 不一致；請重新 Plan 並重新確認。'));
       }
     }

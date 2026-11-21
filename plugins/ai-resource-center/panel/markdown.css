@@ -1,0 +1,48 @@
+/* Markdown 渲染結果（markdown.js 產生的 .rc-markdown）。只使用 panel.css 開頭定義的 CSS 變數，深色與淺色主題自動跟隨。 */
+.rc-markdown { min-width: 0; font-size: 13px; line-height: 1.6; color: var(--fg); overflow-wrap: anywhere; word-break: break-word; }
+.rc-markdown > :first-child { margin-top: 0; }
+.rc-markdown > :last-child { margin-bottom: 0; }
+
+.rc-markdown h1, .rc-markdown h2, .rc-markdown h3, .rc-markdown h4, .rc-markdown h5, .rc-markdown h6 { margin: 1.1em 0 0.45em; font-weight: 600; line-height: 1.3; }
+.rc-markdown h1 { font-size: 1.45em; padding-bottom: 0.25em; border-bottom: 1px solid var(--border); }
+.rc-markdown h2 { font-size: 1.25em; padding-bottom: 0.2em; border-bottom: 1px solid var(--border); }
+.rc-markdown h3 { font-size: 1.1em; }
+.rc-markdown h4 { font-size: 1em; }
+.rc-markdown h5 { font-size: 0.95em; }
+.rc-markdown h6 { font-size: 0.9em; color: var(--muted); }
+
+.rc-markdown p, .rc-markdown ul, .rc-markdown ol, .rc-markdown blockquote, .rc-markdown pre, .rc-markdown .rc-md-table-wrap { margin: 0 0 0.75em; }
+.rc-markdown strong { font-weight: 600; }
+.rc-markdown del { color: var(--muted); }
+.rc-markdown hr { border: 0; border-top: 1px solid var(--border); margin: 1.1em 0; }
+
+.rc-markdown ul, .rc-markdown ol { padding-left: 1.6em; }
+.rc-markdown li { margin: 0.2em 0; }
+.rc-markdown li > ul, .rc-markdown li > ol { margin: 0.2em 0 0; }
+.rc-markdown li > p { margin: 0 0 0.4em; }
+.rc-markdown ul.rc-md-tasks { padding-left: 1.2em; }
+.rc-markdown li.rc-md-task { list-style: none; }
+.rc-markdown li.rc-md-task > input[type="checkbox"] { margin: 0 0.35em 0 -1.2em; vertical-align: -0.1em; accent-color: var(--accent); }
+
+.rc-markdown blockquote { padding: 0.1em 0.9em; border-left: 3px solid var(--border); color: var(--muted); }
+.rc-markdown blockquote > :last-child { margin-bottom: 0; }
+
+.rc-markdown code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.92em; padding: 0.1em 0.35em; border: 1px solid var(--border); border-radius: 4px; background: var(--input-bg); overflow-wrap: anywhere; }
+.rc-markdown pre { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); overflow-x: auto; max-width: 100%; line-height: 1.5; }
+.rc-markdown pre > code { display: block; padding: 0; border: 0; border-radius: 0; background: none; font-size: 12px; white-space: pre; overflow-wrap: normal; word-break: normal; }
+
+.rc-markdown a[data-action] { color: var(--accent); cursor: pointer; text-decoration: none; }
+.rc-markdown a[data-action]:hover { text-decoration: underline; }
+.rc-markdown a[data-action]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
+.rc-markdown a.rc-md-image::before { content: "\25A3\00a0"; color: var(--muted); }
+
+/* 表格：外層可水平捲動，窄寬度不撐破版面 */
+.rc-markdown .rc-md-table-wrap { max-width: 100%; overflow-x: auto; }
+.rc-markdown table { border-collapse: collapse; width: max-content; min-width: 100%; max-width: 640px; }
+.rc-markdown th, .rc-markdown td { padding: 4px 8px; border: 1px solid var(--border); vertical-align: top; text-align: left; overflow-wrap: normal; word-break: normal; min-width: 4.5em; }
+.rc-markdown th { background: var(--card-bg); font-weight: 600; }
+.rc-markdown tbody tr:nth-child(even) td { background: var(--card-bg); }
+.rc-markdown [data-align="center"] { text-align: center; }
+.rc-markdown [data-align="right"] { text-align: right; }
+.rc-markdown [data-align="left"] { text-align: left; }
+.rc-markdown th code, .rc-markdown td code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }

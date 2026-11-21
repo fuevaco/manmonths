@@ -50,7 +50,7 @@ function profile(hostId, version, displayName, surfaces) {
 const W = MutationKind.writeFile, T = MutationKind.syncTree, P = MutationKind.patchConfig;
 const both = [Scope.project, Scope.global];
 
-const codex = profile(HostIds.codex, 'codex/2026.10.1', 'OpenAI Codex', [
+const codex = profile(HostIds.codex, 'codex/2026.11.1', 'OpenAI Codex', [
   surface(SurfaceIds.codexCli, both, HostLocatorIds.projectRoot, HostLocatorIds.codexConfigDirectory, new Map([
     ['skill', route('{root}/.agents/skills/{id}', '{root}/skills/{id}', T, { dialect: ArtifactDialectIds.skillTree, globalRootBase: HostRootBaseIds.codexSkillsRoot })],
     ['agent', route('{root}/.codex/agents/{id}.toml', '{root}/agents/{id}.toml', W, { dialect: ArtifactDialectIds.codexAgentToml, globalRootBase: HostRootBaseIds.codexConfigRoot })],

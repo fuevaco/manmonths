@@ -13,8 +13,8 @@ export function backupReasonOf(mutation, problems) {
 }
 
 const AUTOMATIC_EXPLANATIONS = {
-  [ProblemCodes.unmanagedCollision]: '目的地已有未受管的同名內容；套用時會自動先備份（原名稱加 .bak-lcaipack-<時間戳>）再部署，不需額外確認。',
-  [ProblemCodes.localModification]: '受管內容安裝後被本機修改；套用時會自動先備份（原名稱加 .bak-lcaipack-<時間戳>）再部署，不需額外確認。'
+  [ProblemCodes.unmanagedCollision]: '目的地已有未受管的同名內容，套用時會自動先備份再部署。技能資料夾備份至 LC-AI-Pack 資料目錄下的 backups，其他檔案備份在原位置旁。',
+  [ProblemCodes.localModification]: '受管內容安裝後被本機修改，套用時會自動先備份再部署。技能資料夾備份至 LC-AI-Pack 資料目錄下的 backups，其他檔案備份在原位置旁。'
 };
 
 /** 可自動處理（警告等級）的衝突，用資源中心的自動處理語氣說明；其餘問題維持核心的說明。 */

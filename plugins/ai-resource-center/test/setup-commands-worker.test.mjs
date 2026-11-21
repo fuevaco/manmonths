@@ -63,8 +63,9 @@ async function environment(t, { secret = false } = {}) {
   const versions = { '1.0.0': bundleZip({ secret, markerDir }), '1.1.0': bundleZip({ version: '1.1.0', secret, markerDir, runOnUpdate: true }), '1.2.0': bundleZip({ version: '1.2.0', secret, markerDir, runOnUpdate: false }) };
   const item = { packageKey: KEY, name: 'Demo Setup Bundle', type: 'bundle', description: 'Synthetic', latestReleaseVersion: '1.2.0' };
   const market = await startFakeMarket({ packages: [item] });
-  market.override(`GET /api/market/packages/${KEY}`, () => ({ status: 200, body: { ...item, recommendedVersion: '1.0.0',
-    versions: Object.entries(versions).map(([version, bytes]) => ({ version, isEnabled: true, channel: 'release', status: 'active', hosts: ['claude-code'], sha256: sha(bytes) })) } }));
+  let recommended = '1.0.0';
+  market.override(`GET /api/market/packages/${KEY}`, () => ({ status: 200, body: { ...item, recommendedVersion: recommended,
+    versions: Object.entries(versions).filter(([version])=>version<=recommended).map(([version, bytes]) => ({ version, isEnabled: true, channel: 'release', status: 'active', hosts: ['claude-code'], sha256: sha(bytes) })) } }));
   for (const [version, bytes] of Object.entries(versions)) market.override(`GET /api/market/packages/${KEY}/versions/${version}/download`, () => ({ status: 200, raw: bytes, contentType: 'application/zip' }));
   const secretStore = memoryStore();
   const worker = startWorker({ deps: { lcaipackHome, userHome, env: {}, secretStore } });
@@ -72,160 +73,69 @@ async function environment(t, { secret = false } = {}) {
   await worker.call('rc.session.signIn', { marketUrl: market.url, username: 'alice', password: 'pw-alice' });
   const marker = name => path.join(markerDir, name);
   const runs = () => { try { return fs.readFileSync(marker('runs.txt'), 'utf8').split(/\r?\n/).filter(Boolean); } catch { return []; } };
-  const skill = path.join(project, '.claude', 'skills', 'setup-skill', 'SKILL.md');
-  const receipts = path.join(project, '.lcaipack', 'receipts.json');
-  async function plan(version = '1.0.0', extra = {}) {
-    const { targets } = await worker.call('rc.deploy.listTargets', { scope: 'project', projectRoot: project });
-    const target = targets.find(x => x.surfaceId === 'claude-code-cli');
-    return worker.call('rc.deploy.plan', { packageKey: KEY, version, targets: [target.id], scope: 'project', projectRoot: project, ...extra });
-  }
-  const apply = summary => worker.call('rc.deploy.apply', { planDigest: summary.planDigest, targets: summary.targets.map(x => x.id) });
-  return { dir, userHome, lcaipackHome, project, markerDir, worker, secretStore, marker, runs, skill, receipts, plan, apply };
+  const skill = path.join(userHome, '.claude', 'skills', 'setup-skill', 'SKILL.md');
+  const receipts = path.join(lcaipackHome,'receipts.json');
+  const run = (action='install',extra={})=>worker.call('rc.install.run',{packageKey:KEY,action,...extra});
+  const confirm = (review,action='install')=>run(action,{confirmedPlanId:review.planId});
+  return { dir,userHome,lcaipackHome,project,markerDir,worker,secretStore,marker,runs,skill,receipts,run,confirm,recommend:v=>{recommended=v;} };
 }
-const allFiles = dir => { const out = []; const walk = d => { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else out.push(p); } }; walk(dir); return out; };
+const allFiles = dir => { const out=[];const walk=d=>{for(const f of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,f.name);if(f.isDirectory())walk(p);else out.push(p);}};walk(dir);return out; };
+const commands = review => review.plan.setupCommands;
+const executable = review => commands(review).find(c=>c.willExecute);
+const operations = e => fs.readdirSync(path.join(e.lcaipackHome,'operations')).filter(n=>n.endsWith('.json')).map(n=>JSON.parse(fs.readFileSync(path.join(e.lcaipackHome,'operations',n),'utf8')));
 
-test('摘要列出設定命令與作用；確認前不執行任何命令、不建立任何設定狀態', async t => {
-  const e = await environment(t);
-  const summary = await e.plan();
-  assert.equal(summary.canApply, true, JSON.stringify(summary.problems));
-  const local = summary.setup.commands.find(c => c.willExecute);
-  const foreign = summary.setup.commands.find(c => !c.willExecute);
-  assert.equal(summary.setup.commands.length, 2);
-  assert.equal(local.commandId, WINDOWS ? 'write-marker-windows' : 'write-marker-macos');
-  assert.equal(local.name, WINDOWS ? '寫入證據檔（Windows）' : '寫入證據檔（macOS）');
-  assert.deepEqual([local.runner, local.script, local.timeoutMinutes, local.reason, local.eligibility], [WINDOWS ? 'powershell' : 'bash', WINDOWS ? 'setup/write-marker.ps1' : 'setup/write-marker.sh', 1, 'FirstRun', 'Eligible']);
-  assert.deepEqual(local.arguments.slice(-1), ['orca-rc-demo']);
-  assert.equal(foreign.eligibility, 'UnsupportedOperatingSystem');
-  assert.ok(summary.setup.executableCommandIds.includes(local.commandId) && summary.setup.executableCommandIds.length === 1);
-  // 確認前什麼都沒發生：沒有證據檔、沒有 setup root、完成狀態、operation 紀錄，也沒有部署。
-  assert.deepEqual(e.runs(), []);
-  assert.equal(fs.existsSync(e.skill), false);
-  assert.equal(fs.existsSync(path.join(e.lcaipackHome, 'setup-roots')), false);
-  assert.equal(fs.existsSync(path.join(e.lcaipackHome, 'operations')), false);
-  assert.equal(fs.existsSync(path.join(e.project, '.lcaipack')), false);
+test('一鍵確認列出設定命令用途及系統相容性；確認前零執行與零部署', async t=>{
+ const e=await environment(t);const review=await e.run();
+ assert.equal(review.needsConfirmation,true);assert.deepEqual(review.reasons,['setupCommands']);assert.equal(commands(review).length,2);
+ assert.equal(executable(review).commandId,WINDOWS?'write-marker-windows':'write-marker-macos');
+ assert.deepEqual(executable(review).arguments.slice(-1),['orca-rc-demo']);assert.equal(executable(review).reason,'FirstRun');
+ assert.equal(commands(review).find(c=>!c.willExecute).eligibility,'UnsupportedOperatingSystem');
+ assert.deepEqual(e.runs(),[]);assert.equal(fs.existsSync(e.skill),false);assert.equal(fs.existsSync(path.join(e.lcaipackHome,'operations')),false);
 });
-
-test('確認後命令只執行一次，接著依同一份已確認的計畫部署；結果揭露命令結局與 operation，沒有秘密', async t => {
-  const e = await environment(t);
-  const summary = await e.plan();
-  const result = await e.apply(summary);
-  assert.equal(result.status, 'succeeded', JSON.stringify(result));
-  assert.equal(e.runs().length, 1);
-  assert.ok(e.runs()[0].includes(WINDOWS ? 'os=windows label=orca-rc-demo' : 'os=macos label=orca-rc-demo'));
-  assert.equal(fs.existsSync(e.skill), true);
-  assert.equal(fs.existsSync(e.receipts), true);
-  const executed = result.setup.commands.filter(c => c.executed);
-  assert.deepEqual(executed.map(c => [c.commandId, c.succeeded, c.exitCode]), [[executable(summary).commandId, true, 0]]);
-  assert.equal(result.setup.commands.length, 2);
-  assert.match(result.operation.id, /^op-\d{8}T\d{6}Z-[0-9a-f]{8}$/);
-  assert.equal(result.operation.state, 'succeeded');
-  assert.equal(fs.existsSync(result.operation.logPath), true);
-  assert.equal(fs.existsSync(path.join(e.lcaipackHome, 'setup-roots')), true);
-  // 同一版本的乾淨重裝預設略過已成功的命令：不再執行，但摘要揭露原因。
-  const again = await e.plan();
-  assert.deepEqual([again.setup.commands.find(c => c.commandId === executable(summary).commandId).willExecute, again.setup.commands.find(c => c.commandId === executable(summary).commandId).reason], [false, 'SkippedAlreadySucceeded']);
-  assert.equal((await e.apply(again)).status, 'succeeded');
-  assert.equal(e.runs().length, 1);
+test('確認後真實設定命令只執行一次，寫入全域內容、operation 與完成狀態；同版重裝略過',async t=>{
+ const e=await environment(t);const review=await e.run();const result=await e.confirm(review);
+ assert.equal(result.ok,true);assert.equal(e.runs().length,1);assert.ok(e.runs()[0].includes('label=orca-rc-demo'));
+ assert.equal(fs.existsSync(e.skill),true);assert.equal(fs.existsSync(e.receipts),true);
+ const op=operations(e)[0];assert.equal(op.state,'succeeded');assert.equal(op.scope,'global');assert.equal(fs.existsSync(op.logPath),true);
+ const again=await e.run();assert.equal(again.needsConfirmation,undefined);
+ assert.equal(again.ok,true);assert.equal(e.runs().length,1);
 });
-const executable = summary => summary.setup.commands.find(c => c.willExecute);
-
-test('命令失敗：依賴它的部署目標不被改動、不寫新版收據；結果列出受影響的目標與原因；修正條件後重新安裝成功', async t => {
-  const e = await environment(t);
-  fs.writeFileSync(e.marker('fail.flag'), '');
-  const summary = await e.plan();
-  const result = await e.apply(summary);
-  assert.equal(result.status, 'failed');
-  assert.equal(fs.existsSync(e.skill), false);
-  assert.equal(fs.existsSync(e.receipts), false);
-  // 受影響的目標與原因。
-  assert.deepEqual(result.targets.map(x => [x.id, x.status]), summary.targets.map(x => [x.id, 'notDeployed']));
-  assert.ok(result.targets.every(x => x.label && x.writtenPaths.length === 0));
-  const reason = result.targets[0].problems.find(p => p.code === 'deployment.setup-command-failed');
-  assert.ok(reason && reason.summary.includes(executable(summary).name) && /17/.test(reason.explanation));
-  assert.deepEqual([result.operation.state, result.operation.canResume, result.operation.checkpoint], ['failed', true, `setup-command:${executable(summary).commandId}`]);
-  const failure = result.setup.commands.find(c => c.executed);
-  assert.deepEqual([failure.succeeded, failure.exitCode], [false, 17]);
-  assert.ok(failure.output.some(line => line.includes('precondition missing: fail.flag')));
-  assert.equal(e.runs().length, 1);
-  // 修正條件後重新安裝：同一個命令因「上次未成功」重試，這次成功並部署。
-  fs.rmSync(e.marker('fail.flag'));
-  const retry = await e.plan();
-  assert.equal(retry.setup.commands.find(c => c.willExecute).reason, 'PreviousFailure');
-  const fixed = await e.apply(retry);
-  assert.equal(fixed.status, 'succeeded');
-  assert.equal(e.runs().length, 2);
-  assert.equal(fs.existsSync(e.skill), true);
-  assert.equal(fs.existsSync(e.receipts), true);
+test('設定命令失敗：目標零寫入，保留命令用途與結束代碼；修正後可重試成功',async t=>{
+ const e=await environment(t);fs.writeFileSync(e.marker('fail.flag'),'');const review=await e.run();const result=await e.confirm(review);
+ assert.equal(result.ok,false);assert.equal(result.failed.length,1);assert.equal(fs.existsSync(e.skill),false);assert.equal(fs.existsSync(e.receipts),false);
+ const p=result.failed[0].detail.find(p=>p.code==='deployment.setup-command-failed');assert.equal(p.commandName,executable(review).name);assert.match(p.failureSummary,/17/);
+ const op=operations(e)[0];assert.equal(op.state,'failed');assert.match(op.checkpoint,/setup-command:/);assert.match(fs.readFileSync(op.logPath,'utf8'),/precondition missing: fail.flag/);
+ fs.rmSync(e.marker('fail.flag'));const retry=await e.run();assert.equal(executable(retry).reason,'PreviousFailure');
+ assert.equal((await e.confirm(retry)).ok,true);assert.equal(e.runs().length,2);
 });
-
-test('明細中的命令輸出與日誌不含秘密值：腳本回吐 setup-time 秘密時只剩遮罩字樣', async t => {
-  const e = await environment(t, { secret: true });
-  fs.writeFileSync(e.marker('echo-secret.flag'), ''); fs.writeFileSync(e.marker('fail.flag'), '');
-  const first = await e.plan();
-  assert.equal(first.canApply, false);
-  const saved = await e.worker.call('rc.deploy.saveSetup', { planDigest: first.planDigest, values: {}, secrets: { 'setup-pat': CANARY } });
-  assert.equal(saved.canApply, true, JSON.stringify(saved.problems));
-  const result = await e.apply(saved);
-  assert.equal(result.status, 'failed');
-  const failure = result.setup.commands.find(c => c.executed);
-  assert.ok(failure.output.some(line => line.includes('secret-entry=<redacted>')), JSON.stringify(failure.output));
-  const texts = [...allFiles(e.dir).map(f => fs.readFileSync(f, 'utf8')), ...e.worker.state.transcript, ...e.worker.state.logs, JSON.stringify(result)];
-  assert.deepEqual(leakedSecrets(texts, [CANARY, Buffer.from(CANARY).toString('base64')]), []);
-  // 秘密只存在於（測試用的）安全儲存區。
-  const ref = setupSecretReference({ packageKey: KEY, parameterId: 'setup-pat', scope: 'project', canonicalRoot: e.project });
-  assert.equal(e.secretStore.values.get(ref.key), CANARY);
+test('腳本回吐 setup-time 秘密時，所有檔案、結果及 worker 日誌皆遮罩；秘密只進全域安全儲存區',async t=>{
+ const e=await environment(t,{secret:true});fs.writeFileSync(e.marker('echo-secret.flag'),'');fs.writeFileSync(e.marker('fail.flag'),'');
+ const first=await e.run();assert.ok(first.reasons.includes('missingParameters'));
+ await e.worker.call('rc.install.saveSetup',{packageKey:KEY,secrets:{'setup-pat':CANARY}});
+ const review=await e.run();const result=await e.confirm(review);assert.equal(result.ok,false);
+ assert.ok(operations(e).some(op=>fs.readFileSync(op.logPath,'utf8').includes('secret-entry=<redacted>')));
+ assert.deepEqual(leakedSecrets([...allFiles(e.dir).map(f=>fs.readFileSync(f,'utf8')),...e.worker.state.transcript,...e.worker.state.logs,JSON.stringify(result)],[CANARY,Buffer.from(CANARY).toString('base64')]),[]);
+ const ref=setupSecretReference({packageKey:KEY,parameterId:'setup-pat',scope:'global',canonicalRoot:e.userHome});assert.equal(e.secretStore.values.get(ref.key),CANARY);
 });
-
-test('審核後設定值改變：套用被判定過期，命令一個都沒啟動、目標零寫入，並回傳依目前狀態重新產生的摘要', async t => {
-  const e = await environment(t);
-  const summary = await e.plan();
-  SetupValueStore.forProject({ projectRoot: e.project }).setValues(KEY, { 'marker-label': 'changed-after-review' });
-  const result = await e.apply(summary);
-  assert.equal(result.status, 'stale');
-  assert.equal(result.plan.setup.commands.find(c => c.willExecute).arguments.slice(-1)[0], 'changed-after-review');
-  assert.deepEqual(e.runs(), []);
-  assert.equal(fs.existsSync(e.skill), false);
-  // 重新確認後套用。
-  assert.equal((await e.apply(result.plan)).status, 'succeeded');
-  assert.equal(e.runs().length, 1);
+test('確認前全域參數改變會重新確認，命令尚未執行；新確認後使用新值',async t=>{
+ const e=await environment(t);const review=await e.run();SetupValueStore.forGlobal({home:e.lcaipackHome,userProfile:e.userHome}).setValues(KEY,{'marker-label':'changed-after-review'});
+ const fresh=await e.confirm(review);assert.equal(fresh.needsConfirmation,true);assert.notEqual(fresh.planId,review.planId);assert.equal(executable(fresh).arguments.at(-1),'changed-after-review');
+ assert.deepEqual(e.runs(),[]);assert.equal(fs.existsSync(e.skill),false);assert.equal((await e.confirm(fresh)).ok,true);
 });
-
-test('更新：只重跑宣告 runOnUpdate 的命令版本；沒有宣告的版本略過命令但仍更新內容', async t => {
-  const e = await environment(t);
-  assert.equal((await e.apply(await e.plan('1.0.0'))).status, 'succeeded');
-  assert.equal(e.runs().length, 1);
-  const update = await e.plan('1.1.0', { action: 'update' });
-  assert.equal(executable({ setup: update.setup }).reason, 'UpdateRunOnUpdate');
-  assert.equal((await e.apply(update)).status, 'succeeded');
-  assert.equal(e.runs().length, 2);
-  const quiet = await e.plan('1.2.0', { action: 'update' });
-  assert.equal(quiet.setup.commands.find(c => c.reason === 'SkippedUpdateWithoutRunOnUpdate') !== undefined, true);
-  assert.equal((await e.apply(quiet)).status, 'succeeded');
-  assert.equal(e.runs().length, 2);
-  assert.ok(fs.readFileSync(e.receipts, 'utf8').includes('1.2.0'));
-  // 動作與規劃意圖不一致的請求不被接受。
-  await assert.rejects(() => e.plan('1.1.0', { action: 'teleport' }), /部署動作/);
+test('更新僅重跑 runOnUpdate 命令，其他版本略過仍更新內容與收據',async t=>{
+ const e=await environment(t);assert.equal((await e.confirm(await e.run())).ok,true);
+ e.recommend('1.1.0');const update=await e.run('update');assert.equal(executable(update).reason,'UpdateRunOnUpdate');assert.equal((await e.confirm(update,'update')).ok,true);assert.equal(e.runs().length,2);
+ e.recommend('1.2.0');const quiet=await e.run('update');assert.equal(quiet.needsConfirmation,undefined);assert.equal(quiet.ok,true);assert.equal(e.runs().length,2);
+ assert.equal(JSON.parse(fs.readFileSync(e.receipts,'utf8')).receipts[0].packageVersion,'1.2.0');
+ await assert.rejects(e.run('teleport'),{code:'invalid_params'});
 });
-
-test('取消：命令執行中取消會終止整棵子行程樹，目標零寫入、operation 可繼續', async t => {
-  const e = await environment(t);
-  fs.writeFileSync(e.marker('sleep.flag'), '');
-  const summary = await e.plan();
-  const pending = e.apply(summary);
-  const deadline = Date.now() + 60000;
-  while (!fs.existsSync(e.marker('sleeping.txt')) && Date.now() < deadline) await new Promise(r => setTimeout(r, 50));
-  const pid = Number(fs.readFileSync(e.marker('sleeping.txt'), 'utf8').trim().split(/\r?\n/)[0]);
-  assert.ok(Number.isInteger(pid));
-  t.after(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* 已終止 */ } });
-  const cancel = await e.worker.call('rc.deploy.cancel', {});
-  assert.equal(cancel.cancelled, true);
-  const result = await pending;
-  assert.deepEqual([result.status, result.operation.state, result.operation.canResume], ['cancelled', 'cancelled', true]);
-  assert.equal(fs.existsSync(e.skill), false);
-  assert.equal(fs.existsSync(e.receipts), false);
-  assert.ok(result.targets.every(x => x.status === 'notDeployed'));
-  let alive = true;
-  for (let i = 0; i < 100 && alive; i++) { try { process.kill(pid, 0); await new Promise(r => setTimeout(r, 50)); } catch { alive = false; } }
-  assert.equal(alive, false, '腳本行程在取消後仍存活');
-  assert.equal((await e.worker.call('rc.deploy.cancel', {})).cancelled, false);
+test('取消真實設定命令會終止子行程樹，未部署且 operation 保留可重試',async t=>{
+ const e=await environment(t);fs.writeFileSync(e.marker('sleep.flag'),'');const review=await e.run();const pending=e.confirm(review);
+ const deadline=Date.now()+60000;while(!fs.existsSync(e.marker('sleeping.txt'))&&Date.now()<deadline)await new Promise(r=>setTimeout(r,50));
+ const pid=Number(fs.readFileSync(e.marker('sleeping.txt'),'utf8').trim().split(/\r?\n/)[0]);t.after(()=>{try{process.kill(pid,'SIGKILL');}catch{}});
+ assert.equal((await e.worker.call('rc.install.cancel',{packageKey:KEY})).cancelled,true);
+ const result=await pending;assert.equal(result.ok,false);assert.ok(result.failed.every(t=>t.detail.some(p=>p.code==='deployment.setup-cancelled')));
+ assert.equal(fs.existsSync(e.skill),false);assert.equal(fs.existsSync(e.receipts),false);assert.equal(operations(e)[0].state,'cancelled');
+ let alive=true;for(let i=0;i<100&&alive;i++){try{process.kill(pid,0);await new Promise(r=>setTimeout(r,50));}catch{alive=false;}}assert.equal(alive,false);
+ assert.equal((await e.worker.call('rc.install.cancel',{packageKey:KEY})).cancelled,false);
 });

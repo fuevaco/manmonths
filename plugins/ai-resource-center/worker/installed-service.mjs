@@ -5,13 +5,15 @@ import path from 'node:path';
 import { createPathRules } from './deploy/canonical-root.mjs';
 import { resolveLcAiPackHome } from './paths.mjs';
 import { ReceiptStore, ReceiptFileError, targetKeyOf } from './deploy/receipts.mjs';
-import { RcError, ErrorCode } from './contract.mjs';
+import { RcError, ErrorCode, sharedDataError } from './contract.mjs';
+import { hostLabel } from './host-labels.mjs';
 import { compareVersions } from './package-service.mjs';
 
-export function createInstalledService({ lcaipackHome, userHome = os.homedir(), env = process.env } = {}) {
+export function createInstalledService({ lcaipackHome, userHome = os.homedir(), env = process.env, log = () => {} } = {}) {
   const home = lcaipackHome ?? resolveLcAiPackHome({ env, homedir: userHome });
-  function receipts() {
+  function receipts({ globalOnly = false } = {}) {
     try {
+      if (globalOnly) return ReceiptStore.forGlobal({ home, userProfile: userHome }).load().receipts.filter(r => r.scope === 'global');
       let projects = [];
       try { projects = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8').replace(/^\uFEFF/, '')).registeredProjects ?? []; }
       catch (e) { if (e.code !== 'ENOENT') throw new ReceiptFileError('無法讀取共用專案清單'); }
@@ -22,6 +24,7 @@ export function createInstalledService({ lcaipackHome, userHome = os.homedir(), 
       return stores.flatMap(store => store.load().receipts);
     }
     catch (e) {
+      if (e?.unsupportedFormatVersion) { log(`[sharedDataTooNew] ${e.message}`); throw sharedDataError(); }
       if (e instanceof ReceiptFileError) throw new RcError(ErrorCode.receiptInvalid, e.message);
       throw e;
     }
@@ -37,17 +40,21 @@ export function createInstalledService({ lcaipackHome, userHome = os.homedir(), 
       const market = r.source !== 'local' ? versions?.find(v => v.version === r.packageVersion) : null;
       const comparable = !!(market?.sha256?.trim() && r.packageSha256?.trim());
       const sameContent = comparable && market.sha256.toLowerCase() === r.packageSha256.toLowerCase();
-      return { id: targetKeyOf(r), hostId: r.hostId, surfaceId: r.surfaceId, scope: r.scope, rootPath: r.canonicalRoot,
+      return { id: targetKeyOf(r), label: hostLabel(r), hostId: r.hostId, surfaceId: r.surfaceId, scope: r.scope, rootPath: r.canonicalRoot,
         version: r.packageVersion, channel: sameContent ? market.channel : r.channel, contentDiffersFromMarket: comparable && !sameContent, source: r.source === 'local' ? 'local' : 'market',
-        status: updateVersion ? 'updateAvailable' : (!latestVersion || (versions && !market)) && r.source !== 'local' ? 'unavailable' : 'current', updateVersion };
+        status: updateVersion ? 'updateAvailable' : r.source !== 'local' && latestVersion && compareVersions(r.packageVersion, latestVersion) > 0 ? 'newer'
+          : (!latestVersion || (versions && !market)) && r.source !== 'local' ? 'unavailable' : 'current', updateVersion };
     });
-    return { installationStatus: !deployments.length ? 'notInstalled' : deployments.some(d => d.updateVersion) ? 'updateAvailable' : 'current', deployments };
+    const installationStatus = !deployments.length ? 'notInstalled' : deployments.some(d => d.updateVersion) ? 'updateAvailable'
+      : deployments.some(d => d.status === 'unavailable') ? 'unavailable' : deployments.some(d => d.status === 'newer') ? 'newer' : 'current';
+    return { installationStatus, deployments, ...(installationStatus === 'unavailable'
+      ? { statusHint: '已自市集下架或你已無權限查看；本機仍可繼續使用與解除安裝' } : {}) };
   }
   /** 收據無法讀取時不擲錯：回傳 { error }，讓目錄與詳情照常瀏覽、只有已安裝狀態標示錯誤。 */
-  function tryReceipts() {
-    try { return { records: receipts() }; }
+  function tryReceipts(options) {
+    try { return { records: receipts(options) }; }
     catch (e) {
-      if (e instanceof RcError && e.code === ErrorCode.receiptInvalid) return { error: { code: e.code, message: e.message } };
+      if (e instanceof RcError && [ErrorCode.receiptInvalid, ErrorCode.sharedDataTooNew].includes(e.code)) return { error: { code: e.code, message: e.message } };
       throw e;
     }
   }

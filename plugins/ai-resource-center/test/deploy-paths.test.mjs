@@ -71,11 +71,11 @@ test('CODEX_HOME 指定的設定根也會列出，來源記為環境指定', asy
   assert.equal(roots[0].displayPath, custom);
 });
 
-test('macOS 的 Codex 全域 Skill 目的地：設定根為 ~/.codex/skills/{id}，舊式家目錄根為 ~/.agents/skills/{id}', () => {
+test('macOS 的 Codex 全域 Skill 目的地：設定根與舊式家目錄根皆使用 ~/.agents/skills/{id}', () => {
   const rules = createPathRules({ platform: 'darwin', resolveLinks: false });
   const route = HostProfiles.findRoute(HostProfiles.find('codex').findSurface('codex-cli'), 'skill');
   const ctx = (root) => ({ scope: 'global', canonicalRoot: rules.normalize(root), userHome: rules.normalize('/Users/Alice'), rules, host: { hostId: 'codex', surfaceId: 'codex-cli' } });
-  assert.equal(resolveDestination(route, ctx('/Users/Alice/.codex'), 'hello').destination, '/users/alice/.codex/skills/hello');
+  assert.equal(resolveDestination(route, ctx('/Users/Alice/.codex'), 'hello').destination, '/users/alice/.agents/skills/hello');
   assert.equal(resolveDestination(route, ctx('/Users/Alice'), 'hello').destination, '/users/alice/.agents/skills/hello');});
 
 test('macOS 的 Codex 根目錄偵測與正規化（不需 macOS 主機）', () => {

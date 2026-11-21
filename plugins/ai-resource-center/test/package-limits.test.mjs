@@ -9,6 +9,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { validatePackage, PackageLimits } from '../worker/package-validator.mjs';
 import { startFakeMarket } from './fake-market.mjs';
 import { startWorker } from './harness.mjs';
+import { createSessionService } from '../worker/session-service.mjs';
+import { createPackageService } from '../worker/package-service.mjs';
+import { createDownloadService } from '../worker/download-service.mjs';
 import { zip, manifest } from './zip-fixture.mjs';
 
 const identity = { packageKey: 'demo', version: '1.0.0' };
@@ -53,12 +56,14 @@ test('標頭謊報大小：實際解壓內容超出宣告值時拒絕', () => {
 test('下載超過大小上限時拒絕：不寫入檔案、回報資源包過大', async t => {
   const dir = await mkdtemp(path.join(tmpdir(), 'rc-download-cap-'));
   const market = await startFakeMarket();
-  const worker = startWorker({ deps: { downloadDirectory: dir, maxDownloadBytes: 1024 } });
-  t.after(async () => { worker.dispose(); await market.close(); await rm(dir, { recursive: true, force: true }); });
+  const worker = startWorker({ deps: { userHome: dir, env: {} } });
+  const session = createSessionService({ orca: worker.orca });
+  const downloads = createDownloadService({ session, packages: createPackageService(session), maxDownloadBytes: 1024 });
+  t.after(async () => { session.dispose(); worker.dispose(); await market.close(); await rm(dir, { recursive: true, force: true }); });
   const big = zip(withManifest({ 'resources/hello/SKILL.md': randomBytes(4096).toString('hex') }));
   market.override('GET /api/market/packages/demo', () => ({ status: 200, body: { packageKey: 'demo', versions: [{ version: '1.0.0', isEnabled: true, channel: 'release', sha256: sha(big) }] } }));
   market.override('GET /api/market/packages/demo/versions/1.0.0/download', () => ({ status: 200, raw: big, headers: { 'X-Checksum-Sha256': sha(big) } }));
-  await worker.call('rc.session.signIn', { marketUrl: market.url, username: 'alice', password: 'pw-alice' });
-  await assert.rejects(worker.call('rc.download.save', { packageKey: 'demo', version: '1.0.0' }), { code: 'invalid_package', message: /大小上限/ });
+  await session.signIn({ marketUrl: market.url, username: 'alice', password: 'pw-alice' });
+  await assert.rejects(downloads.fetchVerified({ packageKey: 'demo', version: '1.0.0' }), { code: 'invalid_package', message: /大小上限/ });
   assert.deepEqual(await readdir(dir), []);
 });

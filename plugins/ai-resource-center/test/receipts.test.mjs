@@ -23,6 +23,15 @@ const receipt = (overrides = {}) => ({
   installedAt: '2026-11-21T03:04:05.12+00:00', clientVersion: '1.0.0', hostProfileVersion: 'codex/2026.10.1', ...overrides
 });
 
+test('共用 Codex 技能的 v2 收據與 LC-AI-Pack 產生的 Windows 檔逐位元組相容', async () => {
+  const bytes = await readFile(new URL('./fixtures/lcaipack-shared-skill-v2.windows.golden.json', import.meta.url));
+  const root = 'c:\\synthetic\\home';
+  const shared = receipt({ packageKey: 'demo.skill', canonicalRoot: root, destinationPath: root + '\\.agents\\skills\\hello',
+    normalizedAddress: 'codex|codex-cli|global|' + root + '|hello', clientVersion: '1.6.0', hostProfileVersion: 'codex/2026.11.1' });
+  assert.deepEqual(parseReceiptFile(bytes.toString('utf8'), 'golden'), { receiptFormatVersion: 2, receipts: [shared] });
+  assert.deepEqual(Buffer.from(serializeReceiptFile({ receiptFormatVersion: 2, receipts: [shared] }, '\r\n')), bytes);
+});
+
 test('LC-AI-Pack 產生的收據檔可讀回，原樣再序列化後逐位元組相同（Windows 換行）', async () => {
   const bytes = await readFile(golden);
   const file = parseReceiptFile(bytes.toString('utf8'), 'golden');
@@ -60,18 +69,30 @@ test('全域收據檔直接位於資料目錄下，正規化根目錄是使用�
 test('收據檔不存在時視為空且不建立任何檔案；存檔後讀回並標記格式版本、不留下暫存檔', async (t) => {
   const dir = await temp(t);
   const store = ReceiptStore.forGlobal({ home: path.join(dir, 'home'), userProfile: dir });
-  assert.deepEqual(store.load(), { receiptFormatVersion: 1, receipts: [] });
+  assert.deepEqual(store.load(), { receiptFormatVersion: 2, receipts: [] });
   assert.equal(existsSync(path.join(dir, 'home')), false);
   store.save({ receiptFormatVersion: 7, receipts: [receipt()] });
   const loaded = store.load();
-  assert.equal(loaded.receiptFormatVersion, 1);
+  assert.equal(loaded.receiptFormatVersion, 2);
   assert.deepEqual(loaded.receipts, [receipt()]);
   assert.deepEqual(await readdir(path.join(dir, 'home')), ['receipts.json']);
   const raw = await readFile(store.filePath);
   assert.notEqual(raw[0], 0xef, '不得有 BOM');
 });
 
-for (const [name, content] of [['不支援的格式版本', '{"receiptFormatVersion":2,"receipts":[]}'], ['字面 null', 'null'], ['空白', '  \n'], ['損壞的 JSON', '{"receipts":[']]) {
+test('保留舊格式讀取能力，首次寫入改用格式 2', async (t) => {
+  const dir = await temp(t);
+  const store = ReceiptStore.forGlobal({ home: dir, userProfile: dir });
+  const legacy = '{"receiptFormatVersion":1,"receipts":[]}';
+  await writeFile(store.filePath, legacy);
+  const loaded = store.load();
+  assert.equal(loaded.receiptFormatVersion, 1);
+  assert.equal(await readFile(store.filePath, 'utf8'), legacy);
+  store.save(loaded);
+  assert.equal(store.load().receiptFormatVersion, 2);
+});
+
+for (const [name, content] of [['不支援的格式版本', '{"receiptFormatVersion":99,"receipts":[]}'], ['字面 null', 'null'], ['空白', '  \n'], ['損壞的 JSON', '{"receipts":[']]) {
   test(`收據檔為${name}時明確失敗且不改動檔案，不當成全新狀態`, async (t) => {
     const dir = await temp(t);
     await mkdir(path.join(dir, 'home'));
@@ -79,6 +100,7 @@ for (const [name, content] of [['不支援的格式版本', '{"receiptFormatVers
     const store = ReceiptStore.forGlobal({ home: path.join(dir, 'home'), userProfile: dir });
     assert.throws(() => store.load(), { code: 'receipt_invalid' });
     assert.throws(() => store.upsert([receipt()]), { code: 'receipt_invalid' });
+    assert.throws(() => store.save({ receipts: [] }), { code: 'receipt_invalid' });
     assert.equal(await readFile(path.join(dir, 'home', 'receipts.json'), 'utf8'), content);
   });
 }

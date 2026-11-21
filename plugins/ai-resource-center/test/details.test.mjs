@@ -19,12 +19,12 @@ export async function fixture(t, versions, recommendedVersion = '1.0.0') {
 export const version = (v = '1.0.0', extra = {}) => ({ version: v, isEnabled: true, channel: 'release',
   status: 'active', hosts: ['codex', 'claude-code'], changelog: '更新說明', ...extra });
 
-test('詳情只顯示可見版本，優先市集推薦，選定版本讀取 README 與相容工具', async (t) => {
+test('詳情只顯示可見版本，推薦最新 Release，選定版本讀取 README 與相容工具', async (t) => {
   const { worker, market } = await fixture(t, [version('2.0.0'), version(),
     version('3.0.0', { channel: 'preview', status: 'rejected' }), version('4.0.0', { isEnabled: false })]);
   const detail = await worker.call('rc.package.getDetails', { packageKey: 'demo' });
   assert.deepEqual(detail.versions.map(v => v.version), ['2.0.0', '1.0.0']);
-  assert.equal(detail.selectedVersion, '1.0.0');
+  assert.equal(detail.selectedVersion, '2.0.0');
   assert.equal(detail.readme, '# 使用說明');
   assert.deepEqual(detail.versions[1].hosts, ['codex', 'claude-code']);
   const preview = await worker.call('rc.package.getDetails', { packageKey: 'demo', previewMode: true, version: '3.0.0' });
@@ -42,10 +42,10 @@ test('版本排序對齊 LC-AI-Pack SemVer 黃金順序、build metadata 與自�
   }
 });
 
-test('沒有可用推薦版本時整組 release 優先，Preview 審核狀態不影響可見性', async t => {
+test('Preview 開啟時推薦較新版本，審核狀態不影響可見性', async t => {
   const { worker } = await fixture(t, [version('9.0.0', { channel: 'preview', status: 'pending_review' }),
     version('1.0.0'), version('2.0.0', { status: 'rejected' })], 'missing');
-  assert.equal((await worker.call('rc.package.getDetails', { packageKey: 'demo', previewMode: true })).selectedVersion, '2.0.0');
+  assert.equal((await worker.call('rc.package.getDetails', { packageKey: 'demo', previewMode: true })).selectedVersion, '9.0.0');
   for (const previewMode of [false, true]) for (const status of ['active', 'pending_review', 'rejected']) {
     for (const channel of ['release', 'preview']) for (const isEnabled of [false, true]) {
       const { worker: w } = await fixture(t, [version('1.0.0', { channel, status, isEnabled })]);

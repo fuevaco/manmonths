@@ -70,6 +70,7 @@ export function readPackageZip(bytes, limits = {}) {
       const dataStart = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
       if (dataStart + compressed > start || !bytes.subarray(local + 30, local + 30 + bytes.readUInt16LE(local + 26)).equals(nameBytes)) invalid('ZIP 項目損壞');
       // 先以宣告大小擋下，再把解壓輸出長度限制在宣告大小；標頭謊報時 inflate 在超出處就中止，不會先展開整個炸彈。
+      limits.checkEntry?.(name, size);
       if (size > maxEntryBytes) invalid(`單一檔案解壓後超過上限（${maxEntryBytes / MB} MB）`);
       total += size;
       if (total > maxTotalBytes) invalid(`解壓後總大小超過上限（${maxTotalBytes / MB} MB）`);

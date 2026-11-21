@@ -42,9 +42,10 @@ export function parseDesktopVerdict(line) {
 }
 
 export function locateClaudeDesktop({ platform = process.platform, userHome, homedir = os.homedir, env = process.env, probe = realProbe, environment } = {}) {
+  if (platform !== 'win32' && platform !== 'darwin') return missing('PackageMissing');
   userHome = userHome?.trim() ? userHome : homedir();
   const rules = createPathRules({ platform });
-  if (platform !== 'darwin') {
+  if (platform === 'win32') {
     environment ??= captureDesktopEnvironment({ appDataDirectory: env.APPDATA ?? rules.path.join(userHome, 'AppData', 'Roaming'),
       localAppDataDirectory: env.LOCALAPPDATA ?? rules.path.join(userHome, 'AppData', 'Local'),
       windowsAppsDirectory: env.ProgramFiles ? rules.path.join(env.ProgramFiles, 'WindowsApps') : null, platform });

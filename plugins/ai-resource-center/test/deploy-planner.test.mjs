@@ -2,10 +2,11 @@
 // 全部使用隔離的暫存目錄，不接觸使用者真實家目錄。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createDeploymentPlanner } from '../worker/deploy/planner.mjs';
 import { createPathRules } from '../worker/deploy/canonical-root.mjs';
@@ -35,7 +36,7 @@ async function env(t) {
   const planner = createDeploymentPlanner({ home, userHome, clientVersion: '9.9.9-orca', channel: 'release' });
   const intent = (pkg, roots = [root], extra = {}) => ({ package: pkg, scope: 'global', projectRoot: null, hosts: [codex],
     existingContent: 'Block', hostRoots: [{ host: codex, canonicalRoots: roots }], ...extra });
-  return { dir, userHome, root, home, planner, intent, destination: path.join(rules.normalize(root), 'skills', 'hello') };
+  return { dir, userHome, root, home, planner, intent, destination: path.join(rules.normalize(userHome), '.agents', 'skills', 'hello') };
 }
 
 async function tree(dir) {
@@ -43,15 +44,35 @@ async function tree(dir) {
   return (await readdir(dir, { recursive: true })).sort();
 }
 
-test('規劃階段對目標零寫入，Skill 目的地為 Codex 設定根的 skills/{id}', async (t) => {
+test('更新移除仍有本機修改的技能時，先將修改存入集中備份', async t => {
+  const e = await env(t);
+  const install = e.planner.plan(e.intent(skillPackage()));
+  assert.equal(e.planner.apply(install, { planDigest: install.planDigest }).status, 'Succeeded');
+  await writeFile(path.join(e.destination, 'SKILL.md'), 'Local edit');
+  const bytes = zip({ 'lcpack.json': JSON.stringify({
+    packageFormatVersion: 1, key: 'demo', name: 'Demo', type: 'mcp', version: '2.0.0', description: 'Synthetic',
+    contents: [{ id: 'new-server', kind: 'mcp', name: 'New server', definition: { transport: 'stdio', command: 'echo' } }]
+  }), 'README.md': '# Demo' });
+  const update = e.planner.plan(e.intent({ bytes, expectedSha256: sha(bytes) }, [e.root], { existingContent: 'BackupAndReplace' }));
+  const applied = e.planner.apply(update, { planDigest: update.planDigest });
+  assert.equal(applied.status, 'Succeeded');
+  assert.ok(!existsSync(e.destination));
+  const backups = applied.targets.flatMap(t => t.backupPaths);
+  assert.equal(backups.length, 1);
+  assert.ok(backups[0].startsWith(path.join(e.home, 'backups') + path.sep));
+  assert.equal(await readFile(path.join(backups[0], 'SKILL.md'), 'utf8'), 'Local edit');
+});
+
+test('規劃階段對目標零寫入，多個 Codex 根共用同一份 Skill', async (t) => {
   const e = await env(t);
   const before = await tree(e.dir);
-  const plan = e.planner.plan(e.intent(skillPackage()));
+  const plan = e.planner.plan(e.intent(skillPackage(), [e.root, path.join(e.userHome, '.codex-work')]));
+  assert.equal(plan.targets.length, 1);
   assert.equal(plan.canApply, true, JSON.stringify(plan.problems));
   assert.deepEqual(await tree(e.dir), before);
   const target = plan.targets[0];
-  assert.equal(target.targetKey, `codex|codex-cli|global|${rules.normalize(e.root)}`);
-  assert.equal(target.hostProfileVersion, 'codex/2026.10.1');
+  assert.equal(target.targetKey, `codex|codex-cli|global|${rules.normalize(e.userHome)}`);
+  assert.equal(target.hostProfileVersion, 'codex/2026.11.1');
   const [m] = target.mutations;
   assert.deepEqual([m.contentId, m.kind, m.mutationKind, m.change, m.destinationPath, m.willBackup], ['hello', 'skill', 'SyncTree', 'Create', e.destination, false]);
   assert.equal(m.mutationId.length, 16);
@@ -70,9 +91,9 @@ test('套用後 Skill 逐位元組寫入並記錄相容收據；再次規劃為�
   assert.equal(store.filePath, path.join(e.home, 'receipts.json'));
   assert.deepEqual({ ...r, installedAt: undefined, installedSha256: undefined }, {
     packageKey: 'demo', packageVersion: '1.0.0', packageSha256: pkg.expectedSha256, channel: 'release', contentId: 'hello', kind: 'skill',
-    hostId: 'codex', surfaceId: 'codex-cli', scope: 'global', canonicalRoot: rules.normalize(e.root),
-    normalizedAddress: `codex|codex-cli|global|${rules.normalize(e.root)}|hello`, destinationPath: e.destination, mutationKind: 'SyncTree',
-    sourceSha256: pkg.expectedSha256, ownedConfigFields: [], baseValueHashes: [], clientVersion: '9.9.9-orca', hostProfileVersion: 'codex/2026.10.1',
+    hostId: 'codex', surfaceId: 'codex-cli', scope: 'global', canonicalRoot: rules.normalize(e.userHome),
+    normalizedAddress: `codex|codex-cli|global|${rules.normalize(e.userHome)}|hello`, destinationPath: e.destination, mutationKind: 'SyncTree',
+    sourceSha256: pkg.expectedSha256, ownedConfigFields: [], baseValueHashes: [], clientVersion: '9.9.9-orca', hostProfileVersion: 'codex/2026.11.1',
     installedAt: undefined, installedSha256: undefined
   });
   // 樹雜湊：排序後「相對路徑:內容雜湊\n」再雜湊（獨立計算）。
@@ -88,6 +109,36 @@ test('根目錄就是使用者家目錄的舊式 Codex 根，Skill 落在家目�
   const e = await env(t);
   const plan = e.planner.plan(e.intent(skillPackage(), [e.userHome]));
   assert.equal(plan.targets[0].mutations[0].destinationPath, path.join(rules.normalize(e.userHome), '.agents', 'skills', 'hello'));
+});
+
+test('共用 skills 是使用者的目錄連結時，跨設定根安裝與再次規劃沿用該位置', async t => {
+  const e = await env(t);
+  const outside = path.join(e.dir, 'shared-skills');
+  await mkdir(outside);
+  await mkdir(path.join(e.userHome, '.agents'));
+  await symlink(outside, path.join(e.userHome, '.agents', 'skills'), process.platform === 'win32' ? 'junction' : 'dir');
+  const intent = e.intent(skillPackage());
+  const plan = e.planner.plan(intent);
+  assert.equal(plan.canApply, true, JSON.stringify(plan.targets));
+  assert.equal(e.planner.apply(plan, { planDigest: plan.planDigest }).status, 'Succeeded');
+  assert.equal(await readFile(path.join(outside, 'hello', 'SKILL.md'), 'utf8'), SKILL);
+  assert.equal(e.planner.plan(intent).targets[0].mutations[0].change, 'NoOp');
+});
+
+test('Windows 目錄 ACL 禁止新增技能時，規劃顯示受阻原因且零寫入', { skip: process.platform !== 'win32' }, async t => {
+  const e = await env(t);
+  const skills = path.join(e.userHome, '.agents', 'skills');
+  await mkdir(skills, { recursive: true });
+  // WD / AD deny adding files or subdirectories, while the directory remains readable.
+  execFileSync('icacls.exe', [skills, '/deny', '*S-1-1-0:(WD,AD)']);
+  try {
+    const plan = e.planner.plan(e.intent(skillPackage()));
+    assert.equal(plan.canApply, false);
+    assert.ok(plan.targets[0].problems.some(p => p.code === 'deployment.shared-skills-unavailable'));
+    assert.equal(existsSync(e.destination), false);
+  } finally {
+    execFileSync('icacls.exe', [skills, '/remove:d', '*S-1-1-0']);
+  }
 });
 
 test('需要偵測根目錄的 Codex 沒有偵測結果時阻擋，不退回使用者家目錄', async (t) => {
@@ -138,15 +189,14 @@ test('計畫內的部署目標不屬於使用者選定的根目錄集合時拒�
   assert.ok(result.problems.some(p => p.code === 'deployment.plan-stale'));
 });
 
-test('寫入中途失敗時還原該目標，不留下收據與本次寫入的內容', async (t) => {
+test('規劃後共用技能路徑受阻時回報過期，不留下收據', async (t) => {
   const e = await env(t);
   const plan = e.planner.plan(e.intent(skillPackage()));
-  await writeFile(path.join(e.root, 'skills'), '不是目錄');
+  await writeFile(path.join(e.userHome, '.agents'), '不是目錄');
   const result = e.planner.apply(plan, { planDigest: plan.planDigest });
-  assert.equal(result.status, 'Failed');
-  assert.equal(result.targets[0].status, 'RolledBack');
-  assert.ok(result.targets[0].problems.some(p => p.code === 'deployment.apply-failed'));
-  assert.equal(await readFile(path.join(e.root, 'skills'), 'utf8'), '不是目錄');
+  assert.equal(result.status, 'Stale');
+  assert.ok(result.targets[0].problems.some(p => p.code === 'deployment.plan-stale'));
+  assert.equal(await readFile(path.join(e.userHome, '.agents'), 'utf8'), '不是目錄');
   assert.equal(existsSync(path.join(e.home, 'receipts.json')), false);
 });
 

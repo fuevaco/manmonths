@@ -19,18 +19,23 @@ export function resolveClaudeUserConfigDirectory(canonicalRoot, userHome, cameFr
 export function locateClaudeCodeRoots({ userHome = os.homedir(), env = process.env, manualRoots = [], excludedRoots = [], platform = process.platform, probe = realProbe } = {}) {
   const rules = createPathRules({ platform });
   const api = rules.path;
+  const fold = isCaseInsensitive(platform);
   const roots = new Map();
   const add = (candidate, origin) => {
     if (typeof candidate !== 'string' || !candidate.trim() || isToolOwnedBackup(candidate, api)) return;
     if (!probe.isDirectory(candidate) || !(probe.isFile(api.join(candidate, 'settings.json')) || probe.isFile(api.join(candidate, '.claude.json')))) return;
     const displayPath = api.resolve(candidate);
     const canonicalRoot = rules.normalize(displayPath);
-    const isPrimary = api.basename(canonicalRoot) === PrimaryRootDirectoryName;
+    const name = api.basename(displayPath);
+    const isPrimary = (fold ? name.toLowerCase() : name) === PrimaryRootDirectoryName;
     const existing = roots.get(canonicalRoot);
-    if (!existing || existing.origin === ClientRootOrigin.homeScan) roots.set(canonicalRoot, { canonicalRoot, displayPath, isPrimary, origin });
+    if (!existing || (!existing.isPrimary && isPrimary)) {
+      roots.set(canonicalRoot, { canonicalRoot, displayPath, isPrimary, origin });
+    } else if (existing.origin === ClientRootOrigin.homeScan && origin !== ClientRootOrigin.homeScan) {
+      roots.set(canonicalRoot, { ...existing, origin });
+    }
   };
   if (probe.isDirectory(userHome)) {
-    const fold = isCaseInsensitive(platform);
     for (const name of probe.listDirectories(userHome)) {
       if ((fold ? name.toLowerCase() : name).startsWith('.claude')) add(api.join(userHome, name), ClientRootOrigin.homeScan);
     }

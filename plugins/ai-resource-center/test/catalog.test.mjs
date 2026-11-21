@@ -87,14 +87,14 @@ test('目錄讀完超過 50 筆的分頁，每頁維持相同條件，重新整�
   assert.equal(second.data[50].latestVisibleVersion, '1.1.0');
 });
 
-test('Preview 模式傳遞通道，正式版優先，僅 Preview 的包在開啟時才顯示版本', async (t) => {
+test('Preview 模式傳遞通道，選較新版本，僅 Preview 的包在開啟時才顯示版本', async (t) => {
   const { worker, market } = await setup(t);
   market.override('GET /api/market/packages', (req) => ({ status: 200, body: {
     data: [summary(), summary({ packageKey: 'preview-only', latestReleaseVersion: null })], meta: { total: 2 }
   } }));
   assert.equal((await worker.call('rc.catalog.list')).data[1].latestVisibleVersion, null);
   const result = await worker.call('rc.catalog.list', { previewMode: true });
-  assert.equal(result.data[0].latestVisibleVersion, '1.0.0');
+  assert.equal(result.data[0].latestVisibleVersion, '2.0.0');
   assert.equal(result.data[1].latestVisibleVersion, '2.0.0');
   market.override('GET /api/market/packages', (req) => {
     assert.equal(new URL(req.url, market.url).searchParams.get('channel'), 'preview');

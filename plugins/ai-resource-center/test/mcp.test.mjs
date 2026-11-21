@@ -43,23 +43,23 @@ export function mcpPackage(version = '1.0.0', extra = {}) {
   const bytes = zip({ 'lcpack.json': JSON.stringify(manifest), 'README.md': '# Demo' });
   return { bytes, expectedSha256: ofBytes(bytes) };
 }
-function environment(t, host = { hostId: 'claude-code', surfaceId: 'claude-code-cli' }, scope = 'project') {
+function environment(t, host = { hostId: 'claude-code', surfaceId: 'claude-code-cli' }, scope = 'global') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-08-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const userHome = path.join(dir, 'user'); fs.mkdirSync(userHome);
   const root = path.join(dir, 'project'); fs.mkdirSync(root);
   const home = path.join(dir, 'lcaipack');
   const planner = createDeploymentPlanner({ home, userHome, clientVersion: '1.0.0-test' });
-  const intent = (pkg = mcpPackage(), extra = {}) => ({ package: pkg, hosts: [host], scope, projectRoot: root,
+  const intent = (pkg = mcpPackage(), extra = {}) => ({ package: pkg, hosts: [host], scope,
     hostRoots: [{ host, canonicalRoots: [root] }], existingContent: 'Block', ...extra });
-  const config = path.join(root, host.hostId === 'codex' ? '.codex/config.toml' : host.surfaceId === 'claude-desktop' ? 'claude_desktop_config.json' : '.mcp.json');
+  const config = path.join(root, host.hostId === 'codex' ? 'config.toml' : host.surfaceId === 'claude-desktop' ? 'claude_desktop_config.json' : '.claude.json');
   const apply = plan => planner.apply(plan, { planDigest: plan.planDigest, replaceUnmanagedFiles: true });
   return { dir, root, userHome, home, planner, intent, config, apply };
 }
 
 test('planner installs and updates MCP JSON and TOML with compatible managed field receipts', t => {
   for (const host of [{ hostId: 'claude-code', surfaceId: 'claude-code-cli' }, { hostId: 'codex', surfaceId: 'codex-cli' }, { hostId: 'claude-code', surfaceId: 'claude-desktop' }]) {
-    const e = environment(t, host, host.surfaceId === 'claude-desktop' ? 'global' : 'project');
+    const e = environment(t, host, 'global');
     const toml = host.hostId === 'codex';
     fs.mkdirSync(path.dirname(e.config), { recursive: true });
     const initial = toml ? '# keep\r\nmodel = "test"\r\n[mcp_servers.other]\r\ncommand = "user"\r\n' : JSON.stringify({ theme: 'dark', mcpServers: { other: { command: 'user' } } });
@@ -73,7 +73,7 @@ test('planner installs and updates MCP JSON and TOML with compatible managed fie
       assert.equal(JSON.parse(adapter.readNodeJson(bytes, `${toml ? 'mcp_servers' : 'mcpServers'}.echo`)).env.REV, version);
       assert.deepEqual(JSON.parse(adapter.readNodeJson(bytes, 'root.other')), { command: 'user' });
       if (toml) assert.ok(bytes.toString().startsWith(initial)); else assert.equal(JSON.parse(bytes).theme, 'dark');
-      const store = host.surfaceId === 'claude-desktop' ? ReceiptStore.forGlobal({ home: e.home, userProfile: e.userHome }) : ReceiptStore.forProject({ projectRoot: e.root });
+      const store = ReceiptStore.forGlobal({ home: e.home, userProfile: e.userHome });
       const [r] = store.load().receipts;
       assert.equal(r.packageVersion, version);
       assert.equal(r.mutationKind, 'PatchConfig');
@@ -86,14 +86,6 @@ test('planner installs and updates MCP JSON and TOML with compatible managed fie
   }
 });
 
-
-test('one apply shares neutral project MCP config across hosts without falsely reporting stale', t => {
-  const e = environment(t);
-  const plan = e.planner.plan(e.intent(undefined, { hosts: [{ hostId: 'claude-code', surfaceId: 'claude-code-cli' }, { hostId: 'github-copilot', surfaceId: 'copilot-cli' }] }));
-  assert.equal(plan.canApply, true);
-  assert.equal(e.apply(plan).status, 'Succeeded');
-  assert.equal(ReceiptStore.forProject({ projectRoot: e.root }).load().receipts.length, 2);
-});
 
 test('Claude Code global MCP follows default, environment-origin and custom profile user-config locations', t => {
   const e = environment(t);
@@ -112,7 +104,7 @@ for (const mode of ['tampered', 'backup', 'deleted', 'emptied', 'other-node', 'c
   test(`MCP protection: ${mode}`, t => {
     const codex = mode === 'invalid-toml' || mode === 'codex-tools';
     const e = environment(t, codex ? { hostId: 'codex', surfaceId: 'codex-cli' } : undefined);
-    const store = ReceiptStore.forProject({ projectRoot: e.root });
+    const store = ReceiptStore.forGlobal({ home: e.home, userProfile: e.userHome });
     if (mode === 'setup') {
       const plan = e.planner.plan(e.intent(mcpPackage('1.0.0', { setup: { parameters: [{ parameterId: 'endpoint', label: 'Endpoint', type: 'string', required: true }] } })));
       assert.equal(plan.canApply, false); assert.ok(plan.problems.some(p => p.code === 'deployment.setup-parameter-missing')); return;

@@ -11,10 +11,11 @@ import { ordinal } from '../deploy/digest.mjs';
 
 export const SupportedFormatVersion = 1;
 export const FileName = 'setup.json';
+const originalProjectEntry = Symbol('originalProjectEntry');
 const DEFAULT_UPDATED_AT = '0001-01-01T00:00:00+00:00';
 
 export class SetupFileError extends Error {
-  constructor(message) { super(message); this.name = 'SetupFileError'; this.code = 'setup_file_invalid'; }
+  constructor(message, unsupportedFormatVersion = false) { super(message); this.name = 'SetupFileError'; this.code = 'setup_file_invalid'; this.unsupportedFormatVersion = unsupportedFormatVersion; }
 }
 
 const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -52,6 +53,7 @@ function parseEntry(raw, filePath) {
       entry[name] = value;
     }
   }
+  if (entry.scope === 'project') Object.defineProperty(entry, originalProjectEntry, { value: structuredClone(raw), configurable: true });
   return entry;
 }
 
@@ -72,13 +74,18 @@ export function parseSetupFile(text, filePath) {
     } else file.extra[key] = value;
   }
   if (file.setupFormatVersion !== SupportedFormatVersion) {
-    throw new SetupFileError(`setup 檔格式版本 ${file.setupFormatVersion} 不支援（僅支援 ${SupportedFormatVersion}）：${filePath}`);
+    throw new SetupFileError(`setup 檔格式版本 ${file.setupFormatVersion} 不支援（僅支援 ${SupportedFormatVersion}）：${filePath}`, true);
   }
   return file;
 }
 
 export function serializeSetupFile(file, nl = os.EOL) {
   const items = file.packages.map(entry => {
+    if (entry[originalProjectEntry]) {
+      const raw = entry[originalProjectEntry];
+      const lines = Object.entries(raw).map(([k, v]) => `      ${jsonString(k)}: ${k.toLowerCase() === 'updatedat' && typeof v === 'string' ? JSON.stringify(v) : writeJsonValue(v, '      ', nl)}`);
+      return `    {${nl}${lines.join(',' + nl)}${nl}    }`;
+    }
     const i = '      ';
     const lines = [
       `${i}"packageKey": ${jsonString(entry.packageKey)}`,
@@ -109,7 +116,7 @@ function createStore(filePath, canonicalRoot, scope) {
     },
     save(file, newline = os.EOL) { writeTextAtomic(filePath, serializeSetupFile(file, newline)); },
     getValues(packageKey) {
-      const entry = store.load().packages.find(p => p.packageKey === packageKey);
+      const entry = store.load().packages.find(p => p.packageKey === packageKey && p.scope === scope);
       return entry ? { ...entry.values } : {};
     },
     /** 批次寫入非秘密值；null 代表移除（專案範圍即清除覆寫）。 */
@@ -120,12 +127,14 @@ function createStore(filePath, canonicalRoot, scope) {
       const pairs = Object.entries(values);
       if (!pairs.length) return;
       const file = store.load();
-      let entry = file.packages.find(p => p.packageKey === packageKey);
+      let entry = file.packages.find(p => p.packageKey === packageKey && p.scope === scope);
       if (!entry) {
         if (pairs.every(([, v]) => v == null)) return;
         entry = { packageKey, scope, projectRoot: canonicalRoot, values: {}, updatedAt: DEFAULT_UPDATED_AT, extra: {} };
         file.packages.push(entry);
       }
+      // 此 store 自己的明確寫入才捨棄原始快照；全域 store 永遠不碰專案項目。
+      delete entry[originalProjectEntry];
       for (const [id, value] of pairs) {
         if (typeof id !== 'string' || !id.trim()) throw new TypeError('parameterId 為必填');
         if (value == null) delete entry.values[id]; else entry.values[id] = String(value);
@@ -136,12 +145,14 @@ function createStore(filePath, canonicalRoot, scope) {
     clearPackage(packageKey) {
       const file = store.load();
       const before = file.packages.length;
-      file.packages = file.packages.filter(p => p.packageKey !== packageKey);
+      file.packages = file.packages.filter(p => p.packageKey !== packageKey || p.scope !== scope);
       if (file.packages.length !== before) persist(file);
     }
   };
   function persist(file) {
-    file.packages = file.packages.filter(p => Object.keys(p.values).length > 0).sort((a, b) => ordinal(a.packageKey, b.packageKey));
+    file.packages = file.packages.filter(p => p.scope !== scope || Object.keys(p.values).length > 0);
+    const own = file.packages.filter(p => p.scope === scope).sort((a, b) => ordinal(a.packageKey, b.packageKey));
+    file.packages = file.packages.map(p => p.scope === scope ? own.shift() : p);
     store.save(file);
   }
   return store;

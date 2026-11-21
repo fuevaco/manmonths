@@ -1,3 +1,4 @@
+import { zip } from './zip-fixture.mjs';
 // 等待確認的部署計畫綁定產生它的市集與工作階段（計畫的來源）：
 // 登出、工作階段被拒絕、換市集網址後都不能套用舊計畫；安裝回報只送給計畫來源的市集。
 import test from 'node:test';
@@ -11,17 +12,17 @@ const until = async (check, ms = 2000) => { const end = Date.now() + ms; while (
 const stalePlan = { code: 'plan_stale' };
 
 async function planned(t) {
-  const e = await setupMulti(t);
-  const { codex } = await e.targets();
-  const summary = await e.plan('pkg-a', '1.0.0', [codex.id]);
-  return { e, codex, summary, ids: [codex.id] };
+  const bytes=zip({'lcpack.json':JSON.stringify({packageFormatVersion:1,key:'pkg-a',name:'Demo',type:'bundle',version:'1.0.0',description:'Synthetic',contents:[{id:'demo-skill',kind:'skill',path:'resources/skill'}],setup:{commands:[{commandId:'init',name:'準備',runner:'powershell',script:'setup/init.ps1'}]}}),
+    'README.md':'# Demo','resources/skill/SKILL.md':'---\nname: demo-skill\ndescription: Synthetic\n---\nHello','setup/init.ps1':'exit 0'});
+  const e=await setupMulti(t,{packages:{'pkg-a':{'1.0.0':bytes}},workerDeps:{runners:{resolve:runner=>({runner,executable:'/fake/powershell',leadingArguments:[]})},commandExecutor:{run:async()=>({succeeded:true,outcome:'Completed',exitCode:0})}}});
+  const summary=await e.run();assert.equal(summary.needsConfirmation,true);
+  return {e,summary};
 }
-
 test('登出後重新登入同一帳號：登出前產生的計畫不能套用，也沒有寫入', async t => {
   const { e, summary, ids } = await planned(t);
   await e.worker.call('rc.session.signOut');
   await e.worker.call('rc.session.signIn', { marketUrl: e.market.url, username: 'alice', password: 'pw-alice' });
-  await assert.rejects(e.apply(summary, ids), stalePlan);
+  await assert.rejects(e.confirm(summary), stalePlan);
   assert.deepEqual(e.receipts(), []);
 });
 
@@ -33,7 +34,7 @@ test('工作階段被拒絕（續期失敗）後重新登入：舊計畫不能�
   assert.equal((await e.worker.call('rc.session.getState')).signedIn, false);
   e.market.clearOverrides();
   await e.worker.call('rc.session.signIn', { marketUrl: e.market.url, username: 'alice', password: 'pw-alice' });
-  await assert.rejects(e.apply(summary, ids), stalePlan);
+  await assert.rejects(e.confirm(summary), stalePlan);
   assert.deepEqual(e.receipts(), []);
 });
 
@@ -42,30 +43,28 @@ test('換到另一個市集網址登入：舊市集產生的計畫不能套用',
   const other = await startFakeMarket();
   t.after(() => other.close());
   await e.worker.call('rc.session.signIn', { marketUrl: other.url, username: 'alice', password: 'pw-alice' });
-  await assert.rejects(e.apply(summary, ids), stalePlan);
+  await assert.rejects(e.confirm(summary), stalePlan);
   assert.deepEqual(e.receipts(), []);
 });
 
 test('設定中的市集網址被直接改掉（沒有走登入流程）：套用前核對來源，拒絕舊計畫', async t => {
   const { e, summary, ids } = await planned(t);
   e.worker.state.settings.set('marketUrl', 'http://127.0.0.1:9');
-  await assert.rejects(e.apply(summary, ids), stalePlan);
+  await assert.rejects(e.confirm(summary), stalePlan);
   assert.deepEqual(e.receipts(), []);
 });
 
 test('來源沒變時仍可套用（行為不變）', async t => {
   const { e, summary, ids } = await planned(t);
-  assert.equal((await e.apply(summary, ids)).status, 'succeeded');
+  assert.equal((await e.confirm(summary)).ok, true);
 });
 
 test('安裝回報只送給計畫來源的市集：換到另一個市集（同帳號名）後不會補送過去', async t => {
   const e = await setupMulti(t);
   const other = await startFakeMarket();
   t.after(() => other.close());
-  const { codex } = await e.targets();
   e.market.override('POST /api/market/packages/pkg-a/versions/1.0.0/installs', () => ({ status: 503, body: { title: '暫時無法服務' } }));
-  const summary = await e.plan('pkg-a', '1.0.0', [codex.id]);
-  assert.equal((await e.apply(summary, [codex.id])).status, 'succeeded');
+  assert.equal((await e.run()).ok,true);
   assert.ok(await until(() => Object.keys(e.worker.state.storage.get(INSTALL_REPORTS_KEY)?.entries ?? {}).length === 1));
 
   await e.worker.call('rc.session.signIn', { marketUrl: other.url, username: 'alice', password: 'pw-alice' });

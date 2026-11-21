@@ -9,7 +9,7 @@
 
 import { badParams, ErrorCode, RcError } from './contract.mjs';
 import { send } from './http.mjs';
-import { login } from './auth.mjs';
+import { login, logAuthDiagnostic } from './auth.mjs';
 import { normalizeMarketUrl } from './market-url.mjs';
 import { createSessionStore } from './session-store.mjs';
 import { createSessionManager, realDelay, RejectionReason } from './session-manager.mjs';
@@ -78,11 +78,18 @@ export function createSessionService({
 
   function activate(session) {
     stopActive();
-    const manager = createSessionManager({ session, store, transport, now, delay, requestTimeoutMs });
+    const manager = createSessionManager({ session, store, transport, now, delay, requestTimeoutMs, log: message => orca.log(message) });
     const client = createMarketClient({
       manager,
       marketUrl: session.marketUrl,
-      transport,
+      transport: async request => {
+        let response;
+        const secrets = [manager.current.token, manager.current.refreshToken];
+        try { response = await transport(request); }
+        catch (error) { logAuthDiagnostic(message => orca.log(message), 'request', error, secrets); throw error; }
+        if (response.status < 200 || response.status >= 300) logAuthDiagnostic(message => orca.log(message), 'request', response, secrets);
+        return response;
+      },
       onUnauthorizedWithoutRefresh: ({ reason }) => { onSessionInvalid(manager, reason); }
     });
     manager.onRejected(({ reason }) => { onSessionInvalid(manager, reason); });
@@ -94,17 +101,19 @@ export function createSessionService({
   /** 啟動後第一次：載入綁定目前網址的工作階段；網址已改變時撤銷並清除舊的。 */
   async function ensureLoaded() {
     if (loaded) return;
-    loaded = true;
     const url = await configuredUrl();
     const raw = await store.readRaw();
     if (raw && raw.marketUrl !== url) {
       await clearSession({ notice: null, current: raw, marketUrl: raw.marketUrl, revoke, stopSession: stopActive, store });
       orca.log('市集網址已變更，已清除原市集的工作階段');
+      loaded = true;
       return;
     }
     const session = await store.load(url);
     if (session) activate(session);
     else if (raw) await store.clear(); // 已過期：清掉
+    // 只有主機設定與秘密儲存都讀取成功才完成載入；啟動暫時失敗可由排程重試。
+    loaded = true;
   }
 
   function view(marketUrl, extra = {}) {
@@ -132,7 +141,7 @@ export function createSessionService({
         await ensureLoaded();
         notice = null;
         const account = username.trim();
-        const session = await login({ marketUrl: url, username: account, password, transport, now, timeoutMs: requestTimeoutMs });
+        const session = await login({ marketUrl: url, username: account, password, transport, now, timeoutMs: requestTimeoutMs, log: message => orca.log(message) });
 
         // 原本的工作階段（可能是另一個市集）先登出。
         if (active) {

@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { startWorker } from './harness.mjs';
 import { startFakeMarket } from './fake-market.mjs';
-import { startPanel, settle, textOf } from './panel-harness.mjs';
+import { startPanel, settle, textOf, findByData } from './panel-harness.mjs';
 
 async function setup(t) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'rc-corrupt-'));
@@ -52,11 +52,10 @@ test('面板：目錄照常顯示，並在狀態列與詳情標出已安裝狀�
     if (method === 'rc.session.getState') return { signedIn: true, marketUrl: 'https://market.example.com', account: 'alice' };
     if (method === 'rc.catalog.list') return { data: [{ packageKey: 'demo', name: 'Demo', type: 'skill', latestVisibleVersion: '1.0.0' }], installedError: error };
     if (method === 'rc.package.getDetails') return { packageKey: 'demo', name: 'Demo', selectedVersion: '1.0.0', recommendedVersion: '1.0.0', readme: '', versions: [{ version: '1.0.0', hosts: [] }], installedError: error };
-    if (method === 'rc.deploy.listTargets') return { targets: [] };
   });
   assert.match(textOf(panel.get('catalog-list')), /Demo/);
   assert.match(textOf(panel.get('catalog-status')), /已安裝狀態無法讀取.*部署收據檔不是有效的 JSON/);
-  await panel.get('catalog-list').children[0].children.at(-1).fire('click');
+  await findByData(panel.get('catalog-list'), 'package-key', 'demo').fire('click');
   await settle();
   assert.match(textOf(panel.get('details-installed')), /已安裝狀態無法讀取.*部署收據檔不是有效的 JSON/);
   assert.doesNotMatch(textOf(panel.get('details-installed')), /尚未安裝/);

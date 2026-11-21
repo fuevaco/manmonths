@@ -5,8 +5,19 @@
   "publisher": "manmonths",
   "name": "AI 資源中心",
   "version": "1.0.0",
-  "description": "人月維護的 AI 資源中心：連到你有權使用的資源市集，在 Orca 內獨立登入，瀏覽、下載並部署 Skills、Agents、MCP 與組合包。",
+  "description": "人月維護的 AI 資源中心：連到你有權使用的資源市集，在 Orca 內獨立登入，瀏覽並一鍵安裝 Skills、Agents、MCP 與組合包到 Codex、Claude Code 與桌面工具。",
   "icon": "assets/icon.png",
+  "cover": {
+    "path": "assets/cover.png",
+    "alt": "AI 資源中心：在 Orca 側欄瀏覽並一鍵安裝 Skills、Agents 與 MCP"
+  },
+  "screenshots": [
+    {
+      "path": "assets/screenshots/01-overview.png",
+      "alt": "AI 資源中心：清單與明細畫面，一鍵安裝、更新、補裝與解除安裝，並直接閱讀使用說明",
+      "caption": "清單與明細：一鍵安裝、更新、補裝與解除安裝"
+    }
+  ],
   "author": {
     "name": "人月",
     "url": "https://github.com/fuevaco"
@@ -41,6 +52,7 @@
   "capabilities": [
     { "kind": "settings:own" },
     { "kind": "secrets:own" },
-    { "kind": "storage:own" }
+    { "kind": "storage:own" },
+    { "kind": "notifications:show" }
   ]
 }

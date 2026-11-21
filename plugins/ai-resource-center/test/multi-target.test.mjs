@@ -16,105 +16,58 @@ const snapshot = (root) => {
   return out;
 };
 
-/** 先由 pkg-a 占用 Claude Code 第二根的 demo-skill，使 pkg-b 在該目標因他包擁有而受阻。 */
-async function withBlockedClaudeWork(t) {
+
+async function blocked(t) {
   const e = await setupMulti(t, { packages: { 'pkg-a': ['1.0.0'], 'pkg-b': ['1.0.0'] } });
-  const targets = await e.targets();
-  const first = await e.plan('pkg-a', '1.0.0', [targets.claudeWork.id]);
-  assert.equal((await e.apply(first, [targets.claudeWork.id])).status, 'succeeded');
-  return { e, targets, ids: [targets.codex.id, targets.claude.id, targets.claudeWork.id] };
+  assert.equal((await e.seed('pkg-a', [e.roots.claudeWork])).ok, true);
+  return e;
 }
-
-test('三個目標其中一個受阻：摘要顯示兩個可安裝與一個受阻的具體原因，仍可確認', async (t) => {
-  const { e, ids } = await withBlockedClaudeWork(t);
-  const summary = await e.plan('pkg-b', '1.0.0', ids);
-
-  assert.equal(summary.canApply, true);
-  assert.deepEqual([summary.deployableCount, summary.blockedCount], [2, 1]);
-  const blocked = summary.targets.filter(x => !x.canApply);
-  assert.equal(blocked.length, 1);
-  assert.equal(blocked[0].id, ids[2]);
-  const reason = blocked[0].problems.find(p => p.code === 'deployment.ownership-collision');
-  assert.equal(reason.severity, 'Blocking');
-  assert.match(reason.summary, /pkg-a/);
-  assert.equal(reason.path, e.dest(e.roots.claudeWork));
-  assert.deepEqual(summary.targets.filter(x => x.canApply).map(x => x.id).sort(), [ids[0], ids[1]].sort());
+test('三個部署目標其中一個受阻：確認列出兩個可安裝與一個具體受阻原因', async t => {
+  const e = await blocked(t);
+  const review = await e.run('pkg-b');
+  assert.equal(review.needsConfirmation, true);
+  assert.equal(review.plan.deployableCount, 2);
+  const [target] = review.plan.blockedTargets;
+  assert.equal(target.rootPath, e.roots.claudeWork);
+  assert.equal(target.label, 'Claude Code');
+  assert.equal(target.detail[0].code, 'deployment.ownership-collision');
+  assert.equal(target.detail[0].path, e.dest(e.roots.claudeWork));
+  assert.match(target.reason, /pkg-a/);
 });
-
-test('一次確認：恰有兩個目標完成並寫入收據，受阻目標的檔案與收據不變；結果逐一列出狀態', async (t) => {
-  const { e, ids } = await withBlockedClaudeWork(t);
+test('一次確認後兩個部署目標完成；受阻部署目標檔案及收據逐欄不變', async t => {
+  const e = await blocked(t);
   const before = { files: snapshot(e.roots.claudeWork), receipts: e.receipts() };
-  const summary = await e.plan('pkg-b', '1.0.0', ids);
-
-  const result = await e.apply(summary, ids);
-
-  assert.equal(result.status, 'partial');
-  const byId = Object.fromEntries(result.targets.map(x => [x.id, x]));
-  assert.equal(result.targets.length, 3);
-  assert.equal(byId[ids[0]].status, 'succeeded');
-  assert.equal(byId[ids[1]].status, 'succeeded');
-  assert.equal(byId[ids[2]].status, 'skipped');
-  assert.ok(byId[ids[2]].problems.some(p => p.code === 'deployment.ownership-collision'));
-  assert.deepEqual(byId[ids[2]].writtenPaths, []);
-  for (const id of [ids[0], ids[1]]) assert.ok(byId[id].writtenPaths.length > 0);
-  assert.equal(read(path.join(e.dest(e.roots.codex), 'SKILL.md')), skillText('1.0.0'));
-  assert.equal(read(path.join(e.dest(e.roots.claude), 'SKILL.md')), skillText('1.0.0'));
+  const result = await e.confirm(await e.run('pkg-b'), 'pkg-b');
+  assert.equal(result.ok, true); assert.equal(result.succeeded.length, 2); assert.deepEqual(result.failed, []);
+  assert.equal(result.skipped.length, 1); assert.equal(result.skipped[0].rootPath, e.roots.claudeWork);
   assert.deepEqual(snapshot(e.roots.claudeWork), before.files);
-  const receipts = e.receipts();
-  assert.equal(receipts.filter(r => r.packageKey === 'pkg-b').length, 2);
-  assert.deepEqual(receipts.filter(r => r.packageKey === 'pkg-a'), before.receipts.filter(r => r.packageKey === 'pkg-a'));
-  assert.deepEqual(receipts.filter(r => r.packageKey === 'pkg-b').map(r => r.canonicalRoot).sort(),
-    [e.dest(e.roots.codex), e.dest(e.roots.claude)].map(p => path.dirname(path.dirname(p))).sort());
+  assert.deepEqual(e.receipts().filter(r => r.packageKey === 'pkg-a'), before.receipts);
+  assert.equal(e.receipts().filter(r => r.packageKey === 'pkg-b').length, 2);
+  for (const root of [e.roots.codex, e.roots.claude]) assert.equal(read(path.join(e.dest(root), 'SKILL.md')), skillText('1.0.0'));
 });
-
-test('全部目標受阻：摘要列出各自的原因且不可確認；強行套用也被拒絕、零寫入', async (t) => {
+test('全部部署目標受阻：各自列出原因、不可確認、檔案與收據零變更', async t => {
   const e = await setupMulti(t, { packages: { 'pkg-a': ['1.0.0'], 'pkg-b': ['1.0.0'] } });
-  const targets = await e.targets();
-  const ids = [targets.claude.id, targets.claudeWork.id];
-  const first = await e.plan('pkg-a', '1.0.0', ids);
-  assert.equal((await e.apply(first, ids)).status, 'succeeded');
-  const before = { files: [snapshot(e.roots.claude), snapshot(e.roots.claudeWork)], receipts: e.receipts() };
-
-  const summary = await e.plan('pkg-b', '1.0.0', ids);
-
-  assert.equal(summary.canApply, false);
-  assert.deepEqual([summary.deployableCount, summary.blockedCount], [0, 2]);
-  for (const target of summary.targets) {
-    assert.equal(target.canApply, false);
-    assert.ok(target.problems.some(p => p.code === 'deployment.ownership-collision' && /pkg-a/.test(p.summary)));
-  }
-  assert.equal((await e.apply(summary, ids)).status, 'rejected');
-  assert.deepEqual([snapshot(e.roots.claude), snapshot(e.roots.claudeWork)], before.files);
-  assert.deepEqual(e.receipts(), before.receipts);
+  await e.run('pkg-a');
+  const before = { files: Object.values(e.roots).map(snapshot), receipts: e.receipts() };
+  const review = await e.run('pkg-b');
+  assert.equal(review.allBlocked, true); assert.equal(review.needsConfirmation, false); assert.equal(review.planId, null);
+  assert.equal(review.plan.blockedTargets.length, 3); assert.equal(review.plan.deployableCount, 0);
+  assert.ok(review.plan.blockedTargets.every(t => t.detail.some(p => p.code === 'deployment.ownership-collision')));
+  assert.deepEqual(Object.values(e.roots).map(snapshot), before.files); assert.deepEqual(e.receipts(), before.receipts);
 });
-
-test('每個目標是獨立交易：一個目標寫入失敗時，已成功與其後的目標不受影響，失敗的目標還原原狀態', async (t) => {
-  const e = await setupMulti(t);
-  const targets = await e.targets();
-  const ids = [targets.codex.id, targets.claude.id, targets.claudeWork.id];
-  const first = await e.plan('pkg-a', '1.0.0', ids);
-  assert.equal((await e.apply(first, ids)).status, 'succeeded');
-  const before = snapshot(e.roots.claudeWork);
-  const beforeReceipts = e.receipts().filter(r => r.canonicalRoot.toLowerCase().endsWith('.claude-work'));
-  const update = await e.plan('pkg-a', '1.1.0', ids, { action: 'update' });
-  assert.deepEqual([update.deployableCount, update.blockedCount], [3, 0]);
-
+test('各部署目標獨立交易：一個寫入失敗不影響其他目標，失敗目標還原原狀', async t => {
+  const e = await setupMulti(t); await e.run();
+  const before = snapshot(e.roots.claudeWork), receipts = e.receipts().filter(r => r.canonicalRoot.endsWith('.claude-work'));
+  e.recommend('pkg-a', '1.1.0');
   const write = fs.writeFileSync;
   t.mock.method(fs, 'writeFileSync', (p, ...rest) => {
     if (String(p).replaceAll('\\', '/').toLowerCase().includes('.claude-work/skills/demo-skill/notes.md')) throw new Error('disk full');
     return write(p, ...rest);
   });
-  const result = await e.apply(update, ids);
-  t.mock.restoreAll();
-
-  assert.equal(result.status, 'partial');
-  const byId = Object.fromEntries(result.targets.map(x => [x.id, x]));
-  assert.deepEqual([byId[ids[0]].status, byId[ids[1]].status, byId[ids[2]].status], ['succeeded', 'succeeded', 'rolledBack']);
-  assert.match(byId[ids[2]].problems[0].explanation, /disk full/);
-  assert.equal(read(path.join(e.dest(e.roots.codex), 'SKILL.md')), skillText('1.1.0'));
-  assert.equal(read(path.join(e.dest(e.roots.claude), 'SKILL.md')), skillText('1.1.0'));
+  const result = await e.run('pkg-a', 'update'); t.mock.restoreAll();
+  assert.equal(result.ok, false); assert.equal(result.succeeded.length, 2); assert.equal(result.failed.length, 1);
+  assert.match(result.failed[0].detail[0].explanation, /disk full/);
   assert.deepEqual(snapshot(e.roots.claudeWork), before);
-  const receipts = e.receipts();
-  assert.deepEqual(receipts.filter(r => r.canonicalRoot.toLowerCase().endsWith('.claude-work')), beforeReceipts);
-  assert.deepEqual(receipts.filter(r => !r.canonicalRoot.toLowerCase().endsWith('.claude-work')).map(r => r.packageVersion), ['1.1.0', '1.1.0']);
+  assert.deepEqual(e.receipts().filter(r => r.canonicalRoot.endsWith('.claude-work')), receipts);
+  for (const root of [e.roots.codex, e.roots.claude]) assert.equal(read(path.join(e.dest(root), 'SKILL.md')), skillText('1.1.0'));
 });

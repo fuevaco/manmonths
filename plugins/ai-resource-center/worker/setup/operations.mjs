@@ -17,7 +17,7 @@ export const DirectoryName = 'operations';
 export const OperationIdPattern = /^op-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$/;
 export const OperationState = Object.freeze({ planned: 'planned', running: 'running', incomplete: 'incomplete', succeeded: 'succeeded', failed: 'failed', cancelled: 'cancelled', timedOut: 'timed-out' });
 const STATES = new Set(Object.values(OperationState));
-const KINDS = new Set(['install', 'update', 'reconfigure', 'remove']);
+const KINDS = new Set(['install', 'update', 'reconfigure', 'remove', 'migrate']);
 const MAX_SUMMARY = 2000;
 // Unicode 換行序列（對照 ReplaceLineEndings）：CRLF、LF、CR、VT、FF、NEL、LS、PS。
 const LINE_BREAKS = new RegExp("\r\n|[\n\r\v\f\u0085\u2028\u2029]", "g");
@@ -84,7 +84,7 @@ export function createOperationStore({ home, now = () => new Date(), rules = cre
       } else if (typeof value !== 'string') throw new SetupFileError(`setup 狀態檔不是有效的 JSON：${filePath}`);
       else record[name] = value;
     }
-    if (record.operationFormatVersion !== SupportedFormatVersion) throw new SetupFileError(`operation 檔格式版本 ${record.operationFormatVersion} 不支援（僅支援 ${SupportedFormatVersion}）：${filePath}`);
+    if (record.operationFormatVersion !== SupportedFormatVersion) throw new SetupFileError(`operation 檔格式版本 ${record.operationFormatVersion} 不支援（僅支援 ${SupportedFormatVersion}）：${filePath}`, true);
     return record;
   }
 

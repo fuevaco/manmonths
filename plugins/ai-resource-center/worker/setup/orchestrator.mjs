@@ -148,7 +148,11 @@ export function createOperationOrchestrator({ planner, executor, now = () => new
         const checkpoint = Checkpoints.setupCommand(command.commandId);
         log.writeNote(`operation ${state} at ${checkpoint}`);
         const problem = { ...blocking(ProblemCodes.setupCommandFailed, `設定命令 '${masker.mask(command.name)}' 未成功`, result.failureSummary ?? '詳細輸出只儲存在 operation log。標準內容尚未寫入任何目標。'),
-          scope: fresh.setup.scope, contentId: fresh.setup.packageKey };
+          scope: fresh.setup.scope, contentId: fresh.setup.packageKey,
+          commandName: masker.mask(command.name), failureSummary: masker.mask(
+            result.outcome === 'TimedOut' ? '執行超過時間限制' : result.outcome === 'Cancelled' ? '已取消執行'
+              : result.outcome === 'StartFailed' ? '無法啟動執行程式，請確認已安裝並允許執行'
+                : result.exitCode != null ? `結束代碼 ${result.exitCode}` : result.failureSummary ?? '請展開詳細紀錄查看原因') };
         return finishWith(state, checkpoint, [problem], 'Failed', null, result.failureSummary ?? `設定命令 ${command.commandId} 未成功`);
       }
 

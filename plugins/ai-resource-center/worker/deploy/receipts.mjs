@@ -1,4 +1,4 @@
-// 部署收據（對照 LcAiPack.Core Deployment/DeploymentReceipts.cs，receiptFormatVersion 1）。
+// 部署收據（對照 LcAiPack.Core Deployment/DeploymentReceipts.cs，receiptFormatVersion 2）。
 // 與 LC-AI-Pack 共用同一份檔案（ADR 0001），因此序列化必須與 .NET System.Text.Json
 // （JsonSerializerDefaults.Web + WriteIndented）逐位元組相同：
 // - 欄位順序固定，含唯讀計算欄位 targetKey；source／sourcePath 為 null 時省略；
@@ -13,16 +13,17 @@ import { ErrorCode } from '../contract.mjs';
 import { createPathRules } from './canonical-root.mjs';
 import { ordinal } from './digest.mjs';
 
-export const SupportedFormatVersion = 1;
+export const SupportedFormatVersion = 2;
 export const ProjectDirectoryName = '.lcaipack';
 export const FileName = 'receipts.json';
 
 const STRING_FIELDS = ['packageKey', 'packageVersion', 'packageSha256', 'channel', 'contentId', 'kind', 'hostId', 'surfaceId', 'scope',
   'canonicalRoot', 'normalizedAddress', 'destinationPath', 'mutationKind', 'sourceSha256', 'installedSha256'];
+const originalProjectEntry = Symbol('originalProjectEntry');
 const DEFAULT_INSTALLED_AT = '0001-01-01T00:00:00+00:00';
 
 export class ReceiptFileError extends Error {
-  constructor(message) { super(message); this.name = 'ReceiptFileError'; this.code = ErrorCode.receiptInvalid; }
+  constructor(message, unsupportedFormatVersion = false) { super(message); this.name = 'ReceiptFileError'; this.code = ErrorCode.receiptInvalid; this.unsupportedFormatVersion = unsupportedFormatVersion; }
 }
 
 export const targetKeyOf = (r) => `${r.hostId}|${r.surfaceId}|${r.scope}|${r.canonicalRoot}`;
@@ -62,6 +63,7 @@ function normalizeReceipt(raw) {
   r.hostProfileVersion = typeof raw?.hostProfileVersion === 'string' ? raw.hostProfileVersion : '';
   if (typeof raw?.source === 'string') r.source = raw.source;
   if (typeof raw?.sourcePath === 'string') r.sourcePath = raw.sourcePath;
+  if (r.scope === 'project') Object.defineProperty(r, originalProjectEntry, { value: structuredClone(raw) });
   return r;
 }
 
@@ -71,11 +73,12 @@ export function parseReceiptFile(text, filePath) {
   let parsed;
   try { parsed = JSON.parse(text.replace(/^﻿/, '')); } catch { throw new ReceiptFileError(`部署收據檔不是有效的 JSON：${filePath}`); }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new ReceiptFileError(`部署收據檔內容無效：${filePath}`);
-  const version = parsed.receiptFormatVersion ?? SupportedFormatVersion;
-  if (version !== SupportedFormatVersion) throw new ReceiptFileError(`部署收據檔格式版本 ${version} 不支援（僅支援 ${SupportedFormatVersion}）：${filePath}`);
+  const version = Object.hasOwn(parsed, 'receiptFormatVersion') ? parsed.receiptFormatVersion : 1;
+  if (version !== 1 && version !== SupportedFormatVersion)
+    throw new ReceiptFileError(`部署收據檔格式版本 ${version} 不支援：${filePath}`, Number.isInteger(version) && version > SupportedFormatVersion);
   const receipts = parsed.receipts == null ? [] : parsed.receipts;
   if (!Array.isArray(receipts)) throw new ReceiptFileError(`部署收據檔內容無效：${filePath}`);
-  return { receiptFormatVersion: SupportedFormatVersion, receipts: receipts.map(normalizeReceipt) };
+  return { receiptFormatVersion: version, receipts: receipts.map(normalizeReceipt) };
 }
 
 function stringArray(values, indent, nl) {
@@ -86,6 +89,7 @@ function stringArray(values, indent, nl) {
 export function serializeReceiptFile(file, newline = os.EOL) {
   const nl = newline;
   const items = file.receipts.map((r) => {
+    if (r[originalProjectEntry]) return JSON.stringify(r[originalProjectEntry], null, 2).split('\n').map(line => '    ' + line).join(nl);
     const i = '      ';
     const lines = STRING_FIELDS.map(k => `${i}${jsonString(k)}: ${jsonString(r[k] ?? '')}`);
     lines.push(`${i}"ownedConfigFields": ${stringArray(r.ownedConfigFields ?? [], i, nl)}`);
@@ -100,7 +104,7 @@ export function serializeReceiptFile(file, newline = os.EOL) {
     return `    {${nl}${lines.join(',' + nl)}${nl}    }`;
   });
   const receipts = items.length ? `[${nl}${items.join(',' + nl)}${nl}  ]` : '[]';
-  return `{${nl}  "receiptFormatVersion": ${SupportedFormatVersion},${nl}  "receipts": ${receipts}${nl}}`;
+  return `{${nl}  "receiptFormatVersion": ${file.receiptFormatVersion ?? SupportedFormatVersion},${nl}  "receipts": ${receipts}${nl}}`;
 }
 
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -140,6 +144,7 @@ function createStore(filePath, canonicalRoot, scope, rules, newline) {
       return parseReceiptFile(text, store.filePath);
     },
     save(file) {
+      store.load();
       writeTextAtomic(store.filePath, serializeReceiptFile({ receiptFormatVersion: SupportedFormatVersion, receipts: file.receipts }, newline));
     },
     forTarget(host, targetScope, root) {
@@ -150,7 +155,7 @@ function createStore(filePath, canonicalRoot, scope, rules, newline) {
       if (receipts.length === 0) return;
       const file = store.load();
       for (const r of receipts) {
-        file.receipts = file.receipts.filter(e => e.normalizedAddress !== r.normalizedAddress);
+        file.receipts = file.receipts.filter(e => (scope === 'global' && e.scope === 'project') || e.normalizedAddress !== r.normalizedAddress);
         file.receipts.push(r);
       }
       sort(file);
@@ -160,7 +165,7 @@ function createStore(filePath, canonicalRoot, scope, rules, newline) {
       const set = new Set(addresses);
       if (set.size === 0) return;
       const file = store.load();
-      file.receipts = file.receipts.filter(r => !set.has(r.normalizedAddress));
+      file.receipts = file.receipts.filter(r => (scope === 'global' && r.scope === 'project') || !set.has(r.normalizedAddress));
       sort(file);
       store.save(file);
     }

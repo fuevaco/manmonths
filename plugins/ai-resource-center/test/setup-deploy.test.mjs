@@ -32,9 +32,9 @@ function environment(t, { launcher } = {}) {
   const secrets = createSecretManager(store);
   const host = { hostId: 'claude-code', surfaceId: 'claude-code-cli' };
   const planner = createDeploymentPlanner({ home, userHome, clientVersion: '1.0.0-test', secrets, mcpLauncherPath: launcher });
-  const intent = pkg => ({ package: pkg, hosts: [host], scope: 'project', projectRoot: root, hostRoots: [{ host, canonicalRoots: [root] }], existingContent: 'Block' });
+  const intent = pkg => ({ package: pkg, hosts: [host], scope: 'global', hostRoots: [{ host, canonicalRoots: [root] }], existingContent: 'Block' });
   const apply = plan => planner.apply(plan, { planDigest: plan.planDigest, replaceUnmanagedFiles: false });
-  return { dir, userHome, root, home, store, secrets, planner, intent, apply, config: path.join(root, '.mcp.json') };
+  return { dir, userHome, root, home, store, secrets, planner, intent, apply, config: path.join(root, '.claude.json') };
 }
 
 test('缺少必要設定參數時部署計畫列出缺少項目並阻擋，套用被拒且不寫入任何檔案', t => {
@@ -47,13 +47,13 @@ test('缺少必要設定參數時部署計畫列出缺少項目並阻擋，套�
   assert.equal(fs.existsSync(e.config), false);
 });
 
-test('全域值與專案覆寫補齊參數後即可安裝；沒有執行期秘密的 MCP 直接寫入，不出現 launcher', t => {
+test('全域值補齊參數後即可安裝；沒有執行期秘密的 MCP 直接寫入，不出現 launcher', t => {
   const e = environment(t);
   SetupValueStore.forGlobal({ home: e.home, userProfile: e.userHome }).setValues('demo-mcp', { endpoint: 'https://global.example' });
-  SetupValueStore.forProject({ projectRoot: e.root }).setValues('demo-mcp', { endpoint: 'https://project.example' });
+  SetupValueStore.forGlobal({ home: e.home, userProfile: e.userHome }).setValues('demo-mcp', { endpoint: 'https://project.example' });
   const plan = e.planner.plan(e.intent(setupPackage({ setup: { parameters: [endpoint] } })));
   assert.equal(plan.canApply, true, JSON.stringify(plan.problems));
-  assert.deepEqual([plan.setup.parameters[0].effectiveValue, plan.setup.parameters[0].source], ['https://project.example', 'ProjectOverride']);
+  assert.deepEqual([plan.setup.parameters[0].effectiveValue, plan.setup.parameters[0].source], ['https://project.example', 'Global']);
   assert.equal(e.apply(plan).status, 'Succeeded');
   assert.equal(JSON.parse(fs.readFileSync(e.config, 'utf8')).mcpServers.echo.env.MODE, 'params');
 });
@@ -63,7 +63,7 @@ test('審核後設定值改變時套用前即判定過期，零寫入', t => {
   const setup = { parameters: [{ ...endpoint, default: 'https://default.example' }] };
   const plan = e.planner.plan(e.intent(setupPackage({ setup })));
   assert.equal(plan.canApply, true);
-  SetupValueStore.forProject({ projectRoot: e.root }).setValues('demo-mcp', { endpoint: 'https://changed.example' });
+  SetupValueStore.forGlobal({ home: e.home, userProfile: e.userHome }).setValues('demo-mcp', { endpoint: 'https://changed.example' });
   const result = e.apply(plan);
   assert.equal(result.status, 'Rejected');
   assert.ok(result.problems.some(p => p.code === 'deployment.plan-stale'));
@@ -76,17 +76,17 @@ test('執行期秘密 MCP：設定檔只寫受管 launcher 與非秘密身分，
   const pkg = setupPackage({ setup: { parameters: [apiKey] }, parameters: [{ id: 'api-key', type: 'secret', secret: true, required: true }] });
   const blocked = e.planner.plan(e.intent(pkg));
   assert.ok(blocked.problems.some(p => p.code === 'deployment.setup-parameter-missing'));
-  e.secrets.set(setupSecretReference({ packageKey: 'demo-mcp', parameterId: 'api-key', scope: 'project', canonicalRoot: e.root }), 'canary-runtime-secret');
+  e.secrets.set(setupSecretReference({ packageKey: 'demo-mcp', parameterId: 'api-key', scope: 'global', canonicalRoot: e.userHome }), 'canary-runtime-secret');
   const plan = e.planner.plan(e.intent(pkg));
   assert.equal(plan.canApply, true, JSON.stringify(plan.problems));
   assert.equal(e.apply(plan).status, 'Succeeded');
   const node = JSON.parse(fs.readFileSync(e.config, 'utf8')).mcpServers.echo;
   assert.deepEqual(node, { command: path.join(os.tmpdir(), 'launcher', 'lcaipack.exe'),
-    args: ['mcp-launch', '--package', 'demo-mcp', '--content', 'echo', '--scope', 'project', '--root', rules.normalize(e.root)], type: 'stdio' });
+    args: ['mcp-launch', '--package', 'demo-mcp', '--content', 'echo', '--scope', 'global', '--root', rules.normalize(e.root)], type: 'stdio' });
   const descriptorPath = path.join(plan.setup.setupRoot, 'mcp', 'echo.json');
   const descriptor = JSON.parse(fs.readFileSync(descriptorPath, 'utf8'));
-  assert.deepEqual(descriptor, { launchFormatVersion: 1, packageKey: 'demo-mcp', packageVersion: '1.0.0', contentId: 'echo', scope: 'project',
-    canonicalRoot: rules.normalize(e.root), setupRoot: plan.setup.setupRoot, command: process.platform === 'win32' ? 'cmd' : 'npx',
+  assert.deepEqual(descriptor, { launchFormatVersion: 1, packageKey: 'demo-mcp', packageVersion: '1.0.0', contentId: 'echo', scope: 'global',
+    canonicalRoot: rules.normalize(e.userHome), setupRoot: plan.setup.setupRoot, command: process.platform === 'win32' ? 'cmd' : 'npx',
     args: process.platform === 'win32' ? ['/c', 'npx', '-y', 'example'] : ['-y', 'example'], cwd: null, env: { MODE: 'params' },
     runtimeSecrets: [{ parameterId: 'api-key', required: true }] });
   // 秘密值不出現在任何寫出的檔案、計畫或收據。
@@ -100,7 +100,7 @@ test('執行期秘密 MCP：設定檔只寫受管 launcher 與非秘密身分，
 test('Orca 沒有可用的受管 MCP launcher 時，需要執行期秘密的 MCP 揭露為阻擋問題', t => {
   const e = environment(t);
   const pkg = setupPackage({ setup: { parameters: [apiKey] }, parameters: [{ id: 'api-key', type: 'secret', secret: true, required: true }] });
-  e.secrets.set(setupSecretReference({ packageKey: 'demo-mcp', parameterId: 'api-key', scope: 'project', canonicalRoot: e.root }), 'x');
+  e.secrets.set(setupSecretReference({ packageKey: 'demo-mcp', parameterId: 'api-key', scope: 'global', canonicalRoot: e.userHome }), 'x');
   const plan = e.planner.plan(e.intent(pkg));
   assert.equal(plan.canApply, false);
   assert.ok(plan.targets[0].problems.some(p => p.code === 'deployment.unsupported-content-kind' && p.contentId === 'echo'));
@@ -130,7 +130,7 @@ test('安全儲存區無法查詢時規劃被拒，說明不含秘密', t => {
   const root = path.join(dir, 'p'); fs.mkdirSync(root);
   const host = { hostId: 'claude-code', surfaceId: 'claude-code-cli' };
   const planner = createDeploymentPlanner({ home: path.join(dir, 'h'), userHome: dir, clientVersion: 't', secrets: createSecretManager(memoryStore({ fail: true })) });
-  const plan = planner.plan({ package: setupPackage({ setup: { parameters: [apiKey] } }), hosts: [host], scope: 'project', projectRoot: root, hostRoots: [], existingContent: 'Block' });
+  const plan = planner.plan({ package: setupPackage({ setup: { parameters: [apiKey] } }), hosts: [host], scope: 'global', hostRoots: [{host,canonicalRoots:[root]}], existingContent: 'Block' });
   assert.equal(plan.canApply, false);
-  assert.ok(plan.problems.some(p => p.code === 'deployment.secret-unresolved'));
+  assert.ok(plan.problems.some(p => p.code === 'deployment.secret-unresolved'),JSON.stringify(plan.problems));
 });

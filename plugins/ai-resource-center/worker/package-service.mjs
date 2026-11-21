@@ -33,6 +33,12 @@ export function compareVersions(a, b) {
   return 0;
 }
 
+// 所有顯示與安裝入口共用：Preview 只擴大候選範圍，仍選版本較新者。
+export function recommendedVersion(versions, previewMode = false) {
+  return versions.filter(v => v.version && (v.channel === 'release' || (previewMode && v.channel === 'preview')))
+    .sort((a, b) => compareVersions(b.version, a.version))[0]?.version ?? null;
+}
+
 export function packageInput(input, requireVersion = false) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       typeof input.packageKey !== 'string' || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(input.packageKey) ||
@@ -52,7 +58,11 @@ export function createPackageService(session, installed) {
       throw unreachableError(e, client.marketUrl);
     }
     if (res.status === 401) await session.rejectClient(client);
-    if (res.status < 200 || res.status >= 300) throw statusError(res.status, res.text, '資源包讀取失敗');
+    if (res.status < 200 || res.status >= 300) {
+      const error = statusError(res.status, res.text, '資源包讀取失敗');
+      error.status = res.status;
+      throw error;
+    }
     return res;
   }
   async function details(client, input) {
@@ -63,22 +73,37 @@ export function createPackageService(session, installed) {
     }
     const versions = body.versions.filter(v => v.isEnabled === true && (v.channel === 'release' || input.previewMode === true))
       .sort((a, b) => (a.channel === 'release' ? 0 : 1) - (b.channel === 'release' ? 0 : 1) || compareVersions(b.version, a.version));
-    const selected = input.version ? versions.find(v => v.version === input.version) : versions.find(v => v.version === body.recommendedVersion) || versions[0];
-    if (!selected) throw new RcError(ErrorCode.versionUnavailable, '此版本不可見或已停用，請重新選擇版本');
+    const recommended = recommendedVersion(versions, input.previewMode);
+    const selected = versions.find(v => v.version === (input.version ?? recommended));
+    if (!selected) {
+      const error = new RcError(ErrorCode.versionUnavailable, '此版本不可見或已停用，請重新選擇版本');
+      // 擁有者或管理者仍讀得到主檔，但所有版本都已停用：與 403／404 一樣視為已下架
+      if (input.version === undefined && !body.versions.some(v => v.isEnabled === true)) error.noVisibleVersion = true;
+      throw error;
+    }
     // 僅投影顯示所需欄位，避免將管理資訊或未知欄位帶到面板。
     return { packageKey: body.packageKey, name: body.name, type: body.type, description: body.description,
-      selectedVersion: selected.version, recommendedVersion: (versions.find(v => v.version === body.recommendedVersion) || versions[0]).version, versions: versions.map(v => ({ version: v.version, channel: v.channel,
+      selectedVersion: selected.version, recommendedVersion: recommended, versions: versions.map(v => ({ version: v.version, channel: v.channel,
         hosts: v.hosts || v.platforms || [], changelog: v.changelog, sha256: v.sha256, hasFullGuide: v.hasFullGuide === true })) };
   }
   return { request, details, async getDetails(input) {
     packageInput(input);
     const client = await session.requireClient();
-    const detail = await details(client, input);
+    let detail;
+    try { detail = await details(client, input); }
+    catch (error) {
+      // 只有明確下架／無權限（或主檔仍在但所有版本都已停用）且有全域收據，才以本機資料提供解除安裝入口。
+      if (!([403, 404].includes(error.status) || error.noVisibleVersion === true) || !installed) throw error;
+      const records = installed.receipts({ globalOnly: true }).filter(r => r.packageKey === input.packageKey);
+      if (!records.length) throw error;
+      return { packageKey: input.packageKey, name: input.packageKey, type: records[0].kind, description: '',
+        selectedVersion: null, recommendedVersion: null, versions: [], readme: '', ...installed.project(input.packageKey, null, records) };
+    }
     const suffix = input.previewMode ? '?channel=preview' : '';
     const readme = parseJson((await request(client, `api/market/packages/${encodeURIComponent(input.packageKey)}/versions/${encodeURIComponent(detail.selectedVersion)}/readme${suffix}`)).text);
     if (!readme || (readme.readme !== null && typeof readme.readme !== 'string')) throw new RcError(ErrorCode.marketError, '市集說明格式錯誤');
     // 收據損壞時詳情仍可讀取，只是不附已安裝狀態而改附錯誤。
-    const { records, error } = installed ? installed.tryReceipts() : {};
+    const { records, error } = installed ? installed.tryReceipts({ globalOnly: true }) : {};
     const installation = !installed ? {} : error ? { installedError: error } : installed.project(detail.packageKey, detail.recommendedVersion, records, detail.versions);
     return { ...detail, ...installation, readme: readme.readme || '' };
   } };

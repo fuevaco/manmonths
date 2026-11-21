@@ -9,38 +9,15 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { setupMulti } from './multi-env.mjs';
 
-test('多個目標中只有一個過期：整份要求重新確認，回傳新摘要而不是 Partial，也不送回報', async t => {
-  const e = await setupMulti(t);
-  const targets = await e.targets();
-  const ids = [targets.codex.id, targets.claude.id];
-  const summary = await e.plan('pkg-a', '1.0.0', ids);
-  assert.equal(summary.canApply, true);
-  const codexDest = e.dest(e.roots.codex);
-  const write = fs.writeFileSync;
-  let injected = false;
-  t.mock.method(fs, 'writeFileSync', (p, ...rest) => {
-    const file = String(p).replaceAll('\\', '/').toLowerCase();
-    if (!injected && file.includes('.claude/skills/demo-skill')) {
-      injected = true; // Claude Code（targetKey 排序在前）第一次寫入時，Codex 目標被使用者改動。
-      fs.mkdirSync(codexDest, { recursive: true });
-      write(path.join(codexDest, 'SKILL.md'), '使用者自己的內容');
-    }
-    return write(p, ...rest);
-  });
-  const result = await e.apply(summary, ids);
-  t.mock.restoreAll();
-
-  assert.equal(injected, true);
-  assert.equal(result.status, 'stale', '不是 partial');
-  assert.match(result.message, /重新確認/);
-  assert.notEqual(result.plan.planDigest, summary.planDigest);
-  const codex = result.plan.targets.find(x => x.id === targets.codex.id);
-  assert.equal(codex.changes[0].willBackup, true, '新摘要揭露備份');
-  assert.equal(fs.readFileSync(path.join(codexDest, 'SKILL.md'), 'utf8'), '使用者自己的內容');
-  await delay(100);
-  assert.equal(e.installs.length, 0, '過期的那次確認不回報');
-  // 舊的確認不能再用；新的摘要確認後才完成並回報。
-  await assert.rejects(e.apply(summary, ids), { code: 'plan_stale' });
-  assert.equal((await e.apply(result.plan, ids)).status, 'succeeded');
-  assert.equal(e.receipts().length, 2);
+test('套用期間另一部署目標變動時自動重規劃及備份，完成後才回報',async t=>{
+ const e=await setupMulti(t);const codexDest=e.dest(e.roots.codex);const write=fs.writeFileSync;let injected=false;
+ t.mock.method(fs,'writeFileSync',(p,...rest)=>{
+  if(!injected&&String(p).replaceAll('\\','/').toLowerCase().includes('.claude/skills/demo-skill')){
+   injected=true;fs.mkdirSync(codexDest,{recursive:true});write(path.join(codexDest,'SKILL.md'),'使用者自己的內容');
+  }return write(p,...rest);
+ });
+ const result=await e.run();t.mock.restoreAll();
+ assert.equal(injected,true);assert.equal(result.ok,true);assert.equal(result.succeeded.length,3);assert.equal(e.receipts().length,3);
+ const backup=result.backups.find(t=>t.rootPath===e.userHome);assert.ok(backup);assert.equal(fs.readFileSync(path.join(backup.backupPath,'SKILL.md'),'utf8'),'使用者自己的內容');
+ await delay(100);assert.equal(e.installs.length,1);
 });

@@ -44,7 +44,7 @@ test('路由表與 LC-AI-Pack 的 golden 逐列一致', () => {
 
 test('matrix digest 等於 LC-AI-Pack 計算出的值，代表路由表、版本與 root base 完全相同', () => {
   // 取自 LC-AI-Pack HostProfileGoldenTests.Matrix_digest_is_stable_and_changes_with_the_table
-  assert.equal(HostProfiles.matrixDigest, 'd6006090a3ef2d4aa9b43ddcb7b75378d3943e36b6e11483260d7a879658613d');
+  assert.equal(HostProfiles.matrixDigest, '8c5d9f5e56667df678fbe89ab6985453d980e30e0608ca7889890a9de2b6afbf');
 });
 
 test('每條 template 只用 {root} 與 {id}，Codex CLI 的全域根由偵測提供並支援多根', () => {
@@ -54,5 +54,5 @@ test('每條 template 只用 {root} 與 {id}，Codex CLI 的全域根由偵測�
   const surface = HostProfiles.find(HostIds.codex).findSurface(SurfaceIds.codexCli);
   assert.equal(surface.globalLocatorId, 'codex-config-directory');
   assert.equal(surface.enableMultiRootLocatorEnumeration, true);
-  assert.equal(HostProfiles.find(HostIds.codex).version, 'codex/2026.10.1');
+  assert.equal(HostProfiles.find(HostIds.codex).version, 'codex/2026.11.1');
 });

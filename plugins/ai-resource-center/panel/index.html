@@ -5,16 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資源中心</title>
   <link rel="stylesheet" href="panel.css">
+  <link rel="stylesheet" href="markdown.css">
 </head>
 <body>
   <div id="app">
     <header class="header">
       <div class="header-title">
+        <button id="btn-back" type="button" class="btn btn-icon hidden" title="返回清單" aria-label="返回清單" data-action="back"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
         <span id="status-dot" class="status-dot" title="市集連線狀態"></span>
-        <span>資源中心</span>
+        <span id="header-title">資源中心</span>
       </div>
       <div class="header-actions">
-        <button id="btn-refresh" class="btn btn-icon hidden" title="重新整理目錄與連線" aria-label="重新整理目錄與連線">⟳</button>
+        <button id="btn-refresh" type="button" class="btn btn-icon hidden" title="重新整理" aria-label="重新整理"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><polyline points="20 4 20 9 15 9"/></svg></button>
+        <button id="btn-settings" type="button" class="btn btn-icon hidden" title="設定" aria-label="設定" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      </div>
+      <div id="settings-menu" class="settings-menu hidden" role="group" aria-label="設定">
+        <div id="menu-account" class="menu-account wrap"></div>
+        <div id="menu-url" class="menu-url mono wrap"></div>
+        <div id="menu-version" class="menu-version muted hidden"></div>
+        <hr class="menu-sep">
+        <div data-section="settings" id="menu-settings" class="menu-settings">
+          <label class="checkbox"><input id="catalog-preview" type="checkbox">顯示 Preview 版本</label>
+          <div class="menu-field">
+            <label for="check-interval">檢查更新</label>
+            <select id="check-interval" aria-label="檢查更新">
+              <option value="15">15 分鐘</option><option value="60">1 小時</option><option value="240">4 小時</option>
+              <option value="1440">1 天</option><option value="0">關閉</option>
+            </select>
+          </div>
+        </div>
+        <hr class="menu-sep">
+        <button id="btn-logout" type="button" class="menu-item">登出</button>
       </div>
     </header>
 
@@ -32,7 +53,6 @@
         <div class="field">
           <label for="in-url">市集網址</label>
           <input id="in-url" type="url" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://market.example.com">
-          <div class="hint">輸入你有權使用的市集網址。</div>
         </div>
         <div class="field">
           <label for="in-user">帳號</label>
@@ -44,88 +64,88 @@
         </div>
         <div id="login-error" class="error hidden" role="alert"></div>
         <button id="btn-login" type="submit" class="btn btn-primary btn-block">登入</button>
-        <div class="hint">Orca 的登入與 LC-AI-Pack 桌面工具各自獨立；在這裡登入或登出不會影響另一邊。</div>
       </form>
     </section>
 
     <!-- 已登入 -->
     <section id="view-main" class="content hidden">
-      <div class="panel-box">
-        <div class="kv"><span class="muted">市集</span><span id="main-url" class="mono wrap"></span></div>
-        <div class="kv"><span class="muted">帳號</span><span id="main-account"></span></div>
-        <div id="client-versions" class="hint wrap"></div>
-        <button id="btn-logout" class="btn btn-block">登出</button>
-      </div>
       <section aria-label="資源包目錄" class="catalog">
-        <div class="panel-box-title">全部資源包</div>
-        <form id="catalog-form" class="panel-box">
-          <div class="field">
-            <label for="catalog-search">搜尋資源包</label>
-            <input id="catalog-search" type="search" placeholder="名稱、識別碼或說明">
+        <form id="catalog-form" class="query-bar" role="search" novalidate>
+          <div class="search-field">
+            <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="catalog-search" type="search" placeholder="搜尋名稱、識別碼或說明" aria-label="搜尋資源包" autocomplete="off" spellcheck="false">
           </div>
-          <div class="field">
-            <label for="catalog-type">資源類型</label>
-            <select id="catalog-type">
+          <div class="query-filters">
+            <select id="catalog-type" aria-label="資源類型">
               <option value="">全部類型</option><option value="skill">Skills</option>
               <option value="agent">Agents</option><option value="mcp">MCP</option><option value="bundle">組合包</option>
             </select>
+            <select id="catalog-installation" aria-label="安裝狀態"><option value="">全部狀態</option><option value="installed">已安裝</option><option id="catalog-installation-updates" value="updates">可更新</option></select>
+            <select id="catalog-sort-field" aria-label="排序欄位">
+              <option value="installCount">安裝次數</option>
+              <option value="name">名稱</option>
+              <option value="owner">擁有者</option>
+              <option value="uploadedAt">上傳日期</option>
+            </select>
+            <button id="catalog-sort-direction" type="button" class="btn sort-direction">↓ 多→少</button>
           </div>
-          <div class="field"><label for="catalog-installation">安裝狀態</label><select id="catalog-installation"><option value="">全部</option><option value="installed">已安裝</option><option value="updates">可更新</option></select></div>
-          <label class="checkbox"><input id="catalog-preview" type="checkbox">顯示 Preview 版本</label>
-          <button class="btn btn-primary" type="submit">搜尋</button>
-          <button id="catalog-clear" class="btn" type="button">清除篩選</button>
         </form>
+        <button id="update-banner" type="button" class="update-banner hidden" data-role="update-banner"></button>
         <div id="catalog-status" class="muted" role="status" aria-live="polite"></div>
         <button id="catalog-retry" class="btn hidden" type="button">重新讀取目錄</button>
         <ul id="catalog-list" class="catalog-list"></ul>
       </section>
     </section>
     <section id="view-details" class="content hidden">
-      <button id="details-back" type="button" class="btn">返回清單</button>
-      <h2 id="details-title" class="wrap"></h2>
+      <div id="details-meta"></div>
       <p id="details-description" class="wrap"></p>
-      <div class="panel-box">
-        <label for="details-version">版本</label>
-        <select id="details-version"></select>
-        <p id="details-hosts" class="wrap"></p>
-        <p id="details-changelog" class="wrap"></p>
-        <label for="details-destination">ZIP 完整儲存路徑（選填）</label>
-        <input id="details-destination" type="text" placeholder="留空存入使用者 Downloads 資料夾">
-        <button id="details-download" type="button" class="btn btn-primary btn-block">下載 ZIP</button>
-        <div id="details-status" class="wrap" role="status" aria-live="polite"></div>
-        <button id="details-retry" type="button" class="btn hidden">重新讀取詳情</button>
-      </div>
-      <div id="details-installed" class="panel-box wrap"></div>
-      <div id="install-box" class="panel-box">
-        <div class="panel-box-title">安裝到 AI 工具</div>
-        <div id="install-steps" class="install-steps">
-        <label for="install-scope">1. 選擇安裝範圍</label>
-        <select id="install-scope"><option value="global">使用者全域</option><option value="project">本機專案</option></select>
-        <div id="install-project" class="field hidden">
-          <label for="install-project-root">專案資料夾完整路徑</label>
-          <input id="install-project-root" type="text" placeholder="輸入本機專案完整路徑">
-          <button id="install-detect" type="button" class="btn btn-block">讀取專案目標</button>
+      <div id="details-status-row"></div>
+      <div id="details-status" class="wrap" role="status" aria-live="polite"></div>
+      <button id="details-retry" type="button" class="btn hidden">重新讀取詳情</button>
+      <div id="details-installed" class="fold-group wrap"></div>
+      <div id="details-setup" class="fold-group wrap"></div>
+      <div id="details-changelog" class="fold-group wrap"></div>
+      <section id="details-readme-section" class="readme-section" aria-label="使用說明">
+        <div class="readme-head">
+          <h3>使用說明</h3>
+          <span class="readme-tools">
+            <span id="details-guide-slot" class="readme-guide-slot"></span>
+            <button id="btn-reader" type="button" class="btn btn-icon btn-card-icon hidden" title="放大閱讀" aria-label="放大閱讀" data-action="reader"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline class="icon-expand" points="15 3 21 3 21 9"/><polyline class="icon-expand" points="9 21 3 21 3 15"/><line class="icon-expand" x1="21" y1="3" x2="14" y2="10"/><line class="icon-expand" x1="3" y1="21" x2="10" y2="14"/><polyline class="icon-collapse" points="4 14 10 14 10 20"/><polyline class="icon-collapse" points="20 10 14 10 14 4"/><line class="icon-collapse" x1="14" y1="10" x2="21" y2="3"/><line class="icon-collapse" x1="3" y1="21" x2="10" y2="14"/></svg></button>
+          </span>
         </div>
-        <div id="install-target-label">2. 勾選部署目標</div>
-        <div id="install-target" class="target-list" role="group" aria-labelledby="install-target-label"></div>
-        <button id="details-update" type="button" class="btn btn-block hidden">更新所選目標</button>
-        <div id="install-targets-status" class="hint wrap"></div>
-        <button id="install-plan" type="button" class="btn btn-block">產生部署摘要</button>
-        </div>
-        <div id="install-summary" class="install-summary"></div>
-        <div id="install-setup" class="install-summary hidden"></div>
-        <button id="install-setup-save" type="button" class="btn btn-block hidden">儲存設定並重新產生摘要</button>
-        <button id="install-confirm" type="button" class="btn btn-primary btn-block hidden">確認安裝</button>
-        <button id="install-cancel" type="button" class="btn btn-block hidden">取消設定命令</button>
-        <div id="install-status" class="wrap" role="status" aria-live="polite"></div>
-        <div id="install-result" class="install-summary"></div>
-        <button id="install-retry" type="button" class="btn btn-block hidden">只重試失敗的目標</button>
-        <button id="install-done" type="button" class="btn btn-block hidden">完成</button>
-      </div>
-      <h3>使用說明</h3>
-      <pre id="details-readme" class="wrap"></pre>
+        <div id="details-readme" class="readme wrap"></div>
+      </section>
     </section>
+
+    <!-- 一鍵操作的結果短提示 -->
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <!-- 例外確認層：缺少參數、設定命令、受阻目標；只有一個主要按鈕與取消 -->
+    <div id="confirm-layer" class="confirm-layer hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="confirm-sheet">
+        <div id="confirm-title" class="confirm-title"></div>
+        <div id="confirm-body" class="confirm-body"></div>
+        <div id="confirm-error" class="error hidden" role="alert"></div>
+        <div class="confirm-actions">
+          <button id="confirm-cancel" type="button" class="btn">取消</button>
+          <button id="confirm-primary" type="button" class="btn btn-primary">安裝</button>
+        </div>
+      </div>
+    </div>
   </div>
-  <script src="panel.js"></script>
+  <script src="markdown.js"></script>
+  <!-- 面板腳本：core.js 最先（建立 window.RcPanel）、boot.js 最後（綁定事件並啟動）；各檔職責見檔頭註解 -->
+  <script src="js/core.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/header.js"></script>
+  <script src="js/catalog.js"></script>
+  <script src="js/details.js"></script>
+  <script src="js/readme.js"></script>
+  <script src="js/setup.js"></script>
+  <script src="js/install.js"></script>
+  <script src="js/confirm.js"></script>
+  <script src="js/updates.js"></script>
+  <script src="js/session.js"></script>
+  <script src="js/boot.js"></script>
 </body>
 </html>

@@ -54,7 +54,7 @@ function parseFile(text, filePath) {
     } else file.extra[key] = value;
   }
   if (file.setupFormatVersion !== SupportedFormatVersion) {
-    throw new SetupFileError(`setup command 完成狀態檔格式版本 ${file.setupFormatVersion} 不支援（僅支援 ${SupportedFormatVersion}）：${filePath}`);
+    throw new SetupFileError(`setup command 完成狀態檔格式版本 ${file.setupFormatVersion} 不支援（僅支援 ${SupportedFormatVersion}）：${filePath}`, true);
   }
   return file;
 }

@@ -1,7 +1,8 @@
 // 部署（安裝與更新共用）的 worker 服務：偵測部署目標、下載並驗證確切 ZIP、產生部署計畫摘要，
 // 並在使用者確認後只套用那一份計畫。規劃與套用核心在 worker/deploy/（對照 LC-AI-Pack Deployment）。
 import os from 'node:os';
-import { readFileSync, statSync, mkdirSync, writeFileSync, renameSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { hostLabel } from './host-labels.mjs';
 import { pluginVersion } from './plugin-version.mjs';
 import { resolveInstallAction } from './install-reports.mjs';
 import path from 'node:path';
@@ -9,13 +10,14 @@ import { badParams, RcError, ErrorCode } from './contract.mjs';
 import { packageInput } from './package-service.mjs';
 import { resolveLcAiPackHome } from './paths.mjs';
 import { createDeploymentPlanner, deployableTargets, blockedTargets } from './deploy/planner.mjs';
+import { resolveWindowsOrcaAppData } from './deploy/orca-claude-mcp-cleanup.mjs';
 import { locateClaudeCodeRoots } from './deploy/claude-code-roots.mjs';
+import { createPathRules } from './deploy/canonical-root.mjs';
 import { locateCodexRoots } from './deploy/codex-roots.mjs';
 import { locateClaudeDesktop } from './deploy/claude-desktop-roots.mjs';
 import { HostIds, HostProfiles, SurfaceIds, Scope } from './deploy/host-profiles.mjs';
 import { getDriver } from './deploy/resource-drivers.mjs';
 import { ReceiptFileError } from './deploy/receipts.mjs';
-import { createPathRules } from './deploy/canonical-root.mjs';
 import { createSetupInputService } from './setup/input-service.mjs';
 import { backupReasonOf, describeLoadPrecedence, presentExplanation } from './deploy/conflict-summary.mjs';
 import { createOperationOrchestrator, Actions, readCommandOutput } from './setup/orchestrator.mjs';
@@ -24,7 +26,6 @@ const codexHost = Object.freeze({ hostId: HostIds.codex, surfaceId: SurfaceIds.c
 const desktopHost = Object.freeze({ hostId: HostIds.claudeCode, surfaceId: SurfaceIds.claudeDesktop });
 const installHosts = [codexHost, Object.freeze({ hostId: HostIds.claudeCode, surfaceId: SurfaceIds.claudeCodeCli }), desktopHost];
 const sameHost = (a, b) => a.hostId === b.hostId && a.surfaceId === b.surfaceId;
-const hostLabel = host => host.hostId === HostIds.codex ? 'Codex（CLI／Desktop）' : host.surfaceId === SurfaceIds.claudeDesktop ? 'Claude Desktop' : 'Claude Code';
 const CHANGE_LABELS = { Create: '新增', Replace: '取代', Merge: '合併', NoOp: '無變更' };
 const camel = (s) => s.charAt(0).toLowerCase() + s.slice(1);
 const PLAN_ORIGIN_CHANGED = '登入狀態或市集已改變，這份部署計畫已失效，請重新產生部署摘要並確認。';
@@ -33,6 +34,10 @@ const STALE_MESSAGE ='本機狀態已在確認前改變，舊計畫未套用。�
 const loadPrecedenceOf = (target, version) => { const loadPrecedence = describeLoadPrecedence(target, version); return loadPrecedence.length ? { loadPrecedence } : {}; };
 
 const projectProblem = (p) => ({ code: p.code, severity: p.severity, summary: p.summary, explanation: presentExplanation(p),
+  ...(p.existingOwner ? { existingOwner: p.existingOwner } : {}),
+  ...(p.configPath ? { configPath: p.configPath } : {}),
+  ...(p.failureStage ? { failureStage: p.failureStage } : {}),
+  ...(p.commandName ? { commandName: p.commandName, failureSummary: p.failureSummary } : {}),
   ...(p.contentId ? { contentId: p.contentId } : {}), ...(p.path ? { path: p.path } : {}) });
 
 /**
@@ -62,66 +67,9 @@ export function createDeployService({ downloads, installed, session = null, lcai
   const currentOrigin = async () => (session ? session.identity() : null);
   const sameOrigin = (a, b) => (a === null && b === null) || (!!a && !!b && a.marketUrl === b.marketUrl && a.account === b.account);
 
-  /** 某個專案資料夾可部署的目標（每個支援專案範圍的 AI 工具各一個）。 */
-  function projectTargets(root) {
-    const canonicalRoot = createPathRules().normalize(root);
-    return installHosts.filter(host => HostProfiles.find(host.hostId).findSurface(host.surfaceId).scopes.includes(Scope.project)).map(host => ({ id: `${host.hostId}|${host.surfaceId}|${Scope.project}|${canonicalRoot}`,
-      ...host, scope: Scope.project, label: `${hostLabel(host)} 本機專案`, rootPath: path.resolve(root), projectRoot: path.resolve(root), canonicalRoot,
-      isPrimary: true, origin: 'ProjectRoot' }));
-  }
-
-  /** 該資源包已有部署（收據）的專案資料夾：優先沿用共用專案清單的寫法，資料夾已不存在的略過。 */
-  function knownProjectRoots(packageKey) {
-    const rules = createPathRules();
-    let registered = [];
-    try { registered = registeredProjects(); } catch { /* 專案清單無法讀取時，收據的位置仍可使用 */ }
-    const spelled = new Map(registered.map(p => [rules.normalize(p), p]));
-    const roots = new Map();
-    for (const d of installed.project(packageKey, null).deployments) {
-      if (d.scope !== Scope.project) continue;
-      const key = rules.normalize(d.rootPath);
-      if (!roots.has(key)) roots.set(key, spelled.get(key) ?? d.rootPath);
-    }
-    return [...roots.values()].filter(root => { try { return statSync(root).isDirectory(); } catch { return false; } });
-  }
-
-  /**
-   * 專案安裝成功（或部分成功）後把專案根註冊到共用 config.json 的 registeredProjects（對照 CliContext.RegisterProject；
-   * 比對不分大小寫），其後狀態與更新掃描才看得到該專案。保留檔案內其他欄位；沒有 config.json 時只建立專案清單，不寫入任何預設值。
-   * 註冊只是附帶作業：設定檔無法讀寫時不影響已完成的部署。
-   */
-  function registerProject(projectRoot) {
-    try {
-      const file = path.join(home, 'config.json');
-      let config = {};
-      try { config = JSON.parse(readFileSync(file, 'utf8').replace(/^﻿/, '')) ?? {}; } catch (e) { if (e.code !== 'ENOENT') return; }
-      if (!config || typeof config !== 'object' || Array.isArray(config)) return;
-      const projects = config.registeredProjects === undefined ? [] : config.registeredProjects;
-      if (!Array.isArray(projects)) return;
-      const full = path.resolve(projectRoot);
-      if (projects.some(p => typeof p === 'string' && p.toLowerCase() === full.toLowerCase())) return;
-      mkdirSync(home, { recursive: true });
-      const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-      writeFileSync(temporary, JSON.stringify({ ...config, registeredProjects: [...projects, full] }, null, 2));
-      renameSync(temporary, file);
-    } catch { /* 附帶作業 */ }
-  }
-
+  const rules = createPathRules({ platform });
   function detectTargets(input = {}) {
-    if (!input || typeof input !== 'object' || Array.isArray(input) ||
-        (input.scope !== undefined && ![Scope.global, Scope.project].includes(input.scope)) ||
-        (input.projectRoot !== undefined && typeof input.projectRoot !== 'string')) throw badParams('部署範圍格式錯誤');
-    if (input.scope === Scope.project) {
-      const root = input.projectRoot?.trim();
-      // 沒有指定專案路徑時，自動列出已有該資源部署的專案（工項 05 待辦：專案範圍的既有部署要能直接更新）。
-      if (!root && input.projectRoot === undefined && input.packageKey && installed) return knownProjectRoots(input.packageKey).flatMap(projectTargets);
-      let exists = false;
-      if (root && path.isAbsolute(root) && !/^[\/]{2}/.test(root)) {
-        try { exists = statSync(root).isDirectory(); } catch { /* 必須是存在的本機資料夾 */ }
-      }
-      if (!exists) throw badParams('請指定存在的本機專案資料夾完整路徑');
-      return projectTargets(root);
-    }
+    if (input.scope !== undefined && input.scope !== Scope.global || input.projectRoot !== undefined) throw badParams('Orca 只支援全域部署');
     let config = {};
     try { config = JSON.parse(readFileSync(path.join(home, 'config.json'), 'utf8')) ?? {}; }
     catch (e) {
@@ -147,6 +95,8 @@ export function createDeployService({ downloads, installed, session = null, lcai
     if (input.packageKey && installed) {
       for (const d of installed.project(input.packageKey, null).deployments) {
         if (d.scope !== Scope.global || !installHosts.some(h => h.hostId === d.hostId && h.surfaceId === d.surfaceId) || targets.some(t => t.id === d.id)) continue;
+        const excluded = config.excludedClientRoots?.[d.hostId] ?? [];
+        if (excluded.some(root => rules.normalize(root) === rules.normalize(d.rootPath))) continue;
         let exists = false;
         try { exists = statSync(d.rootPath).isDirectory(); } catch { /* missing roots remain visible in installed details */ }
         if (!exists) continue;
@@ -157,16 +107,23 @@ export function createDeployService({ downloads, installed, session = null, lcai
     return targets;
   }
 
-  /**
-   * 「維持原版」只列與這份計畫同範圍的部署：全域計畫只看全域部署；專案計畫看全域部署加上該專案自己的部署，
-   * 不列其他專案（其他專案的部署仍在已安裝清單可見，對照 LC-AI-Pack 已安裝頁依部署分組）。
-   */
-  function relevantToPlan(deployment, state) {
-    if (!state || deployment.scope === Scope.global) return true;
-    if (state.intent.scope !== Scope.project) return false;
-    const rules = createPathRules();
-    const planned = state.targetIds.map(id => state.targetsById.get(id)?.canonicalRoot).filter(Boolean);
-    return planned.some(root => rules.normalize(root) === rules.normalize(deployment.rootPath));
+  const canonicalHome = rules.normalize(userHome);
+
+  function packageTargets(targets, contents, packageKey) {
+    const codexRoots = targets.filter(t => sameHost(t, codexHost) && t.canonicalRoot !== canonicalHome);
+    const receipts = (installed?.receipts({ globalOnly: true }) ?? []).filter(r =>
+      r.packageKey === packageKey && r.scope === Scope.global && sameHost(r, codexHost));
+    const hasRootContent = contents.some(c => c.kind !== 'skill');
+    const visible = targets.filter(t => !sameHost(t, codexHost) || (t.canonicalRoot !== canonicalHome &&
+      (hasRootContent || receipts.some(r => r.canonicalRoot === t.canonicalRoot && r.kind !== 'skill'))));
+    // Keep prior managed destinations in an update that drops the last content of their kind.
+    const hadSharedSkill = receipts.some(r => r.canonicalRoot === canonicalHome && r.kind === 'skill');
+    const hasDetectedRoot = codexRoots.some(t => t.origin !== 'Receipt');
+    if ((hasDetectedRoot && contents.some(c => c.kind === 'skill')) || (codexRoots.length && hadSharedSkill)) {
+      visible.push({ ...codexHost, scope: Scope.global, id: [codexHost.hostId, codexHost.surfaceId, Scope.global, canonicalHome].join('|'),
+        label: 'Codex 全域共用技能', rootPath: userHome, canonicalRoot: canonicalHome, isPrimary: true, origin: 'SharedSkills' });
+    }
+    return visible;
   }
 
   function summarize(plan, targetsById, state = null) {
@@ -186,7 +143,7 @@ export function createDeployService({ downloads, installed, session = null, lcai
         ...loadPrecedenceOf(t, plan.package.version),
         problems: t.problems.map(projectProblem)
       })),
-      unchangedDeployments: deployments.filter(d => !plan.targets.some(t => t.targetKey === d.id) && relevantToPlan(d, state)),
+      unchangedDeployments: deployments.filter(d => !plan.targets.some(t => t.targetKey === d.id) && d.scope === Scope.global),
       setup: setupInput.summarize(plan.setup),
       problems: plan.problems.map(projectProblem)
     };
@@ -195,6 +152,7 @@ export function createDeployService({ downloads, installed, session = null, lcai
   /** 設定層與收據檔的錯誤轉成面板可顯示的錯誤；同步與非同步（套用）共用。 */
   const guard = (fn) => {
     const convert = e => {
+      if (e?.unsupportedFormatVersion) throw e;
       if (e instanceof ReceiptFileError) throw new RcError(ErrorCode.receiptInvalid, `${e.message}。請修正或移除該檔案後重試。`);
       throw e;
     };
@@ -214,6 +172,7 @@ export function createDeployService({ downloads, installed, session = null, lcai
     // 動作決定設定命令的判斷意圖（同版略過、更新重跑、重新設定）；規劃與套用必須使用同一個意圖。
     const planner = guard(() => createDeploymentPlanner({ home, userHome, clientVersion, channel: state.channel, operatingSystem: platform === 'darwin' ? 'macos' : 'windows',
       shadowingProjectRoots: registeredProjects(), secrets: setupInput.secrets, mcpLauncherPath,
+      windowsOrcaAppDataDirectory: resolveWindowsOrcaAppData(platform, env, userHome),
       setupPlanning: { intent: Actions[state.action].intent, runners, environment: setupEnvironment } }));
     const plan = guard(() => planner.plan(state.intent));
     pending = { ...state, plan, planner };
@@ -221,6 +180,23 @@ export function createDeployService({ downloads, installed, session = null, lcai
   }
 
   return {
+    detectTargets,
+    // 無目標的設定規劃：明細讀取／儲存沿用相同參數解析與共用儲存，不產生部署副作用。
+    async packageSetup(input, save = false) {
+      packageInput(input, true);
+      const origin = await currentOrigin();
+      const fetched = await downloads.fetchVerified(input);
+      if (!sameOrigin(origin, await currentOrigin())) throw new RcError(ErrorCode.planStale, PLAN_ORIGIN_CHANGED);
+      const state = { intent: { package: { bytes: fetched.bytes, expectedSha256: fetched.sha256 }, scope: Scope.global,
+        hosts: [], hostRoots: [], existingContent: 'BackupAndReplace', allowScopeShadowing: true },
+        origin, action: 'reconfigure', channel: fetched.version.channel, targetIds: [], targetsById: new Map() };
+      let summary = runPlan(state);
+      if (save) {
+        guard(() => setupInput.save(pending.plan.setup, state.intent, input));
+        summary = runPlan(state);
+      }
+      return summary.setup;
+    },
     async listTargets(input) {
       if (input?.packageKey !== undefined) packageInput(input);
       const targets = detectTargets(input);
@@ -228,7 +204,7 @@ export function createDeployService({ downloads, installed, session = null, lcai
       if (input?.version === undefined) return { targets };
       packageInput(input, true);
       const { manifest } = await downloads.fetchVerified(input);
-      return { targets: targets.filter(t => {
+      return { contents: manifest.contents.map(({ kind, id }) => ({ kind, id })), targets: packageTargets(targets, manifest.contents, input.packageKey).filter(t => {
         const surface = HostProfiles.find(t.hostId)?.findSurface(t.surfaceId);
         const supported = c => getDriver(c.kind) && surface?.routes.get(c.kind)?.templateFor(t.scope);
         return surface?.scopes.includes(t.scope) && manifest.contents.some(supported) && manifest.contents.every(c =>
@@ -240,37 +216,31 @@ export function createDeployService({ downloads, installed, session = null, lcai
       packageInput(input, true);
       if (!Array.isArray(input.targets) || !input.targets.length || input.targets.some(t => typeof t !== 'string') || new Set(input.targets).size !== input.targets.length) throw badParams('請選擇至少一個不重複的部署目標');
       if (input.action !== undefined && !Object.hasOwn(Actions, input.action)) throw badParams('部署動作格式錯誤');
+      if (input.missingTargets !== undefined && (!Array.isArray(input.missingTargets) ||
+        input.missingTargets.some(id => !input.targets.includes(id)))) throw badParams('補裝位置不在所選部署目標');
       pending = null;
-      const detected = new Map(detectTargets(input).map(t => [t.id, t]));
-      const selected = input.targets.map(id => detected.get(id));
-      if (selected.some(t => !t)) throw badParams('找不到所選的部署目標，請重新整理部署目標後再試');
-      // 一份計畫只有一個範圍與一個專案（部署意圖只有一組 scope／projectRoot）；不同專案的目標要分次規劃，不能默默只取第一個。
-      if (new Set(selected.map(t => `${t.scope}|${t.scope === Scope.project ? t.canonicalRoot : ''}`)).size > 1) throw badParams('一次只能選擇同一個範圍、同一個專案的部署目標');
       const origin = await currentOrigin();
       const fetched = await downloads.fetchVerified(input);
       // 下載期間工作階段若換了（登出、換市集），這份下載不屬於目前的來源。
       if (!sameOrigin(origin, await currentOrigin())) throw new RcError(ErrorCode.planStale, PLAN_ORIGIN_CHANGED);
+      const detected = new Map(packageTargets(detectTargets(input), fetched.manifest.contents, input.packageKey).map(t => [t.id, t]));
+      const selected = input.targets.map(id => detected.get(id));
+      if (selected.some(t => !t)) throw badParams('找不到所選的部署目標，請重新整理部署目標後再試');
+      const codex = selected.filter(t => sameHost(t, codexHost));
+      const wantsShared = codex.some(t => t.canonicalRoot === canonicalHome);
+      const wantsRootContent = codex.some(t => t.canonicalRoot !== canonicalHome);
+      const codexContent = !codex.length || (wantsShared && wantsRootContent) ? 'All' : wantsShared ? 'SharedSkills' : 'RootContent';
+      const missingTargets = new Set(input.missingTargets ?? []);
       const intent = {
-        package: { bytes: fetched.bytes, expectedSha256: fetched.sha256 }, scope: selected[0].scope,
-        projectRoot: selected[0].scope === Scope.project ? selected[0].rootPath : null, hosts: installHosts.filter(h => selected.some(t => sameHost(t, h))),
+        codexContent, package: { bytes: fetched.bytes, expectedSha256: fetched.sha256 }, scope: Scope.global, hosts: installHosts.filter(h => selected.some(t => sameHost(t, h))),
         // ADR 0002：可解決的衝突自動處理。本機修改與未受管同名內容先備份再套用；全域／專案並存持續揭露；
         // 他包擁有、設定檔無法安全變更等不可繞過的阻擋仍由核心判定。
         existingContent: 'BackupAndReplace', allowScopeShadowing: true,
         hostRoots: installHosts.filter(h => selected.some(t => sameHost(t, h))).map(host => ({ host, canonicalRoots: selected.filter(t => sameHost(t, host)).map(t => t.rootPath),
-          origins: Object.fromEntries(selected.filter(t => sameHost(t, host)).map(t => [t.rootPath, t.origin])) }))
+          missingContentRoots: selected.filter(t => sameHost(t, host) && missingTargets.has(t.id)).map(t => t.rootPath),
+          origins: Object.fromEntries(selected.filter(t => sameHost(t, host)).map(t => [t.rootPath, sameHost(t, codexHost) && t.canonicalRoot === canonicalHome ? 'SharedSkills' : t.origin])) }))
       };
       return runPlan({ intent, origin, action: input.action ?? 'install', channel: fetched.version.channel === 'preview' ? 'preview' : 'release', targetIds: [...input.targets], targetsById: detected });
-    },
-
-    /** 儲存面板填入的設定參數（一般值依安裝範圍寫入 setup.json，秘密只寫入安全儲存區），再依同一組目標重新規劃。 */
-    async saveSetup(input) {
-      if (!input || typeof input !== 'object' || typeof input.planDigest !== 'string') throw badParams('設定參數格式錯誤');
-      const current = pending;
-      if (!current || current.plan.planDigest !== input.planDigest) {
-        throw new RcError(ErrorCode.planStale, '這份部署計畫已失效，請重新產生部署摘要後再填寫設定參數。');
-      }
-      guard(() => setupInput.save(current.plan.setup, current.intent, input));
-      return runPlan(current);
     },
 
     async apply(input) {
@@ -304,7 +274,6 @@ export function createDeployService({ downloads, installed, session = null, lcai
         (result.targets.every(t => t.status !== 'Succeeded') && result.problems.some(p => p.code === 'deployment.plan-stale'))));
       if (stale) return { status: 'stale', message: STALE_MESSAGE, plan: runPlan(current) };
       // 至少一個目標成功後才回報（builder 會再次確認）；失敗、受阻與復原的目標不計入。回報失敗不影響結果。
-      if (result && current.intent.scope === Scope.project && ['Succeeded', 'Partial'].includes(result.status)) registerProject(current.intent.projectRoot);
       if (result) {
         // 回報屬於計畫來源的市集與帳號，不是套用結束當下的工作階段（長時間的設定命令期間使用者可能已換市集）。
         await installReports?.report({ origin: current.origin, plan: current.plan, applied: result, packageKey: current.plan.package.key, version: current.plan.package.version,

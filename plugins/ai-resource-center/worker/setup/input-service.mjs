@@ -1,6 +1,6 @@
 // 面板設定參數的輸入與揭露（對照 LcAiPack.Gui SetupFormCollector.TryCollect、SetupFieldViewModel、Core SetupInputCollector）。
 // - 揭露：只回傳非秘密有效值與來源；秘密只回報「是否已儲存」。
-// - 儲存：一般值依安裝範圍寫入 setup.json（Global 或 Project 覆寫）；秘密只寫入作業系統安全儲存區。
+// - 儲存：一般值寫入全域 setup.json；秘密只寫入作業系統安全儲存區。
 //   先完整驗證再寫入；錯誤訊息只含參數身分，不含任何值。
 import { badParams, RcError, ErrorCode } from '../contract.mjs';
 import { createPathRules } from '../deploy/canonical-root.mjs';
@@ -28,6 +28,7 @@ export function createSetupInputService({ home, userHome, platform = process.pla
 
   function save(setup, intent, input) {
     if (!setup?.hasSetup) throw badParams('此資源包沒有設定參數');
+    if (setup.scope !== 'global') throw badParams('Orca 只支援全域設定參數');
     const values = input.values ?? {}, secretValues = input.secrets ?? {};
     if (!isPlainObject(values) || !isPlainObject(secretValues)) throw badParams('設定參數格式錯誤');
     const byId = new Map(setup.parameters.map(p => [p.parameterId, p]));
@@ -60,7 +61,7 @@ export function createSetupInputService({ home, userHome, platform = process.pla
 
     for (const [ref, value] of pendingSecrets) secrets.set(ref, value);
     if (Object.keys(plain).length) {
-      SetupValueStore.forScope({ scope: setup.scope, projectRoot: intent.projectRoot, home, userProfile: userHome, rules })
+      SetupValueStore.forGlobal({ home, userProfile: userHome, rules })
         .setValues(setup.packageKey, plain, setup.parameters.filter(p => p.isSecret).map(p => p.parameterId));
     }
   }
@@ -68,6 +69,7 @@ export function createSetupInputService({ home, userHome, platform = process.pla
   /** 把設定層錯誤轉成面板可顯示的錯誤；訊息不含秘密值。 */
   function guard(fn) {
     const convert = e => {
+      if (e?.unsupportedFormatVersion) throw e;
       if (e instanceof SetupFileError) throw new RcError(ErrorCode.setupInvalid, `${e.message}。請修正或移除該檔案後重試。`);
       if (e instanceof SetupSecretStoreError) throw new RcError(ErrorCode.secretStoreFailed, e.message);
       throw e;

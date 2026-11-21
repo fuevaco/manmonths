@@ -49,9 +49,9 @@ function environment(t, { intent = SetupIntent.install, launcher, secretStore = 
   const secrets = createSecretManager(secretStore);
   const planner = createDeploymentPlanner({ home, userHome, clientVersion: '1.0.0-test', secrets, mcpLauncherPath: launcher, operatingSystem: 'windows',
     setupPlanning: { intent, runners: fakeRunners, environment: { operatingSystem: 'windows', architecture: 'x64' } } });
-  const intentOf = pkg => ({ package: pkg, hosts: [host], scope: 'project', projectRoot: root, hostRoots: [{ host, canonicalRoots: [root] }], existingContent: 'Block' });
-  const skill = path.join(root, '.claude', 'skills', 'hello', 'SKILL.md');
-  const receipts = path.join(root, '.lcaipack', 'receipts.json');
+  const intentOf = pkg => ({ package: pkg, hosts: [host], scope: 'global', hostRoots: [{ host, canonicalRoots: [root] }], existingContent: 'Block' });
+  const skill = path.join(root, 'skills', 'hello', 'SKILL.md');
+  const receipts = path.join(home, 'receipts.json');
   /** 替身 executor：記錄呼叫、依序回傳預先指定的結果，並在執行當下觀察磁碟狀態。 */
   function executor(results = [], onRun = () => {}) {
     const calls = [];
@@ -64,7 +64,7 @@ function environment(t, { intent = SetupIntent.install, launcher, secretStore = 
   }
   const orchestrate = (exec, extra = {}) => createOperationOrchestrator({ planner, executor: exec, ...extra });
   const store = createOperationStore({ home });
-  const completions = () => SetupCommandCompletionStore.forProject({ projectRoot: root });
+  const completions = () => SetupCommandCompletionStore.forGlobal({ home });
   return { dir, userHome, root, home, secrets, planner, intentOf, skill, receipts, executor, orchestrate, store, completions, secretStore };
 }
 const request = (plan, action = 'install', extra = {}) => ({ reviewedPlan: plan, authorization: { planDigest: plan.planDigest, replaceUnmanagedFiles: false }, action, ...extra });
@@ -162,7 +162,7 @@ test('審核後實際狀態改變時零命令、零 target 寫入並判定過期
   const exec = e.executor();
   const pkg = packageOf({ setup: { parameters: [{ parameterId: 'server', label: 'Server', type: 'string', required: true, default: 'a' }], commands: [command('prepare')] } });
   const plan = e.planner.plan(e.intentOf(pkg));
-  SetupValueStore.forProject({ projectRoot: e.root }).setValues(KEY, { server: 'changed' });
+  SetupValueStore.forGlobal({ home: e.home, userProfile: e.userHome }).setValues(KEY, { server: 'changed' });
   const result = await e.orchestrate(exec).apply(request(plan));
   assert.equal(exec.calls.length, 0);
   assert.deepEqual([result.state, result.checkpoint, result.status, result.commands, result.apply], ['failed', 'rejected-stale', 'Stale', [], null]);
@@ -240,7 +240,7 @@ test('受管 MCP 啟動描述在命令之後、target 之前寫入（managed-mcp
     const bytes = zip({ 'lcpack.json': JSON.stringify(manifest), 'README.md': '# Demo', 'setup/prepare.ps1': 'exit 0\n' });
     return { bytes, expectedSha256: ofBytes(bytes) };
   };
-  e.secrets.set(setupSecretReference({ packageKey: KEY, parameterId: 'api-key', scope: 'project', canonicalRoot: e.root }), 'runtime-canary');
+  e.secrets.set(setupSecretReference({ packageKey: KEY, parameterId: 'api-key', scope: 'global', canonicalRoot: e.userHome }), 'runtime-canary');
   const plan = e.planner.plan(e.intentOf(manifestPkg()));
   assert.equal(plan.canApply, true, JSON.stringify(plan));
   let descriptorAtTargets = null;
@@ -329,7 +329,7 @@ test('被拒的 operation 仍收到 operation-started 與 completed；進度出�
 test('秘密：setup-time 秘密只經通道交付且在 log 遮罩；進度事件、operation 狀態、結果與完成狀態都沒有秘密、argv 或腳本輸出', async t => {
   const e = environment(t);
   const CANARY = 'fake-setup-time-canary-77';
-  e.secrets.set(setupSecretReference({ packageKey: KEY, parameterId: 'setup-pat', scope: 'project', canonicalRoot: e.root }), CANARY);
+  e.secrets.set(setupSecretReference({ packageKey: KEY, parameterId: 'setup-pat', scope: 'global', canonicalRoot: e.userHome }), CANARY);
   const setup = { parameters: [{ parameterId: 'setup-pat', label: 'PAT', type: 'secret', required: true, secretUsage: 'setup-time' }, { parameterId: 'mode', label: 'Mode', type: 'string', required: true, default: 'fast' }],
     commands: [command('prepare', { arguments: ['-Mode', '{{parameter:mode}}'] })] };
   const events = [];
@@ -357,10 +357,10 @@ test('缺少必填的 setup-time 秘密在命令啟動前以 secret-unresolved �
   const plan = e.planner.plan(e.intentOf(packageOf({ setup })));
   assert.equal(plan.canApply, false);
   // 規劃階段已阻擋；即使有人繞過（審核後秘密被刪除），執行階段也以相同原因中止。
-  e.secrets.set(setupSecretReference({ packageKey: KEY, parameterId: 'setup-pat', scope: 'project', canonicalRoot: e.root }), 'temp');
+  e.secrets.set(setupSecretReference({ packageKey: KEY, parameterId: 'setup-pat', scope: 'global', canonicalRoot: e.userHome }), 'temp');
   const reviewed = e.planner.plan(e.intentOf(packageOf({ setup })));
   assert.equal(reviewed.canApply, true);
-  e.secrets.delete(setupSecretReference({ packageKey: KEY, parameterId: 'setup-pat', scope: 'project', canonicalRoot: e.root }));
+  e.secrets.delete(setupSecretReference({ packageKey: KEY, parameterId: 'setup-pat', scope: 'global', canonicalRoot: e.userHome }));
   const exec = e.executor();
   const result = await e.orchestrate(exec).apply(request(reviewed));
   assert.equal(exec.calls.length, 0);

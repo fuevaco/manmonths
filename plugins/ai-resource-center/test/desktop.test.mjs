@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { locateClaudeDesktop } from '../worker/deploy/claude-desktop-roots.mjs';
 
+test('Linux Desktop stays undetected even if a Windows package is supplied', () => {
+  const result = locateClaudeDesktop({ platform: 'linux', userHome: '/home/synthetic', environment: {
+    package: { packageFamilyName: 'Claude_demo', installedAtLocal: new Date(2026, 7, 7) },
+    appDataDirectory: '/synthetic/roaming', localAppDataDirectory: '/synthetic/local', selfReportLogLines: []
+  }, probe: { isDirectory: () => true, isFile: () => true } });
+  assert.deepEqual(result, { isDetected: false, configDirectory: null, configFilePath: null, source: 'PackageMissing', disclosures: [], canonicalConfigDirectory: null });
+});
+
 // MacClaudeDesktopLocatorTests：由注入 platform/home/probe 驗證，與執行測試的 OS 無關。
 test('macOS Desktop requires the exact config file, preserves display casing and creates nothing', () => {
   const files = new Set(); let probes = [];

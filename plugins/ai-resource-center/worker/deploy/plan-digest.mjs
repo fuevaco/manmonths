@@ -39,6 +39,7 @@ export function computePlanDigest(identity, sourceSha256, intent, targets, rules
   b += `hostProfiles=${HostProfiles.matrixDigest}\n`;
   b += `package=${identity.key}@${identity.version}/${identity.type}\n`;
   b += `sourceSha256=${String(sourceSha256).toLowerCase()}\n`;
+  if (intent.codexContent && intent.codexContent !== 'All') b += `intent.codexContent=${intent.codexContent}\n`;
   b += `intent.scope=${intent.scope}\n`;
   b += `intent.projectRoot=${intent.projectRoot == null ? '-' : rules.normalize(intent.projectRoot)}\n`;
   b += `intent.existingContent=${intent.existingContent ?? 'Block'}\n`;
@@ -46,6 +47,9 @@ export function computePlanDigest(identity, sourceSha256, intent, targets, rules
   for (const h of [...intent.hosts].sort((x, y) => ordinal(x.hostId, y.hostId) || ordinal(x.surfaceId, y.surfaceId))) {
     b += `intent.host=${h.hostId}/${h.surfaceId}\n`;
   }
+  const selected = new Set((intent.hostRoots ?? []).flatMap(s => (s.missingContentRoots ?? []).map(root =>
+    `${s.host.hostId}/${s.host.surfaceId}|${rules.normalize(root)}`)));
+  for (const root of [...selected].sort(ordinal)) b += `intent.missingContentOnly=${root}\n`;
   for (const t of [...targets].sort((x, y) => ordinal(x.targetKey, y.targetKey))) b += appendTarget(t, rules);
   b += appendSetupDigest(setup, rules);
   return ofText(b);

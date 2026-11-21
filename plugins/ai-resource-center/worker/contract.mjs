@@ -1,6 +1,6 @@
 // 面板 ↔ trusted worker 的請求契約。
 //
-// - 方法名稱：`rc.<領域>.<動作>`，例如 rc.session.signIn。後續工項新增 rc.catalog.*、rc.download.*、rc.deploy.* 時，
+// - 方法名稱：`rc.<領域>.<動作>`，例如 rc.session.signIn。後續工項新增 rc.catalog.*、rc.install.* 時，
 //   各自在 worker/handlers/ 下新增一個模組並在 index.mjs 註冊，共用這裡的錯誤格式與輸入驗證。
 // - 輸入：面板送來的 JSON（可能是 undefined）；每個欄位都要檢查型別。
 // - 成功：回傳可 JSON 序列化的物件，絕不包含憑證或秘密值。
@@ -31,6 +31,9 @@ export const ErrorCode = Object.freeze({
   marketError: 'market_error',
   versionUnavailable: 'version_unavailable',
   checksumMismatch: 'checksum_mismatch',
+  guideUnavailable: 'guide_unavailable',
+  guideIndexMissing: 'guide_index_missing',
+  guideTooLarge: 'guide_too_large',
   invalidPackage: 'invalid_package',
   unsafePath: 'unsafe_path',
   saveFailed: 'save_failed',
@@ -40,6 +43,7 @@ export const ErrorCode = Object.freeze({
   receiptInvalid: 'receipt_invalid',
   /** LC-AI-Pack 共用的設定值檔（setup.json）無法讀取 */
   setupInvalid: 'setup_invalid',
+  sharedDataTooNew: 'sharedDataTooNew',
   /** 作業系統安全儲存區無法存取秘密；不會改用明文 */
   secretStoreFailed: 'secret_store_failed',
   internal: 'internal'
@@ -55,6 +59,7 @@ export class RcError extends Error {
 }
 
 export const badParams = (message) => new RcError(ErrorCode.invalidParams, message);
+export const sharedDataError = () => new RcError(ErrorCode.sharedDataTooNew, '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛');
 
 /** 取字串欄位；不是字串時回傳空字串。 */
 export const str = (input, key) => (typeof input?.[key] === 'string' ? input[key] : '');
@@ -74,6 +79,10 @@ export function createRouter(orca) {
         try {
           return await fn(input ?? {}, ctx);
         } catch (e) {
+          if (e?.unsupportedFormatVersion) {
+            orca.log(`[${method}] sharedDataTooNew ${e.message}`);
+            throw sharedDataError();
+          }
           if (e instanceof RcError) {
             orca.log(`[${method}] ${e.code}`);
             throw e;

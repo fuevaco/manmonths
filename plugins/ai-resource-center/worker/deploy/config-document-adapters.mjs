@@ -48,7 +48,7 @@ function makeAdapter(id, format, rootProperty, flavor, parse, write, remove) {
       const baseValueHashes = [ofText(renderedNodeJson), ...Object.keys(rendered).sort(ordinal).map(k => hashValue(rendered[k]))];
       const problems = [];
       const problem = (code, path, summary) => blocking(code, summary, '請還原本機修改或重新規劃；不會靜默覆寫設定欄位。',
-        { host: context.host, scope: context.scope, contentId: incoming.id, path: `${context.configPath}#${path}`, existingOwner: ownership });
+        { host: context.host, scope: context.scope, contentId: incoming.id, path: `${context.configPath}#${path}`, existingOwner: ownership, configPath: context.configPath });
       let change;
       if (existing === null) change = 'Create';
       else if (!owner) { change = 'Replace'; problems.push(problem(ProblemCodes.unmanagedCollision, nodePath, `已有非本工具管理的 MCP server '${incoming.id}'`)); }
