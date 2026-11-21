@@ -11,15 +11,15 @@
         "ref": "main",
         "path": "plugins/ai-resource-center"
       },
-      "description": "人月維護的 AI 資源中心：連到你有權使用的資源市集，在 Orca 內獨立登入，瀏覽、下載並部署 Skills、Agents、MCP 與組合包。",
+      "description": "人月維護的 AI 資源中心：連到你有權使用的資源市集，在 Orca 內獨立登入，瀏覽並一鍵安裝 Skills、Agents、MCP 與組合包到 Codex、Claude Code 與桌面工具。",
       "categories": [
         "tools"
       ],
       "releases": [
         {
           "version": "1.0.0",
-          "commit": "5c3994191ac33dfb59c105c5f28d0aa7f8e9e030",
-          "contentHash": "da7312701e7978a92f5a814ffe18cc475b080afaf87ddcee3f25b885943508ba",
+          "commit": "04c08c376ca3f859fb2df3d832ba3f83812152a9",
+          "contentHash": "c78ea5832aceac7807b1a5174570e22a451d59d0eb42a7f21689a388530df8a5",
           "execution": "trusted-worker",
           "minimumOrca": "1.4.259",
           "name": "AI 資源中心",
@@ -40,7 +40,23 @@
               "sha256": "5f1eff5edc4afd08373d481171df1081842a034a349627ccef8fb7b0892fc0a3",
               "width": 256,
               "height": 256
-            }
+            },
+            "cover": {
+              "path": "plugins/ai-resource-center/assets/cover.png",
+              "alt": "AI 資源中心：在 Orca 側欄瀏覽並一鍵安裝 Skills、Agents 與 MCP",
+              "sha256": "0ab998effde2d4c08c4d5f9699b2665431905e2437fc661a4ef4dcc451eaf0b2",
+              "width": 1200,
+              "height": 750
+            },
+            "screenshots": [
+              {
+                "path": "plugins/ai-resource-center/assets/screenshots/01-overview.png",
+                "alt": "AI 資源中心：清單與明細畫面，一鍵安裝、更新、補裝與解除安裝，並直接閱讀使用說明",
+                "sha256": "ad214f9f26950c994f77df2983f98baea958fba6762cd38edfb4630c22bc199c",
+                "width": 1280,
+                "height": 800
+              }
+            ]
           }
         }
       ]
