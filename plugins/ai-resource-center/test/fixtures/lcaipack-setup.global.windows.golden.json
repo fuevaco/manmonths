@@ -1,0 +1,25 @@
+{
+  "setupFormatVersion": 1,
+  "packages": [
+    {
+      "packageKey": "another.pkg",
+      "scope": "global",
+      "projectRoot": "d:\\orca-rc-golden-09\\user",
+      "values": {
+        "flag": "true"
+      },
+      "updatedAt": "2026-11-20T17:54:31.5785298+00:00"
+    },
+    {
+      "packageKey": "orca-rc-demo-mcp-params",
+      "scope": "global",
+      "projectRoot": "d:\\orca-rc-golden-09\\user",
+      "values": {
+        "demo-endpoint": "https://global.example.invalid/a?b=1\u0026c=\u003Cd\u003E",
+        "demo-region": "south",
+        "label": "\u7814\u767C\u74B0\u5883 \u0027x\u0027 \u002B \u0022y\u0022"
+      },
+      "updatedAt": "2026-11-20T17:54:31.5471711+00:00"
+    }
+  ]
+}

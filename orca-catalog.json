@@ -4,6 +4,48 @@
   "owner": "manmonths",
   "plugins": [
     {
+      "id": "manmonths.ai-resource-center",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/fuevaco/manmonths.git",
+        "ref": "main",
+        "path": "plugins/ai-resource-center"
+      },
+      "description": "人月維護的 AI 資源中心：連到你有權使用的資源市集，在 Orca 內獨立登入，瀏覽、下載並部署 Skills、Agents、MCP 與組合包。",
+      "categories": [
+        "tools"
+      ],
+      "releases": [
+        {
+          "version": "1.0.0",
+          "commit": "5c3994191ac33dfb59c105c5f28d0aa7f8e9e030",
+          "contentHash": "da7312701e7978a92f5a814ffe18cc475b080afaf87ddcee3f25b885943508ba",
+          "execution": "trusted-worker",
+          "minimumOrca": "1.4.259",
+          "name": "AI 資源中心",
+          "types": [
+            "panel",
+            "worker"
+          ],
+          "contributes": [
+            {
+              "kind": "panels",
+              "name": "資源中心"
+            }
+          ],
+          "images": {
+            "icon": {
+              "path": "plugins/ai-resource-center/assets/icon.png",
+              "alt": "AI 資源中心 icon",
+              "sha256": "5f1eff5edc4afd08373d481171df1081842a034a349627ccef8fb7b0892fc0a3",
+              "width": 256,
+              "height": 256
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "manmonths.marp-mermaid-preview",
       "source": {
         "kind": "git",

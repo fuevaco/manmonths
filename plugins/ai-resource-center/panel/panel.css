@@ -1,0 +1,109 @@
+:root {
+  --bg: var(--orca-background, #0d1117);
+  --fg: var(--orca-foreground, #e6edf3);
+  --muted: #8b949e;
+  --border: var(--orca-border, #30363d);
+  --card-bg: rgba(255, 255, 255, 0.04);
+  --hover-bg: rgba(255, 255, 255, 0.08);
+  --input-bg: rgba(0, 0, 0, 0.25);
+  --accent: #2f81f7;
+  --accent-fg: #ffffff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --warn-bg: rgba(210, 153, 34, 0.16);
+  --bad: #f85149;
+  --bad-bg: rgba(248, 81, 73, 0.14);
+  --info-bg: rgba(47, 129, 247, 0.14);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
+  color-scheme: dark;
+}
+
+html.light, body.light {
+  color-scheme: light;
+  --bg: var(--orca-background, #ffffff);
+  --fg: var(--orca-foreground, #1f2328);
+  --muted: #656d76;
+  --border: var(--orca-border, #d0d7de);
+  --card-bg: #f6f8fa;
+  --hover-bg: #eaeef2;
+  --input-bg: #ffffff;
+  --accent: #0969da;
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --warn-bg: rgba(154, 103, 0, 0.13);
+  --bad: #cf222e;
+  --bad-bg: rgba(207, 34, 46, 0.1);
+  --info-bg: rgba(9, 105, 218, 0.1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 13px; line-height: 1.45; overflow: hidden; }
+#app { display: flex; flex-direction: column; height: 100%; min-width: 0; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.wrap { overflow-wrap: anywhere; word-break: break-word; }
+
+.header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); gap: 6px; }
+.header-title { display: flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; }
+.status-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status-dot.connected { background: var(--ok); }
+.status-dot.warn { background: var(--warn); }
+.status-dot.error { background: var(--bad); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--fg); font-size: 12px; font-weight: 500; font-family: inherit; cursor: pointer; }
+.btn:hover { background: var(--hover-bg); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
+.btn-block { width: 100%; }
+.btn-icon { width: 28px; padding: 0; }
+
+.banner { margin: 8px 10px 0; padding: 6px 9px; border-radius: 6px; font-size: 12px; background: var(--info-bg); overflow-wrap: anywhere; }
+.banner.error { background: var(--bad-bg); color: var(--bad); }
+
+.content { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.panel-box { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--card-bg); display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.panel-box-title { font-weight: 600; }
+.install-steps { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.field label { font-size: 12px; font-weight: 600; }
+.field input, .field select { width: 100%; min-width: 0; height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--fg); font-size: 12px; font-family: inherit; }
+.checkbox { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.hint { font-size: 11px; color: var(--muted); }
+
+.notice { padding: 6px 8px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); font-size: 12px; }
+.error { padding: 6px 8px; border-radius: 6px; background: var(--bad-bg); color: var(--bad); font-size: 12px; overflow-wrap: anywhere; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; min-width: 0; }
+.catalog { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.catalog-list { display: flex; flex-direction: column; gap: 8px; list-style: none; min-width: 0; }
+#view-details input, #view-details select { width: 100%; min-width: 0; height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--fg); font: inherit; }
+#details-readme, #details-changelog { white-space: pre-wrap; font: inherit; }
+#view-details > * { flex-shrink: 0; max-width: 100%; }
+
+/* 部署摘要與結果：單欄、可展開明細 */
+.install-summary { display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.install-summary details { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+.install-summary summary { cursor: pointer; font-weight: 600; }
+.install-summary ul { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.install-summary .setup-field { display: flex; flex-direction: column; gap: 2px; }
+#view-details .install-summary .setup-field input[type="checkbox"] { align-self: flex-start; width: auto; height: auto; padding: 0; }
+.install-summary .path { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.problem-blocking { color: var(--bad); }
+.problem-warning { color: var(--warn); }
+.target-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.target-choice { display: flex; align-items: flex-start; gap: 6px; cursor: pointer; min-width: 0; }
+.target-choice > span { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+#view-details .target-choice input { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; }
+.target-choice .path { font-size: 11px; color: var(--muted); }
+
+/* 窄側欄（約 220 px）：縮小留白 */
+@media (max-width: 260px) {
+  .header { padding: 6px 8px; }
+  .content { padding: 8px; }
+  .panel-box { padding: 8px; }
+  .kv { grid-template-columns: 1fr; gap: 0; }
+}

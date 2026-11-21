@@ -1,0 +1,46 @@
+{
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
+  "id": "ai-resource-center",
+  "publisher": "manmonths",
+  "name": "AI 資源中心",
+  "version": "1.0.0",
+  "description": "人月維護的 AI 資源中心：連到你有權使用的資源市集，在 Orca 內獨立登入，瀏覽、下載並部署 Skills、Agents、MCP 與組合包。",
+  "icon": "assets/icon.png",
+  "author": {
+    "name": "人月",
+    "url": "https://github.com/fuevaco"
+  },
+  "repository": "https://github.com/fuevaco/manmonths",
+  "engines": {
+    "orca": ">=1.4.259"
+  },
+  "pluginApi": 1,
+  "main": "worker/index.mjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "ai-resource-center",
+        "title": "資源中心",
+        "icon": "puzzle",
+        "entry": "panel/index.html",
+        "ui": "html"
+      }
+    ],
+    "settings": [
+      {
+        "key": "marketUrl",
+        "title": "市集網址",
+        "description": "你有權使用的資源市集網址。請在「資源中心」面板輸入並登入；登入憑證會加密儲存，不會寫進設定檔。改用其他網址時需要重新登入。",
+        "type": "string",
+        "default": "",
+        "placeholder": "https://market.example.com"
+      }
+    ]
+  },
+  "capabilities": [
+    { "kind": "settings:own" },
+    { "kind": "secrets:own" },
+    { "kind": "storage:own" }
+  ]
+}
