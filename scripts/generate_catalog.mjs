@@ -155,30 +155,93 @@ function getImageDimensions(buf, filePath) {
   // PNG: 8-byte signature + IHDR chunk (width at 16..20, height at 20..24)
   if (
     buf.length >= 24 &&
-    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+    buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) &&
+    buf.readUInt32BE(8) === 13 &&
     buf.toString('ascii', 12, 16) === 'IHDR'
   ) {
     return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
   }
   // WEBP: RIFF....WEBP
-  if (buf.length >= 30 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') {
+  if (buf.length >= 25 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') {
     const chunk = buf.toString('ascii', 12, 16);
-    if (chunk === 'VP8X') {
+    if (chunk === 'VP8X' && buf.length >= 30) {
       const width = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
       const height = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
       return { width, height };
     }
-    if (chunk === 'VP8 ' && buf.length >= 30) {
+    if (chunk === 'VP8 ' && buf.length >= 30 && buf[23] === 0x9d && buf[24] === 0x01 && buf[25] === 0x2a) {
       const width = buf.readUInt16LE(26) & 0x3fff;
       const height = buf.readUInt16LE(28) & 0x3fff;
       return { width, height };
     }
-    if (chunk === 'VP8L' && buf.length >= 25) {
+    if (chunk === 'VP8L' && buf[20] === 0x2f) {
       const bits = buf.readUInt32LE(21);
       return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
     }
   }
-  throw new Error(`Unsupported or invalid icon image format (expected PNG or WEBP): ${filePath}`);
+  // JPEG segments include their two-byte length. Only SOF markers carry dimensions;
+  // C4 (DHT), C8 (JPG), and CC (DAC) are not SOF markers.
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let offset = 2;
+    while (offset < buf.length) {
+      if (buf[offset++] !== 0xff) break;
+      while (offset < buf.length && buf[offset] === 0xff) offset++;
+      if (offset >= buf.length) break;
+      const marker = buf[offset++];
+      if (marker === 0xda || marker === 0xd9 || marker === 0x00) break;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (offset + 2 > buf.length) break;
+      const length = buf.readUInt16BE(offset);
+      if (length < 2 || offset + length > buf.length) break;
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        if (length < 8) break;
+        const height = buf.readUInt16BE(offset + 3);
+        const width = buf.readUInt16BE(offset + 5);
+        const components = buf[offset + 7];
+        if (!width || !height || !components || length !== 8 + 3 * components) break;
+        return { width, height };
+      }
+      offset += length;
+    }
+  }
+  throw new Error(`Unsupported or invalid image format (expected PNG, WEBP or JPEG): ${filePath}`);
+}
+
+function derivePromotionalImages(manifest, pluginFolder, relPath) {
+  // 取自外掛 manifest（manifestVersion 2）的 cover 與 screenshots，與 Orca 外掛頁面使用同一份宣告。
+  function imageEntry(declared, kind, maxBytes, minWidth, minHeight) {
+    if (!declared || typeof declared.path !== 'string' || typeof declared.alt !== 'string' || !declared.alt.trim()) {
+      throw new Error(`${kind} image in ${relPath}/orca-plugin.json requires string path and alt`);
+    }
+    const file = declared.path.replace(/\\/g, '/');
+    const absolute = join(pluginFolder, file);
+    if (!existsSync(absolute)) throw new Error(`${kind} image not found: ${absolute}`);
+    const buf = readFileSync(absolute);
+    if (buf.length > maxBytes) {
+      throw new Error(`${kind} image exceeds ${maxBytes} bytes limit (${buf.length} bytes): ${absolute}`);
+    }
+    const { width, height } = getImageDimensions(buf, absolute);
+    if (width < minWidth || height < minHeight) {
+      throw new Error(`${kind} image must be at least ${minWidth}x${minHeight} (got ${width}x${height}): ${absolute}`);
+    }
+    return {
+      path: `${relPath}/${file}`,
+      alt: declared.alt,
+      sha256: createHash('sha256').update(buf).digest('hex'),
+      width,
+      height
+    };
+  }
+  const images = {};
+  if (manifest.cover) images.cover = imageEntry(manifest.cover, 'Cover', 1048576, 800, 500);
+  const screenshots = manifest.screenshots ?? [];
+  if (!Array.isArray(screenshots) || screenshots.length > 6) {
+    throw new Error(`screenshots in ${relPath}/orca-plugin.json must be an array of at most 6 items`);
+  }
+  if (screenshots.length) {
+    images.screenshots = screenshots.map((item) => imageEntry(item, 'Screenshot', 1572864, 1280, 800));
+  }
+  return images;
 }
 
 function deriveIconCatalogEntry(manifest, pluginFolder, relPath) {
@@ -237,6 +300,10 @@ export function generateCatalog() {
     const types = deriveCatalogTypes(manifest);
     const summary = deriveContributionSummary(manifest);
     const iconEntry = deriveIconCatalogEntry(manifest, pluginFolder, relPath);
+    const images = {
+      ...(iconEntry ? { icon: iconEntry } : {}),
+      ...derivePromotionalImages(manifest, pluginFolder, relPath)
+    };
 
     const publisher = manifest.publisher || 'manmonths';
     const qualifiedId = `${publisher}.${manifest.id}`;
@@ -271,7 +338,7 @@ export function generateCatalog() {
           ...(manifest.name ? { name: manifest.name } : {}),
           ...(types.length > 0 ? { types } : { types: ['interface-language'] }),
           ...(summary.length > 0 ? { contributes: summary } : {}),
-          ...(iconEntry ? { images: { icon: iconEntry } } : {})
+          ...(Object.keys(images).length ? { images } : {})
         }
       ]
     });
