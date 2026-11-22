@@ -18,12 +18,13 @@ export function validateSetup(m, check, known) {
   for (const p of parameters) {
     known(p, ['parameterId', 'label', 'type', 'description', 'required', 'default', 'secretUsage', 'options', 'visibleWhen'], 'setup parameter');
     if (!object(p)) continue;
-    check(id(p.parameterId) && !byId.has(p.parameterId), 'setup parameterId 為必填且不可重複'); byId.set(p.parameterId, p);
+    check(id(p.parameterId), 'setup parameterId 為必填且必須是小寫 dot/dash/underscore 形式');
+    check(!byId.has(p.parameterId), 'setup parameterId 不可重複', 'duplicate-setup-id'); byId.set(p.parameterId, p);
     check(text(p.label), 'setup parameter label 為必填');
     check(['string', 'boolean', 'choice', 'secret'].includes(p.type), 'setup parameter type 不支援');
     check(p.required == null || typeof p.required === 'boolean', 'setup required 必須是布林值');
     check(p.type === 'secret' ? ['runtime', 'setup-time'].includes(p.secretUsage) : p.secretUsage == null, 'secretUsage 與 type 不符');
-    if (p.default !== undefined) check(p.type !== 'secret' && matches(p, p.default), 'setup default 與 type 不符或含秘密預設值');
+    if (p.default !== undefined) check(p.type !== 'secret' && matches(p, p.default), 'setup default 與 type 不符或含秘密預設值', p.type === 'secret' ? 'setup-secret-exposure' : 'invalid-setup');
     const options = array(p.options, 'setup options');
     check(p.type === 'choice' ? options.length > 0 : options.length === 0, 'setup options 只適用於 choice 且不可為空');
     const seen = new Set();
@@ -36,11 +37,11 @@ export function validateSetup(m, check, known) {
     if (p.visibleWhen != null) {
       const c = p.visibleWhen; known(c, ['parameterId', 'equals'], 'visibleWhen');
       const target = byId.get(c?.parameterId);
-      check(!!target && target !== p && target.type !== 'secret' && c.equals !== undefined && matches(target, c.equals), 'visibleWhen 引用或比對值無效');
+      check(!!target && target !== p && target.type !== 'secret' && c?.equals !== undefined && matches(target, c.equals), 'visibleWhen 引用或比對值無效', target?.type === 'secret' ? 'setup-secret-exposure' : 'invalid-setup-reference');
     }
     const visited = new Set(); let current = p;
     while (current) {
-      if (visited.has(current)) { check(false, 'visibleWhen 形成循環'); break; }
+      if (visited.has(current)) { check(false, 'visibleWhen 形成循環', 'invalid-setup-reference'); break; }
       visited.add(current); current = byId.get(current.visibleWhen?.parameterId);
     }
   }
@@ -48,17 +49,18 @@ export function validateSetup(m, check, known) {
   for (const c of commands) {
     known(c, ['commandId', 'name', 'runner', 'script', 'payloads', 'arguments', 'operatingSystems', 'architectures', 'timeoutMinutes', 'runOnUpdate'], 'setup command');
     if (!object(c)) continue;
-    check(id(c.commandId) && !commandIds.has(c.commandId), 'setup commandId 為必填且不可重複'); commandIds.add(c.commandId);
+    check(id(c.commandId), 'setup commandId 為必填且必須是小寫 dot/dash/underscore 形式');
+    check(!commandIds.has(c.commandId), 'setup commandId 不可重複', 'duplicate-setup-id'); commandIds.add(c.commandId);
     check(text(c.name), 'setup command name 為必填');
     check(['powershell', 'bash'].includes(c.runner), 'setup runner 不支援');
-    check(text(c.script) && !unsafe(c.script) && !/\.(exe|dll|msi|bat|cmd|com|scr|ps1xml|zip|7z|rar)$/i.test(c.script), 'setup script 路徑或副檔名無效');
+    check(text(c.script) && !unsafe(c.script) && !/\.(exe|dll|msi|bat|cmd|com|scr|ps1xml|zip|7z|rar)$/i.test(c.script), 'setup script 路徑或副檔名無效', text(c.script) && unsafe(c.script) ? 'path-escape' : 'invalid-setup', typeof c.script === 'string' ? c.script : 'lcpack.json');
     const payloads = array(c.payloads, 'payloads');
-    check(new Set(payloads).size === payloads.length && payloads.every(p => text(p) && !unsafe(p)), 'setup payload 路徑無效或重複');
+    check(new Set(payloads).size === payloads.length && payloads.every(p => text(p) && !unsafe(p)), 'setup payload 路徑無效或重複', payloads.some(p => text(p) && unsafe(p)) ? 'path-escape' : 'invalid-setup');
     for (const arg of array(c.arguments, 'arguments')) {
       check(typeof arg === 'string', 'setup arguments 必須是文字');
       for (const token of tokens(arg)) {
         const parameter = token.startsWith('parameter:') ? byId.get(token.slice(10)) : null;
-        check(!!parameter && parameter.type !== 'secret', 'setup argument 引用無效或暴露秘密');
+        check(!!parameter && parameter.type !== 'secret', 'setup argument 引用無效或暴露秘密', parameter?.type === 'secret' ? 'setup-secret-exposure' : 'invalid-setup-reference');
       }
     }
     for (const [key, allowed] of [['operatingSystems', ['windows', 'macos']], ['architectures', ['x64', 'arm64']]]) {
@@ -69,7 +71,7 @@ export function validateSetup(m, check, known) {
     check(c.runOnUpdate == null || typeof c.runOnUpdate === 'boolean', 'setup runOnUpdate 必須是布林值');
   }
   function walk(value, path = '') {
-    if (typeof value === 'string') for (const token of tokens(value)) check(token === 'setupRoot' && /^(command|cwd|args\[\d+\])$/.test(path) && commands.length > 0, 'MCP definition token 位置或引用無效');
+    if (typeof value === 'string') for (const token of tokens(value)) check(token === 'setupRoot' && /^(command|cwd|args\[\d+\])$/.test(path) && commands.length > 0, 'MCP definition token 位置或引用無效', 'invalid-setup-reference');
     else if (Array.isArray(value)) value.forEach((v, i) => walk(v, `${path}[${i}]`));
     else if (object(value)) for (const [key, v] of Object.entries(value)) walk(v, path ? `${path}.${key}` : key);
   }
@@ -78,8 +80,8 @@ export function validateSetup(m, check, known) {
     walk(c.definition);
     if (setup != null) for (const p of array(c.definition.parameters, 'MCP parameters')) {
       const declared = byId.get(p?.id);
-      check(!(declared?.type === 'secret' && declared.secretUsage === 'setup-time'), 'setup-time 秘密不得成為 MCP runtime 身分');
-      if (p?.secret === true) check(declared?.type === 'secret' && declared.secretUsage === 'runtime', 'MCP secret parameter 必須對應 runtime setup parameter');
+      check(!(declared?.type === 'secret' && declared.secretUsage === 'setup-time'), 'setup-time 秘密不得成為 MCP runtime 身分', 'setup-secret-exposure');
+      if (p?.secret === true) check(declared?.type === 'secret' && declared.secretUsage === 'runtime', 'MCP secret parameter 必須對應 runtime setup parameter', 'invalid-setup-reference');
     }
   }
 }

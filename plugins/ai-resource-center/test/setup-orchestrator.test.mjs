@@ -231,7 +231,7 @@ test('沒有設定命令的資源包（只有參數或完全沒有 setup）走�
 });
 
 test('受管 MCP 啟動描述在命令之後、target 之前寫入（managed-mcp checkpoint）', async t => {
-  const launcher = path.join(os.tmpdir(), 'launcher', 'lcaipack.exe');
+  const launcher = path.join(os.tmpdir(), 'launcher', 'lcaipack-mcp-launch.mjs');
   const e = environment(t, { launcher });
   const setup = { parameters: [{ parameterId: 'api-key', label: 'API key', type: 'secret', required: true, secretUsage: 'runtime' }], commands: [command('prepare')] };
   const manifestPkg = () => {

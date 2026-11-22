@@ -72,17 +72,18 @@ test('審核後設定值改變時套用前即判定過期，零寫入', t => {
 });
 
 test('執行期秘密 MCP：設定檔只寫受管 launcher 與非秘密身分，啟動描述只留秘密身分，秘密不落地', t => {
-  const e = environment(t, { launcher: path.join(os.tmpdir(), 'launcher', 'lcaipack.exe') });
+  const e = environment(t, { launcher: path.join(os.tmpdir(), 'launcher', 'lcaipack-mcp-launch.mjs') });
   const pkg = setupPackage({ setup: { parameters: [apiKey] }, parameters: [{ id: 'api-key', type: 'secret', secret: true, required: true }] });
   const blocked = e.planner.plan(e.intent(pkg));
   assert.ok(blocked.problems.some(p => p.code === 'deployment.setup-parameter-missing'));
   e.secrets.set(setupSecretReference({ packageKey: 'demo-mcp', parameterId: 'api-key', scope: 'global', canonicalRoot: e.userHome }), 'canary-runtime-secret');
   const plan = e.planner.plan(e.intent(pkg));
   assert.equal(plan.canApply, true, JSON.stringify(plan.problems));
+  assert.equal(e.planner.plan(e.intent(pkg)).planDigest, plan.planDigest);
   assert.equal(e.apply(plan).status, 'Succeeded');
   const node = JSON.parse(fs.readFileSync(e.config, 'utf8')).mcpServers.echo;
-  assert.deepEqual(node, { command: path.join(os.tmpdir(), 'launcher', 'lcaipack.exe'),
-    args: ['mcp-launch', '--package', 'demo-mcp', '--content', 'echo', '--scope', 'global', '--root', rules.normalize(e.root)], type: 'stdio' });
+  assert.deepEqual(node, { command: 'node',
+    args: [path.join(os.tmpdir(), 'launcher', 'lcaipack-mcp-launch.mjs'), 'mcp-launch', '--package', 'demo-mcp', '--content', 'echo', '--scope', 'global', '--root', rules.normalize(e.userHome)], type: 'stdio' });
   const descriptorPath = path.join(plan.setup.setupRoot, 'mcp', 'echo.json');
   const descriptor = JSON.parse(fs.readFileSync(descriptorPath, 'utf8'));
   assert.deepEqual(descriptor, { launchFormatVersion: 1, packageKey: 'demo-mcp', packageVersion: '1.0.0', contentId: 'echo', scope: 'global',

@@ -122,8 +122,9 @@ export function createSessionService({
   }
 
   return {
-    async getState() {
+    async getState({ secretsProtection } = {}) {
       return serial(async () => {
+        if (secretsProtection === 'unavailable') return view(await configuredUrl());
         await ensureLoaded();
         const url = await configuredUrl();
         if (!active) return view(url);

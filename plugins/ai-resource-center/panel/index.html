@@ -20,12 +20,17 @@
         <button id="btn-settings" type="button" class="btn btn-icon hidden" title="設定" aria-label="設定" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       </div>
       <div id="settings-menu" class="settings-menu hidden" role="group" aria-label="設定">
-        <div id="menu-account" class="menu-account wrap"></div>
-        <div id="menu-url" class="menu-url mono wrap"></div>
-        <div id="menu-version" class="menu-version muted hidden"></div>
+        <div class="menu-identity">
+          <div id="menu-avatar" class="menu-avatar" aria-hidden="true"></div>
+          <div class="menu-identity-text">
+            <div id="menu-account" class="menu-account ell"></div>
+            <div id="menu-url" class="menu-url muted ell"></div>
+          </div>
+        </div>
+        <hr class="menu-sep">
+        <button id="btn-my-packages" type="button" class="menu-item menu-nav"><span>📦 我的資源包</span><span class="menu-chevron" aria-hidden="true">›</span></button>
         <hr class="menu-sep">
         <div data-section="settings" id="menu-settings" class="menu-settings">
-          <label class="checkbox"><input id="catalog-preview" type="checkbox">顯示 Preview 版本</label>
           <div class="menu-field">
             <label for="check-interval">檢查更新</label>
             <select id="check-interval" aria-label="檢查更新">
@@ -33,9 +38,11 @@
               <option value="1440">1 天</option><option value="0">關閉</option>
             </select>
           </div>
+          <label class="checkbox"><input id="catalog-preview" type="checkbox">顯示 Preview 版本</label>
         </div>
         <hr class="menu-sep">
-        <button id="btn-logout" type="button" class="menu-item">登出</button>
+        <button id="btn-logout" type="button" class="btn btn-danger-outline btn-block">登出</button>
+        <div id="menu-version" class="menu-version muted hidden"></div>
       </div>
     </header>
 
@@ -70,7 +77,7 @@
     <!-- 已登入 -->
     <section id="view-main" class="content hidden">
       <section aria-label="資源包目錄" class="catalog">
-        <form id="catalog-form" class="query-bar" role="search" novalidate>
+        <form id="catalog-form" class="query-bar sticky-bar" role="search" novalidate>
           <div class="search-field">
             <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input id="catalog-search" type="search" placeholder="搜尋名稱、識別碼或說明" aria-label="搜尋資源包" autocomplete="off" spellcheck="false">
@@ -95,6 +102,18 @@
         <button id="catalog-retry" class="btn hidden" type="button">重新讀取目錄</button>
         <ul id="catalog-list" class="catalog-list"></ul>
       </section>
+    </section>
+    <!-- 我的資源包（由 developer.js 負責）：頂端按鈕列固定，清單由後續工項填入 -->
+    <section id="view-developer" class="content hidden" aria-label="我的資源包">
+      <div id="developer-toolbar" class="developer-toolbar sticky-bar">
+        <button id="btn-dev-upload" type="button" class="btn btn-primary">打包並上傳…</button>
+        <button id="btn-dev-install" type="button" class="btn">從資料夾安裝…</button>
+      </div>
+      <!-- 本機開發中（js/sideload.js 填入；沒有內容時不顯示） -->
+      <div id="developer-local" class="developer-local hidden"></div>
+      <div id="developer-status" class="muted" role="status" aria-live="polite"></div>
+      <button id="developer-retry" type="button" class="btn hidden">重新讀取</button>
+      <div id="developer-list" class="developer-list"></div>
     </section>
     <section id="view-details" class="content hidden">
       <div id="details-meta"></div>
@@ -132,6 +151,22 @@
         </div>
       </div>
     </div>
+
+    <!-- 通用 sheet（js/sheet.js）：標題、內容、錯誤區、取消與一顆主要按鈕；我的資源包的各種操作與後續打包上傳共用 -->
+    <div id="sheet-layer" class="confirm-layer hidden" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div class="confirm-sheet">
+        <div id="sheet-title" class="confirm-title"></div>
+        <div id="sheet-body" class="confirm-body"></div>
+        <div id="sheet-error" class="error hidden" role="alert"></div>
+        <div class="confirm-actions">
+          <button id="sheet-cancel" type="button" class="btn">取消</button>
+          <button id="sheet-primary" type="button" class="btn btn-primary"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通用浮動選單（js/sheet.js 的 RC.openPopover）：樣式同齒輪選單 -->
+    <div id="popover" class="popover-menu hidden" role="menu"></div>
   </div>
   <script src="markdown.js"></script>
   <!-- 面板腳本：core.js 最先（建立 window.RcPanel）、boot.js 最後（綁定事件並啟動）；各檔職責見檔頭註解 -->
@@ -144,6 +179,10 @@
   <script src="js/setup.js"></script>
   <script src="js/install.js"></script>
   <script src="js/confirm.js"></script>
+  <script src="js/sheet.js"></script>
+  <script src="js/developer.js"></script>
+  <script src="js/upload.js"></script>
+  <script src="js/sideload.js"></script>
   <script src="js/updates.js"></script>
   <script src="js/session.js"></script>
   <script src="js/boot.js"></script>

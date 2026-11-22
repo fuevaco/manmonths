@@ -10,16 +10,27 @@ export function parseManifest(source) {
   const clean = source.replace(/^\uFEFF/, '').replace(stringsAndComments, (match, string) => string || ' ');
   return JSON.parse(clean.replace(/("(?:\\.|[^"\\])*")|,(?=\s*[}\]])/g, (match, string) => string || ''));
 }
-export function validateManifest(m) {
+// 預檢使用同一套規則收集逐項問題；原 validateManifest 仍以 RcError 拋錯。
+export function collectManifestProblems(m) {
+  const problems = [];
+  validateManifest(m, { problems });
+  return problems;
+}
+export function validateManifest(m, { problems } = {}) {
   const errors = [];
-  const check = (ok, message) => { if (!ok) errors.push(message); };
+  let contextPath = 'lcpack.json', setupPhase = false;
+  const check = (ok, message, code = setupPhase ? 'invalid-setup' : 'invalid-package', problemPath = contextPath) => {
+    if (ok) return;
+    errors.push(message);
+    problems?.push({ code: `deployment.${code}`, message, path: problemPath });
+  };
   const known = (value, keys, label) => {
     check(object(value), `${label} 必須是 object`);
-    if (object(value)) for (const key of Object.keys(value)) check(keys.includes(key), `${label} 含不支援欄位 ${key}`);
+    if (object(value)) for (const key of Object.keys(value)) check(keys.includes(key), `${label} 含不支援欄位 ${key}`, key === 'schemaVersion' ? 'unsupported-package-format' : setupPhase ? 'invalid-setup' : 'invalid-package');
   };
   known(m, ['packageFormatVersion', 'key', 'name', 'type', 'version', 'description', 'category', 'tags', 'contents', 'dependencies', 'minClientVersion', 'setup'], 'lcpack.json');
-  if (!object(m)) throw new RcError(ErrorCode.invalidPackage, '資源包格式錯誤：lcpack.json 必須是 object');
-  check(m.packageFormatVersion === 1, 'packageFormatVersion 必須是 1');
+  if (!object(m)) { if (problems) return m; throw new RcError(ErrorCode.invalidPackage, '資源包格式錯誤：lcpack.json 必須是 object'); }
+  check(m.packageFormatVersion === 1, 'packageFormatVersion 必須是 1', 'unsupported-package-format');
   check(typeof m.key === 'string' && /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(m.key), 'key 格式錯誤');
   for (const k of ['name', 'description']) check(text(m[k]), `${k} 為必填文字`);
   check(['skill', 'agent', 'mcp', 'bundle'].includes(m.type), 'type 不支援');
@@ -30,9 +41,10 @@ export function validateManifest(m) {
   for (const c of Array.isArray(m.contents) ? m.contents : []) {
     known(c, ['id', 'kind', 'name', 'description', 'path', 'definition', 'hosts'], 'contents');
     if (!object(c)) continue;
+    contextPath = typeof c.path === 'string' ? c.path : 'lcpack.json';
     check(typeof c.id === 'string' && /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(c.id), 'content.id 格式錯誤');
-    check(!ids.has(c.id), 'content.id 不可重複'); ids.add(c.id);
-    check(['skill', 'agent', 'mcp', 'prompt', 'command'].includes(c.kind), 'content.kind 不支援');
+    check(!ids.has(c.id), 'content.id 不可重複', 'duplicate-content-id'); ids.add(c.id);
+    check(['skill', 'agent', 'mcp', 'prompt', 'command'].includes(c.kind), 'content.kind 不支援', 'unsupported-content-kind');
     if (!['skill', 'agent'].includes(c.kind) || c.name != null) check(text(c.name), 'content.name 為必填');
     if (m.type !== 'bundle') check(m.type === c.kind, 'contents.kind 必須與 type 相同');
     if (c.hosts != null) {
@@ -60,18 +72,19 @@ export function validateManifest(m) {
           check(text(p?.id) && !parameters.has(p.id), 'MCP parameter.id 為必填且不可重複'); parameters.add(p?.id);
         }
       }
-      if (object(d.env)) for (const [key, value] of Object.entries(d.env)) check(!(typeof value === 'string' && /TOKEN|SECRET|PASSWORD|APIKEY|API_KEY/i.test(key)), 'MCP env 疑似內嵌秘密，請改用 parameters');
+      if (object(d.env)) for (const [key, value] of Object.entries(d.env)) check(!(typeof value === 'string' && /TOKEN|SECRET|PASSWORD|APIKEY|API_KEY/i.test(key)), 'MCP env 疑似內嵌秘密，請改用 parameters', 'secret-unresolved');
     } else {
       check(c.definition == null, '檔案類型不可使用 definition');
-      check(text(c.path) && !unsafe(c.path), 'content.path 為必填且不可為絕對路徑或含 ..');
+      check(text(c.path) && !unsafe(c.path), 'content.path 為必填且不可為絕對路徑或含 ..', text(c.path) && unsafe(c.path) ? 'path-escape' : 'invalid-package');
     }
   }
   if (m.dependencies != null) {
     check(object(m.dependencies), 'dependencies 必須是 object');
-    check(m.dependencies.cli == null || Array.isArray(m.dependencies.cli), 'dependencies.cli 必須是 array');
-    for (const d of Array.isArray(m.dependencies.cli) ? m.dependencies.cli : []) check(text(d?.name) && text(d?.checkCommand), 'CLI dependency 必須揭露 name 與 checkCommand');
+    check(m.dependencies?.cli == null || Array.isArray(m.dependencies.cli), 'dependencies.cli 必須是 array');
+    for (const d of Array.isArray(m.dependencies?.cli) ? m.dependencies.cli : []) check(text(d?.name) && text(d?.checkCommand), 'CLI dependency 必須揭露 name 與 checkCommand');
   }
+  contextPath = 'lcpack.json'; setupPhase = true;
   validateSetup(m, check, known);
-  if (errors.length) throw new RcError(ErrorCode.invalidPackage, `資源包格式錯誤：${errors.join('；')}`);
+  if (errors.length && !problems) throw new RcError(ErrorCode.invalidPackage, `資源包格式錯誤：${errors.join('；')}`);
   return m;
 }

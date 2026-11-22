@@ -22,6 +22,7 @@ export const ProblemCodes = Object.freeze({
   setupIntentMismatch: 'deployment.setup-intent-mismatch',
   setupCancelled: 'deployment.setup-cancelled',
   secretUnresolved: 'deployment.secret-unresolved',
+  mcpLauncherUnavailable: 'deployment.mcp-launcher-unavailable',
   consentRequired: 'deployment.consent-required',
   sourceChanged: 'deployment.source-changed',
   planStale: 'deployment.plan-stale',

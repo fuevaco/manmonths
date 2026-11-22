@@ -9,12 +9,13 @@
   // 設定命令執行或略過的理由（對照 LC-AI-Pack PlanRenderer.DescribeReason）
   const REASON_LABELS = { FirstRun: '第一次執行', PreviousFailure: '上一次執行沒有成功，這次重試', ScriptChanged: '腳本內容與上次成功時不同', Reconfigure: '重新套用設定',
     UpdateRunOnUpdate: '版本改變且作者宣告更新時執行', SkippedAlreadySucceeded: '同版本且上次已成功', SkippedUpdateWithoutRunOnUpdate: '版本改變但作者未宣告更新時執行' };
+  const BORROWED_NOTICE = '此命令是為 macOS 撰寫，將在 Linux 以 bash 執行。'; // Linux 借用 macOS 命令（planning.mjs 的 borrowedFromOs）
   const ELIGIBILITY_LABELS = { UnsupportedOperatingSystem: '不適用於本機作業系統', UnsupportedArchitecture: '不適用於本機處理器架構' };
 
   let confirmState = null; // { key, action, extra, response, inputs, replanned, busy, running }
   RC.confirmOpen = () => Boolean(confirmState);
 
-  const commandLine = (c) => `${c.runner} ${c.script}${c.arguments?.length ? ` ${c.arguments.join(' ')}` : ''}`;
+  const commandLine = (c, joiner = ' ') => `${c.runner}${joiner}${c.script}${c.arguments?.length ? ` ${c.arguments.join(' ')}` : ''}`;
   const commandKey = (list) => JSON.stringify((list || []).map(c => [c.commandId, c.willExecute === true, c.runner, c.script]));
   const blockedKey = (list) => JSON.stringify((list || []).map(b => [b.targetId, b.reason]));
   /** 儲存參數必然改變計畫；若重新規劃後只剩剛才已確認過的同一批命令與受阻目標，不再重複詢問。 */
@@ -29,20 +30,23 @@
     return el('section', { className: 'confirm-section', 'data-section': name }, el('div', { className: 'confirm-heading', textContent: heading }), ...children);
   }
 
-  function commandSection(commands) {
+  /** 設定命令清單（例外確認層與從資料夾安裝的 sheet 共用）；heading／joiner 供 sheet 沿用草圖的「安裝時會執行」與「runner · 腳本」寫法。 */
+  function commandSection(commands, { heading, joiner = ' ' } = {}) {
     const run = commands.filter(c => c.willExecute), skipped = commands.filter(c => !c.willExecute);
-    return confirmSection('setupCommands', run.length ? `將先執行 ${run.length} 個設定命令` : '設定命令（這次不執行）',
+    return confirmSection('setupCommands', run.length ? heading || `將先執行 ${run.length} 個設定命令` : '設定命令（這次不執行）',
       run.length ? el('div', { className: 'hint', textContent: '命令由資源包作者提供，會在你的電腦上依序執行；任何一項失敗就不安裝。' }) : null,
-      ...run.map(c => el('div', { className: 'confirm-item', 'data-role': 'setup-command', 'data-command-id': c.commandId },
+      ...run.flatMap(c => [el('div', { className: 'confirm-item', 'data-role': 'setup-command', 'data-command-id': c.commandId },
         el('strong', { textContent: c.name || c.commandId }),
-        el('div', { className: 'location-path mono', textContent: commandLine(c) }),
-        c.timeoutMinutes ? el('div', { className: 'hint', textContent: `最長執行 ${c.timeoutMinutes} 分鐘` }) : null)),
+        el('div', { className: 'location-path mono', textContent: commandLine(c, joiner) }),
+        c.timeoutMinutes ? el('div', { className: 'hint', textContent: `最長執行 ${c.timeoutMinutes} 分鐘` }) : null),
+        c.borrowedFromOs === 'macos' ? el('div', { className: 'notice', 'data-role': 'borrowed-command-notice', textContent: BORROWED_NOTICE }) : null]),
       skipped.length ? el('details', { className: 'backup-fold' }, el('summary', { textContent: `略過 ${skipped.length} 個命令` }),
         ...skipped.map(c => el('div', { className: 'confirm-item', 'data-role': 'skipped-command' },
           el('div', { textContent: `${c.name || c.commandId}：${ELIGIBILITY_LABELS[c.eligibility] || REASON_LABELS[c.reason] || '這次不需要執行'}` }),
           el('div', { className: 'location-path mono', textContent: commandLine(c) })))) : null);
   }
 
+  /** 受阻目標清單（例外確認層與從資料夾安裝的 sheet 共用）。 */
   function blockedSection(plan, label, allBlocked) {
     const blocked = plan.blockedTargets || [];
     const rest = Number.isFinite(plan.deployableCount) ? plan.deployableCount : 0;
@@ -50,6 +54,12 @@
       el('ul', { className: 'location-list' }, ...blocked.map(t => RC.targetRow(t, 'blocked-target', '此位置受阻'))),
       !allBlocked && rest > 0 ? el('div', { 'data-role': 'deployable', textContent: `其餘 ${rest} 個位置仍會${label}。` }) : null);
   }
+
+  RC.commandSection = commandSection;
+  RC.blockedSection = blockedSection;
+  /** 儲存參數後重新規劃，若只剩剛才已確認過的同一批命令與受阻目標則不再詢問（確認層與 sheet 共用）。 */
+  RC.sameApproval = sameApproval;
+  RC.runTimeout = runTimeout;
 
   /** 解除安裝的確認內容：將移除的位置（工具圖示、友善名稱、根目錄）與備份、保留說明。 */
   function uninstallSection(deployments) {

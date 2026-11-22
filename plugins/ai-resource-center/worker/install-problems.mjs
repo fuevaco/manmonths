@@ -1,4 +1,5 @@
 // 一鍵安裝的使用者說明；部署核心仍使用原始規則與診斷。
+import { LinuxKeyringHelp } from './setup/secrets.mjs';
 const replacements = [
   [/canonical root/gi, '根目錄'], [/contentId/g, '內容識別碼'], [/\bpackage\b/gi, '資源包'],
   [/\bownership\b/gi, '管理權'], [/\bshadowing\b/gi, '載入優先順序'], [/\brollback\b/gi, '還原'],
@@ -42,7 +43,8 @@ function message(p) {
     case 'deployment.setup-runner-unavailable': return '找不到設定命令所需的執行程式，請先安裝後重試';
     case 'deployment.setup-intent-mismatch': return '安裝動作已變更，請重新執行安裝';
     case 'deployment.setup-cancelled': return '已取消設定，尚未完成安裝';
-    case 'deployment.secret-unresolved': return '無法讀取安全儲存的設定參數，請重新設定後重試';
+    case 'deployment.secret-unresolved': return p.explanation === LinuxKeyringHelp ? LinuxKeyringHelp : '無法讀取安全儲存的設定參數，請重新設定後重試';
+    case 'deployment.mcp-launcher-unavailable': return p.summary;
     case 'deployment.consent-required': return '需先確認備份並取代現有內容';
     case 'deployment.source-changed': return '資源包內容已變更，請重新下載後安裝';
     case 'deployment.plan-stale': return '這個位置的內容已變動，請重新執行安裝';

@@ -59,5 +59,5 @@ export function createRunnerRegistry({ probeDirectories, exists, env = process.e
 
 /** 偵測本機環境；GUI 與外掛都以本機判斷為準，市集不參與。未知架構回傳原始名稱，讓計畫能如實揭露不相容。 */
 export function detectSetupEnvironment({ platform = process.platform, arch = os.arch() } = {}) {
-  return { operatingSystem: platform === 'darwin' ? 'macos' : 'windows', architecture: arch === 'x64' ? 'x64' : arch === 'arm64' ? 'arm64' : String(arch).toLowerCase() };
+  return { operatingSystem: platform === 'darwin' ? 'macos' : platform === 'linux' ? 'linux' : 'windows', architecture: arch === 'x64' ? 'x64' : arch === 'arm64' ? 'arm64' : String(arch).toLowerCase() };
 }

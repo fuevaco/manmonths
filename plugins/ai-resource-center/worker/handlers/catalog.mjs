@@ -5,6 +5,7 @@ import { statusError, unreachableError } from '../auth.mjs';
 import { validatePreferences, defaultDirection } from '../preferences.mjs';
 import { sortCatalog } from '../catalog-sort.mjs';
 import { recommendedVersion } from '../package-service.mjs';
+import { readSourceManifest } from '../local-source.mjs';
 
 export function registerCatalogHandlers(router, { session, installed, preferences, enrich }) {
   router.handle('rc.catalog.list', async (input) => {
@@ -53,11 +54,15 @@ export function registerCatalogHandlers(router, { session, installed, preference
     if (input.installation === 'installed') {
       for (const r of records) {
         if (seen.has(r.packageKey)) continue;
-        if (input.type && input.type !== r.kind) continue;
+        // 市集沒有的開發中版本：名稱與類型讀來源資料夾的 lcpack.json（對照 RefreshLocalSourcePlatform），讀不到時用識別碼。
+        const manifest = r.source === 'local' ? readSourceManifest(r.sourcePath) : null;
+        const name = typeof manifest?.name === 'string' && manifest.name.trim() ? manifest.name : r.packageKey;
+        const type = ['skill', 'agent', 'mcp', 'bundle'].includes(manifest?.type) ? manifest.type : r.kind;
+        if (input.type && input.type !== type) continue;
         if (input.category) continue; // 收據沒有分類，不猜測市集分類。
-        if (input.search?.trim() && !r.packageKey.toLowerCase().includes(input.search.trim().toLowerCase())) continue;
+        if (input.search?.trim() && ![r.packageKey, name].some(text => text.toLowerCase().includes(input.search.trim().toLowerCase()))) continue;
         seen.add(r.packageKey);
-        data.push({ packageKey: r.packageKey, name: r.packageKey, type: r.kind, latestVisibleVersion: null, owner: null, category: null, lastUploadedAt: null, hasFullGuide: false, installCount: null, downloadCount: 0 });
+        data.push({ packageKey: r.packageKey, name, type, latestVisibleVersion: null, owner: null, category: null, lastUploadedAt: null, hasFullGuide: false, installCount: null, downloadCount: 0 });
       }
     }
     const projected = data.map(p => ({ ...p, ...installed.project(p.packageKey, p.latestVisibleVersion, records) })).filter(p =>

@@ -113,7 +113,7 @@ test('macOS 透過 security 存取 Keychain：service 與 account 沿用 LC-AI-P
 });
 
 test('不支援的平台沒有明文替代儲存', () => {
-  assert.throws(() => createDefaultSecretStore({ platform: 'linux' }), /Windows Credential Manager 與 macOS Keychain/);
+  assert.throws(() => createDefaultSecretStore({ platform: 'freebsd' }), /Windows Credential Manager 與 macOS Keychain/);
 });
 
 test('Windows 實機：Credential Manager 寫入、讀回、刪除合成秘密', { skip: process.platform !== 'win32' }, () => {

@@ -29,7 +29,7 @@ function pkgBytes({ secret }) {
     setup: { parameters: secret ? [...parameters, apiKey] : parameters } }), 'README.md': '# Demo' });
 }
 
-async function environment(t, { secret = true, launcher } = {}) {
+async function environment(t, { secret = true, launcher = null } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rc-setup-'));
   const userHome = path.join(dir, 'home'), lcaipackHome = path.join(dir, 'lcaipack'), project = path.join(dir, 'project');
   fs.mkdirSync(path.join(userHome, '.claude'), { recursive: true }); fs.writeFileSync(path.join(userHome, '.claude', 'settings.json'), '{}');

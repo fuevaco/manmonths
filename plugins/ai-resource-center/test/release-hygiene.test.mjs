@@ -73,7 +73,7 @@ test('沒有內部位址：IP 只允許 127.0.0.1，不得有內網網段、內�
     // 非 URL 形式的內部網域尾碼與公司網域名稱。
     ['內部網域', /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:corp|lan|intra|intranet|com\.tw|org\.tw|gov\.tw)\b/gi],
     ['組織名稱', /linkchain|aiworkcenter|aiworkcentre/gi,
-      (m, line, rel) => /com\.linkchain\.lcaipack/.test(line) && ['worker/setup/secrets.mjs', 'test/setup-secrets.test.mjs', 'README.md'].includes(rel)]
+      (m, line, rel) => /com\.linkchain\.lcaipack/.test(line) && ['worker/setup/secrets.mjs', 'worker/setup/mcp-launcher/lcaipack-mcp-launch.mjs', 'test/setup-secrets.test.mjs', 'test/linux-support.test.mjs', 'README.md'].includes(rel)]
   ];
   assert.deepEqual(findings(rules), []);
 });

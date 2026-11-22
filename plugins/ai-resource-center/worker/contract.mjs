@@ -29,6 +29,8 @@ export const ErrorCode = Object.freeze({
   sessionUnavailable: 'session_unavailable',
   /** 其他市集錯誤回應 */
   marketError: 'market_error',
+  /** 市集並行操作衝突，面板應重新讀取清單 */
+  conflict: 'conflict',
   versionUnavailable: 'version_unavailable',
   checksumMismatch: 'checksum_mismatch',
   guideUnavailable: 'guide_unavailable',
@@ -46,6 +48,8 @@ export const ErrorCode = Object.freeze({
   sharedDataTooNew: 'sharedDataTooNew',
   /** 作業系統安全儲存區無法存取秘密；不會改用明文 */
   secretStoreFailed: 'secret_store_failed',
+  /** 開發中版本的來源資料夾已不存在，無法重新打包（重新安裝、補裝） */
+  sourceMissing: 'source_missing',
   internal: 'internal'
 });
 

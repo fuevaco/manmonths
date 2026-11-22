@@ -112,9 +112,11 @@
   /** 卡片與明細共用的安裝狀態判斷。 */
   RC.installState = function installState(p) {
     const status = p.installationStatus || 'notInstalled';
-    const updatable = status === 'updateAvailable';
+    // 開發中版本（從資料夾安裝）不算可更新；卡片顯示「開發中 x.y.z」與藍色左邊
+    const dev = typeof p.devVersion === 'string' && p.devVersion !== '';
+    const updatable = !dev && status === 'updateAvailable';
     const installed = !updatable && status !== 'notInstalled' && (p.deployments || []).length > 0;
-    return { status, updatable, installed, kind: updatable ? 'update' : status === 'unavailable' ? 'unavailable' : installed ? 'installed' : 'none' };
+    return { status, updatable, installed, dev, kind: dev ? 'dev' : updatable ? 'update' : status === 'unavailable' ? 'unavailable' : installed ? 'installed' : 'none' };
   };
 
   /** 簡易版本比較（x.y.z[-pre]）：面板只用來挑出最舊／最新的已安裝版本顯示；是否可更新由 worker 判斷。 */
@@ -150,8 +152,15 @@
     return status === 'unavailable' ? '已下架' : '未安裝';
   }
 
-  /** 已下架時 worker 附的說明（statusHint）；其他狀態不顯示。 */
-  const statusHint = (p) => (p.installationStatus === 'unavailable' && typeof p.statusHint === 'string' ? p.statusHint.trim() : '');
+  /** 已下架、或開發中版本而市集沒有這個資源包時，worker 附的說明（statusHint）；其他狀態不顯示。 */
+  const statusHint = (p) => ((p.installationStatus === 'unavailable' || RC.installState(p).dev) && typeof p.statusHint === 'string' ? p.statusHint.trim() : '');
+
+  /** 開發中版本的狀態文字：藍色「開發中」徽章＋版本（＋待補裝位置數）。 */
+  function devStatusText(p) {
+    const pending = RC.pendingCount(p);
+    return el('span', { className: 'card-status-text', 'data-role': 'status-text', 'data-kind': 'dev', ...(statusHint(p) ? { title: statusHint(p) } : {}) },
+      el('span', { className: 'badge b-dev', 'data-role': 'dev-badge', textContent: '開發中' }), el('span', { textContent: ` ${p.devVersion}${pending > 0 ? ` · ${pending} 個新位置` : ''}` }));
+  }
 
   /** 一行式安裝狀態：工具圖示＋狀態文字＋失敗與略過提示，右側為安裝／更新／補裝按鈕；卡片與明細頁共用。 */
   function statusRow(p, { showText = true } = {}) {
@@ -159,7 +168,7 @@
     if (!tools && !showText) return null;
     return el('div', { className: 'card-status', 'data-role': 'status-row' },
       tools,
-      showText ? el('span', { className: 'card-status-text', 'data-role': 'status-text', 'data-kind': RC.installState(p).kind, textContent: installText(p), ...(statusHint(p) ? { title: statusHint(p) } : {}) }) : null,
+      showText ? (RC.installState(p).dev ? devStatusText(p) : el('span', { className: 'card-status-text', 'data-role': 'status-text', 'data-kind': RC.installState(p).kind, textContent: installText(p), ...(statusHint(p) ? { title: statusHint(p) } : {}) })) : null,
       RC.failureBadge(p),
       RC.skippedBadge(p),
       el('span', { className: 'card-actions', 'data-slot': 'card-actions' }, ...(showText ? [RC.actionButton(p)].flat() : [])));
@@ -167,7 +176,7 @@
 
   /** 卡片與明細共用：一行式狀態列，展開時其下接失敗清單與略過清單。 */
   RC.stateBlock = (p, options) => [statusRow(p, options),
-    options?.showText !== false && statusHint(p) ? el('div', { className: 'hint status-hint', 'data-role': 'status-hint', textContent: statusHint(p) }) : null,
+    options?.showText !== false && !RC.installState(p).dev && statusHint(p) ? el('div', { className: 'hint status-hint', 'data-role': 'status-hint', textContent: statusHint(p) }) : null,
     RC.failureList(p), RC.skippedList(p), RC.detachedNote(p)];
 
   // ---------- 卡片 ----------
@@ -190,6 +199,8 @@
       Number.isFinite(p.installCount) ? el('span', { className: 'meta-item', 'data-meta': 'installs' }, RC.ICONS.installs(), el('span', { textContent: `${p.installCount} 次` })) : null,
       date ? el('span', { className: 'meta-item', 'data-meta': 'date', textContent: date }) : null
     ].filter(Boolean);
+    // 開發中版本而市集沒有這個資源包：沒有擁有者與安裝次數，資訊列改放說明（草圖 §4）
+    if (!items.length && RC.installState(p).dev && statusHint(p)) items.push(el('span', { className: 'meta-item', 'data-meta': 'hint', textContent: statusHint(p) }));
     if (!items.length) return null;
     const row = el('div', { className: 'card-meta', 'data-role': 'meta' });
     items.forEach((item, i) => row.append(...(i ? [el('span', { className: 'meta-sep', textContent: '·' }), item] : [item])));
@@ -207,10 +218,10 @@
   }
 
   function catalogCard(p) {
-    const { status, updatable, installed } = RC.installState(p);
+    const { status, updatable, installed, dev } = RC.installState(p);
     const typeText = [TYPE_LABELS[p.type] || p.type, p.category].filter(Boolean).join(' · ');
     const description = typeof p.description === 'string' && p.description.trim() ? p.description.trim() : '';
-    const card = el('li', { className: `panel-box catalog-card wrap${installed ? ' is-installed' : ''}${updatable ? ' has-update' : ''}`, 'data-package-key': p.packageKey, 'data-install-status': status,
+    const card = el('li', { className: `panel-box catalog-card wrap${installed ? ' is-installed' : ''}${updatable ? ' has-update' : ''}${dev ? ' is-dev' : ''}`, 'data-package-key': p.packageKey, 'data-install-status': status,
       role: 'link', 'aria-label': `查看詳情：${p.name}` },
       el('div', { className: 'card-head' },
         el('div', { className: 'card-title', 'data-role': 'title' }, updatable ? el('span', { className: 'update-badge', 'data-role': 'update-badge', textContent: '可更新' }) : null, el('strong', { textContent: p.name })),
@@ -232,7 +243,7 @@
   /** 目前畫面上的資源包資料：明細頁開著該資源包時用明細，否則用清單。 */
   RC.packageOf = function packageOf(key) {
     if (state.currentPackage?.packageKey === key && (state.currentDetail || state.detailSeed)) return RC.detailView();
-    return catalogItems.get(key) || null;
+    return catalogItems.get(key) || RC.localPackageOf?.(key) || null;
   };
 
   RC.clearCatalog = () => $('catalog-list').replaceChildren();
@@ -249,5 +260,6 @@
       $('view-main').scrollTop = scroll;
     }
     if (state.currentPackage?.packageKey === key) { RC.renderDetailTop(); RC.updateSetupButton(); }
+    RC.renderLocalPackages?.(); // 我的資源包的「本機開發中」卡片也依執行中狀態重繪
   };
 })();

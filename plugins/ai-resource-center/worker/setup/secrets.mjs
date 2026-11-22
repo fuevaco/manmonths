@@ -3,6 +3,7 @@
 // - Windows：Credential Manager Generic credential（target name = key、UTF-8 blob、Persist=LocalMachine、
 //   Comment "LC-AI-Pack"、UserName "lcaipack"），經 Windows PowerShell 的 P/Invoke 存取；
 // - macOS：Keychain generic password（service com.linkchain.lcaipack、account = key），經 `security`。
+// - Linux：Secret Service（同 service 與 account），經 `secret-tool`。
 // 秘密值只經子行程 stdin 傳遞，不進命令列、環境變數、檔案或日誌；沒有任何明文替代儲存。
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -175,6 +176,33 @@ export function createMacKeychainStore({ run = defaultRun } = {}) {
 /** 依作業系統選擇安全儲存區；不支援的平台直接失敗，沒有明文替代。 */
 export function createDefaultSecretStore({ platform = process.platform, run } = {}) {
   if (platform === 'win32') return createWindowsCredentialStore(run ? { run } : {});
+  if (platform === 'linux') return createLinuxSecretStore(run ? { run } : {});
   if (platform === 'darwin') return createMacKeychainStore(run ? { run } : {});
-  throw new SetupSecretStoreError('目前只支援 Windows Credential Manager 與 macOS Keychain；不提供明文秘密儲存替代。');
+  throw new SetupSecretStoreError('目前只支援 Windows Credential Manager 與 macOS Keychain，以及 Linux Secret Service；不提供明文秘密儲存替代。');
+}
+
+export const LinuxKeyringHelp = '請安裝 libsecret-tools（sudo apt install libsecret-tools），並解鎖 GNOME 鑰匙圈';
+
+/** Secret Service；值只經 stdin 寫入。lookup 原樣回傳 UTF-8，不 trim。 */
+export function createLinuxSecretStore({ run = defaultRun } = {}) {
+  const call = (verb, key, input) => {
+    let result;
+    try {
+      result = run('secret-tool', [verb, ...(verb === 'store' ? ['--label=LC-AI-Pack'] : []), 'service', KeychainService, 'account', key], input);
+    } catch { throw new SetupSecretStoreError(LinuxKeyringHelp); }
+    // 沒有值也沒有診斷時，再查同一身分的項目，避免把鎖住而無法讀取的項目當成不存在。
+    if (verb !== 'store' && result.status === 1 && !result.stderr && !result.stdout) {
+      let found;
+      try { found = run('secret-tool', ['search', '--all', 'service', KeychainService, 'account', key], undefined); }
+      catch { throw new SetupSecretStoreError(LinuxKeyringHelp); }
+      if (found.status !== 0 || found.stdout || found.stderr) throw new SetupSecretStoreError(LinuxKeyringHelp);
+    }
+    if (result.status !== 0 && !(verb !== 'store' && result.status === 1 && !result.stderr && !result.stdout)) {
+      throw new SetupSecretStoreError(LinuxKeyringHelp);
+    }
+    return result;
+  };
+  const get = key => { const r = call('lookup', key); return r.status === 0 ? r.stdout : null; };
+  return { get, existsMany: keys => keys.map(key => get(key) !== null),
+    set: (key, value) => void call('store', key, value), delete: key => void call('clear', key) };
 }

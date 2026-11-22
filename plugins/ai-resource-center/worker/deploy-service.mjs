@@ -2,6 +2,8 @@
 // 並在使用者確認後只套用那一份計畫。規劃與套用核心在 worker/deploy/（對照 LC-AI-Pack Deployment）。
 import os from 'node:os';
 import { readFileSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { validatePackage } from './package-validator.mjs';
 import { hostLabel } from './host-labels.mjs';
 import { pluginVersion } from './plugin-version.mjs';
 import { resolveInstallAction } from './install-reports.mjs';
@@ -49,7 +51,7 @@ const projectProblem = (p) => ({ code: p.code, severity: p.severity, summary: p.
  * @param {object} [deps.env]   偵測 CODEX_HOME／CLAUDE_CONFIG_DIR 用的環境變數
  * @param {{report(input: object): Promise<void>}} [deps.installReports]  安裝回報入口（工項 12）；成功部署至少一個目標後呼叫
  * @param {object} [deps.secretStore]  秘密的安全儲存區（測試注入）；預設為作業系統的 Credential Manager／Keychain
- * @param {string} [deps.mcpLauncherPath]  受管 MCP launcher；Orca 目前沒有，需要執行期秘密的 MCP 會受阻
+ * @param {string|(() => string|null)} [deps.mcpLauncherPath]  外掛自帶 MCP launcher 腳本路徑或延遲解析函式
  * @param {object} [deps.runners]  設定命令的 runner registry（測試注入）；預設為固定的 PowerShell／bash
  * @param {{operatingSystem: string, architecture: string}} [deps.setupEnvironment]  設定命令相容性判斷用的本機環境（測試注入）
  * @param {{run(request: object): Promise<object>}} [deps.commandExecutor]  設定命令執行器（測試注入）；產品路徑永遠是真實子行程
@@ -68,6 +70,23 @@ export function createDeployService({ downloads, installed, session = null, lcai
   const sameOrigin = (a, b) => (a === null && b === null) || (!!a && !!b && a.marketUrl === b.marketUrl && a.account === b.account);
 
   const rules = createPathRules({ platform });
+
+  /**
+   * 規劃用的確切 ZIP：市集版本經受管下載驗證；從資料夾安裝（input.localSource）則讀暫存打包產物並以打包時的 SHA-256 驗證，
+   * 不呼叫市集（對照 SideloadInstallViewModel：全程不呼叫 Registry API）。
+   */
+  async function artifactOf(input) {
+    const local = input.localSource;
+    if (!local) return downloads.fetchVerified(input);
+    let bytes;
+    try { bytes = await readFile(local.zipPath); }
+    catch { throw new RcError(ErrorCode.invalidPackage, '暫存的資源包已不存在，請重新從資料夾安裝'); }
+    const { sha256, manifest } = validatePackage(bytes, { packageKey: input.packageKey, version: input.version, sha256: local.sha256 });
+    return { bytes, sha256, manifest, version: { version: input.version, channel: '' }, localSourcePath: local.folder };
+  }
+  // 收據的版本通道：本機來源為空字串（對照 SideloadInstallViewModel channel: ""），其餘依市集版本。
+  const channelOf = fetched => fetched.localSourcePath != null ? '' : fetched.version.channel === 'preview' ? 'preview' : 'release';
+
   function detectTargets(input = {}) {
     if (input.scope !== undefined && input.scope !== Scope.global || input.projectRoot !== undefined) throw badParams('Orca 只支援全域部署');
     let config = {};
@@ -170,7 +189,7 @@ export function createDeployService({ downloads, installed, session = null, lcai
 
   function runPlan(state) {
     // 動作決定設定命令的判斷意圖（同版略過、更新重跑、重新設定）；規劃與套用必須使用同一個意圖。
-    const planner = guard(() => createDeploymentPlanner({ home, userHome, clientVersion, channel: state.channel, operatingSystem: platform === 'darwin' ? 'macos' : 'windows',
+    const planner = guard(() => createDeploymentPlanner({ home, userHome, clientVersion, channel: state.channel, operatingSystem: platform === 'darwin' ? 'macos' : platform === 'linux' ? 'linux' : 'windows',
       shadowingProjectRoots: registeredProjects(), secrets: setupInput.secrets, mcpLauncherPath,
       windowsOrcaAppDataDirectory: resolveWindowsOrcaAppData(platform, env, userHome),
       setupPlanning: { intent: Actions[state.action].intent, runners, environment: setupEnvironment } }));
@@ -185,11 +204,11 @@ export function createDeployService({ downloads, installed, session = null, lcai
     async packageSetup(input, save = false) {
       packageInput(input, true);
       const origin = await currentOrigin();
-      const fetched = await downloads.fetchVerified(input);
+      const fetched = await artifactOf(input);
       if (!sameOrigin(origin, await currentOrigin())) throw new RcError(ErrorCode.planStale, PLAN_ORIGIN_CHANGED);
       const state = { intent: { package: { bytes: fetched.bytes, expectedSha256: fetched.sha256 }, scope: Scope.global,
         hosts: [], hostRoots: [], existingContent: 'BackupAndReplace', allowScopeShadowing: true },
-        origin, action: 'reconfigure', channel: fetched.version.channel, targetIds: [], targetsById: new Map() };
+        origin, action: 'reconfigure', channel: fetched.localSourcePath != null ? '' : fetched.version.channel, targetIds: [], targetsById: new Map() };
       let summary = runPlan(state);
       if (save) {
         guard(() => setupInput.save(pending.plan.setup, state.intent, input));
@@ -203,7 +222,7 @@ export function createDeployService({ downloads, installed, session = null, lcai
       // 不帶版本的呼叫沿用純本機偵測；面板以確切資源版本篩選可載入的選項。
       if (input?.version === undefined) return { targets };
       packageInput(input, true);
-      const { manifest } = await downloads.fetchVerified(input);
+      const { manifest } = await artifactOf(input);
       return { contents: manifest.contents.map(({ kind, id }) => ({ kind, id })), targets: packageTargets(targets, manifest.contents, input.packageKey).filter(t => {
         const surface = HostProfiles.find(t.hostId)?.findSurface(t.surfaceId);
         const supported = c => getDriver(c.kind) && surface?.routes.get(c.kind)?.templateFor(t.scope);
@@ -220,7 +239,7 @@ export function createDeployService({ downloads, installed, session = null, lcai
         input.missingTargets.some(id => !input.targets.includes(id)))) throw badParams('補裝位置不在所選部署目標');
       pending = null;
       const origin = await currentOrigin();
-      const fetched = await downloads.fetchVerified(input);
+      const fetched = await artifactOf(input);
       // 下載期間工作階段若換了（登出、換市集），這份下載不屬於目前的來源。
       if (!sameOrigin(origin, await currentOrigin())) throw new RcError(ErrorCode.planStale, PLAN_ORIGIN_CHANGED);
       const detected = new Map(packageTargets(detectTargets(input), fetched.manifest.contents, input.packageKey).map(t => [t.id, t]));
@@ -236,11 +255,13 @@ export function createDeployService({ downloads, installed, session = null, lcai
         // ADR 0002：可解決的衝突自動處理。本機修改與未受管同名內容先備份再套用；全域／專案並存持續揭露；
         // 他包擁有、設定檔無法安全變更等不可繞過的阻擋仍由核心判定。
         existingContent: 'BackupAndReplace', allowScopeShadowing: true,
+        // 從資料夾安裝：收據寫 source: "local"＋sourcePath（原樣），且不送安裝回報。
+        ...(fetched.localSourcePath != null ? { localSourcePath: fetched.localSourcePath } : {}),
         hostRoots: installHosts.filter(h => selected.some(t => sameHost(t, h))).map(host => ({ host, canonicalRoots: selected.filter(t => sameHost(t, host)).map(t => t.rootPath),
           missingContentRoots: selected.filter(t => sameHost(t, host) && missingTargets.has(t.id)).map(t => t.rootPath),
           origins: Object.fromEntries(selected.filter(t => sameHost(t, host)).map(t => [t.rootPath, sameHost(t, codexHost) && t.canonicalRoot === canonicalHome ? 'SharedSkills' : t.origin])) }))
       };
-      return runPlan({ intent, origin, action: input.action ?? 'install', channel: fetched.version.channel === 'preview' ? 'preview' : 'release', targetIds: [...input.targets], targetsById: detected });
+      return runPlan({ intent, origin, action: input.action ?? 'install', channel: channelOf(fetched), targetIds: [...input.targets], targetsById: detected });
     },
 
     async apply(input) {
