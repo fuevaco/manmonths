@@ -1,0 +1,14 @@
+{
+  "setupFormatVersion": 1,
+  "packages": [
+    {
+      "packageKey": "orca-rc-demo-mcp-params",
+      "scope": "project",
+      "projectRoot": "d:\\orca-rc-golden-09\\proj",
+      "values": {
+        "demo-endpoint": "https://project.example.invalid"
+      },
+      "updatedAt": "2026-11-20T17:54:31.5792277+00:00"
+    }
+  ]
+}

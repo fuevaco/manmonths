@@ -1,0 +1,28 @@
+{
+  "receiptFormatVersion": 2,
+  "receipts": [
+    {
+      "packageKey": "demo.skill",
+      "packageVersion": "1.0.0",
+      "packageSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "channel": "release",
+      "contentId": "hello",
+      "kind": "skill",
+      "hostId": "codex",
+      "surfaceId": "codex-cli",
+      "scope": "global",
+      "canonicalRoot": "c:\\synthetic\\home",
+      "normalizedAddress": "codex|codex-cli|global|c:\\synthetic\\home|hello",
+      "destinationPath": "c:\\synthetic\\home\\.agents\\skills\\hello",
+      "mutationKind": "SyncTree",
+      "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "installedSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "ownedConfigFields": [],
+      "baseValueHashes": [],
+      "installedAt": "2026-11-21T03:04:05.12+00:00",
+      "clientVersion": "1.6.0",
+      "hostProfileVersion": "codex/2026.11.1",
+      "targetKey": "codex|codex-cli|global|c:\\synthetic\\home"
+    }
+  ]
+}
