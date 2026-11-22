@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { installMcpLauncher } from '../worker/setup/find-mcp-launcher.mjs';
+import { installMcpLauncher, refreshMcpLauncher, mcpLauncherPath } from '../worker/setup/find-mcp-launcher.mjs';
 import { resolveSetupRoot } from '../worker/setup/planning.mjs';
 import { createWindowsCredentialStore, setupSecretReference, KeychainService } from '../worker/setup/secrets.mjs';
 
@@ -168,4 +168,57 @@ test('Windows 真實認證管理員寫入後由獨立 launcher 讀取，結束�
     assert.equal(JSON.parse(result.stdout).input, `LCAIPACK-SECRET-BEGIN 1\npat ${Buffer.from(secret).toString('base64')}\nLCAIPACK-SECRET-END\nhost-bytes\n`);
   } finally { store.delete(f.key); }
   assert.equal(store.get(f.key), null);
+});
+
+// Codex 只把白名單環境變數交給 stdio MCP；launcher 需自行找回目前使用者的 D-Bus 工作階段，secret-tool 才連得到鑰匙圈。
+async function dbusFixture(t) {
+  const f = fixture(t);
+  // unix socket 路徑上限約 107 位元組，暫存資料夾可能很長，所以放在 /tmp。
+  const runtimeDir = fs.mkdtempSync('/tmp/rc-dbus-');
+  t.after(() => fs.rmSync(runtimeDir, { recursive: true, force: true }));
+  const { createServer } = await import('node:net');
+  const listen = async file => { const server = createServer(); server.listen(file); await once(server, 'listening'); t.after(() => server.close()); };
+  const runWith = (env, expected) => {
+    fs.writeFileSync(f.preload, `Object.defineProperty(process,'platform',{value:'linux'});const cp=require('node:child_process');const original=cp.spawnSync;cp.spawnSync=(file,args,options)=>{if(file!=='secret-tool')return original(file,args,options);require('node:assert/strict').deepEqual({address:options.env.DBUS_SESSION_BUS_ADDRESS,runtime:options.env.XDG_RUNTIME_DIR},${JSON.stringify(expected)});return {status:0,stdout:${JSON.stringify(secret)},stderr:''};};require('node:module').syncBuiltinESMExports();`);
+    const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== 'DBUS_SESSION_BUS_ADDRESS' && name !== 'XDG_RUNTIME_DIR'));
+    return spawnSync(process.execPath, ['--require', f.preload, source, ...f.args], { env: { ...clean, LCAIPACK_HOME: f.home, ...env }, input: 'host\n', encoding: 'utf8', timeout: 10000 });
+  };
+  return { f, runtimeDir, listen, runWith };
+}
+
+test('Linux launcher 在沒有 D-Bus 位址時改用 XDG_RUNTIME_DIR 下自己擁有的 bus socket', { skip: process.platform !== 'linux' }, async t => {
+  const { runtimeDir, listen, runWith } = await dbusFixture(t);
+  await listen(path.join(runtimeDir, 'bus'));
+  const result = runWith({ XDG_RUNTIME_DIR: runtimeDir }, { address: `unix:path=${runtimeDir}/bus`, runtime: runtimeDir });
+  assert.equal(result.status, 17, result.stderr);
+  assert.equal(JSON.parse(result.stdout).input, `LCAIPACK-SECRET-BEGIN 1\npat ${Buffer.from(secret).toString('base64')}\nLCAIPACK-SECRET-END\nhost\n`);
+});
+
+test('Linux launcher 保留用戶端給的 D-Bus 位址，不採用不是 socket 的 bus', { skip: process.platform !== 'linux' }, async t => {
+  const { runtimeDir, listen, runWith } = await dbusFixture(t);
+  await listen(path.join(runtimeDir, 'bus'));
+  const given = 'unix:path=/run/given/bus';
+  assert.equal(runWith({ XDG_RUNTIME_DIR: runtimeDir, DBUS_SESSION_BUS_ADDRESS: given }, { address: given, runtime: runtimeDir }).status, 17);
+
+  const plain = fs.mkdtempSync('/tmp/rc-dbus-plain-');
+  t.after(() => fs.rmSync(plain, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(plain, 'bus'), '');
+  // 退回 /run/user/<uid>/bus 是正式行為；主機上有這個 socket 時應採用它，但絕不採用一般檔案。
+  const fallback = path.join('/run/user', String(process.getuid()), 'bus');
+  let usable = false;
+  try { const s = fs.statSync(fallback); usable = s.isSocket() && s.uid === process.getuid(); } catch {}
+  const expected = usable ? { address: `unix:path=${fallback}`, runtime: plain } : { runtime: plain };
+  assert.equal(runWith({ XDG_RUNTIME_DIR: plain }, expected).status, 17);
+});
+
+test('外掛更新後只替換已安裝過的 launcher，從未安裝時不建立', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rc-refresh-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const options = { userHome: dir, env: {} };
+  assert.equal(refreshMcpLauncher(options), null);
+  assert.equal(fs.existsSync(path.dirname(mcpLauncherPath(options))), false);
+  const installed = installMcpLauncher(options);
+  fs.writeFileSync(installed, 'old launcher');
+  assert.equal(refreshMcpLauncher(options), installed);
+  assert.equal(fs.readFileSync(installed, 'utf8'), fs.readFileSync(source, 'utf8'));
 });

@@ -118,6 +118,29 @@ async function main() {
       normalize(descriptor.canonicalRoot) !== root || path.resolve(descriptor.setupRoot) !== setupRoot || typeof descriptor.command !== 'string' || !descriptor.command ||
       !Array.isArray(descriptor.args) || !descriptor.args.every(a => typeof a === 'string') || !Array.isArray(descriptor.runtimeSecrets)) throw new Error('啟動描述無效，請重新安裝資源包');
 
+  // Codex 等用戶端只把白名單環境變數交給 stdio MCP，沒有 D-Bus 工作階段位址時 secret-tool 連不到鑰匙圈
+  // （「Cannot autolaunch D-Bus without X11 $DISPLAY」）。這時改用目前使用者執行期目錄裡的 bus socket；
+  // 只接受自己擁有的 socket，找不到就照原環境執行，維持原本的失敗訊息。
+  function secretServiceEnvironment(env) {
+    if (env.DBUS_SESSION_BUS_ADDRESS?.trim()) return env;
+    const uid = process.getuid?.();
+    if (uid === undefined) return env;
+    const runtimeDir = env.XDG_RUNTIME_DIR?.trim();
+    for (const dir of [runtimeDir, `/run/user/${uid}`]) {
+      if (!dir || !path.isAbsolute(dir)) continue;
+      const bus = path.join(dir, 'bus');
+      try {
+        const stat = fs.statSync(bus);
+        if (!stat.isSocket() || stat.uid !== uid) continue;
+      } catch { continue; }
+      // D-Bus 位址值只允許未跳脫的 [-0-9A-Za-z_/.\*]，其餘位元組以 %XX 表示。
+      const escaped = [...Buffer.from(bus, 'utf8')].map(b => /[-0-9A-Za-z_/.\\*]/.test(String.fromCharCode(b)) && b < 0x80
+        ? String.fromCharCode(b) : `%${b.toString(16).padStart(2, '0')}`).join('');
+      return { ...env, XDG_RUNTIME_DIR: runtimeDir || dir, DBUS_SESSION_BUS_ADDRESS: `unix:path=${escaped}` };
+    }
+    return env;
+  }
+
   // 無環境變數測試入口；測試以 Node --require 攔截內建系統呼叫。
   function readSecret(key) {
     const run = (file, args, input) => {
@@ -138,12 +161,13 @@ async function main() {
       return result.status === 0 ? result.stdout.replace(/\n$/, '') : null;
     }
     if (process.platform !== 'linux') throw new Error('不支援的秘密儲存區');
+    const env = secretServiceEnvironment(process.env);
     const result = spawnSync('secret-tool', ['lookup', 'service', 'com.linkchain.lcaipack', 'account', key], {
-      encoding: 'utf8', timeout: 60000, maxBuffer: 1 << 20, windowsHide: true
+      env, encoding: 'utf8', timeout: 60000, maxBuffer: 1 << 20, windowsHide: true
     });
     if (result.error || (result.status !== 0 && !(result.status === 1 && !result.stderr && !result.stdout))) throw new Error('請安裝 libsecret-tools（sudo apt install libsecret-tools），並解鎖 GNOME 鑰匙圈');
     if (result.status === 1) {
-      const found = spawnSync('secret-tool', ['search', '--all', 'service', 'com.linkchain.lcaipack', 'account', key], { encoding: 'utf8', timeout: 60000, maxBuffer: 1 << 20, windowsHide: true });
+      const found = spawnSync('secret-tool', ['search', '--all', 'service', 'com.linkchain.lcaipack', 'account', key], { env, encoding: 'utf8', timeout: 60000, maxBuffer: 1 << 20, windowsHide: true });
       if (found.error || found.status !== 0 || found.stdout || found.stderr) throw new Error('無法存取鑰匙圈內的秘密');
     }
     return result.status === 0 ? result.stdout : null;

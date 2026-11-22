@@ -125,31 +125,34 @@
 
   function delimToText(token) { return token.t === 'delim' ? { t: 'text', v: token.ch.repeat(token.n) } : token; }
 
-  /** 依 CommonMark 的分隔符號規則（簡化）配對強調；比對範圍有界以避免病態輸入。 */
+  /**
+   * 依 CommonMark 的分隔符號規則（簡化）配對強調；比對範圍有界以避免病態輸入。
+   * 被配對取代的一定是已處理序列的尾端，所以用堆疊只動尾端，整體為線性；
+   * 在陣列中間 splice 會讓「a*a*a*…」這類輸入變成二次方。
+   */
   function resolveEmphasis(tokens) {
-    let i = 0;
-    while (i < tokens.length) {
-      const c = tokens[i];
-      if (c.t !== 'delim' || !c.canClose || c.n === 0) { i += 1; continue; }
-      let found = -1;
-      for (let j = i - 1, stop = Math.max(0, i - 400); j >= stop; j -= 1) {
-        const o = tokens[j];
-        if (o.t !== 'delim' || o.ch !== c.ch || !o.canOpen || o.n === 0) continue;
-        if ((o.canClose || c.canOpen) && (o.orig + c.orig) % 3 === 0 && !(o.orig % 3 === 0 && c.orig % 3 === 0)) continue;
-        found = j; break;
+    const out = [];
+    for (const c of tokens) {
+      if (c.t !== 'delim' || !c.canClose || c.n === 0) { out.push(c); continue; }
+      for (;;) {
+        let found = -1;
+        for (let j = out.length - 1, stop = Math.max(0, out.length - 400); j >= stop; j -= 1) {
+          const o = out[j];
+          if (o.t !== 'delim' || o.ch !== c.ch || !o.canOpen || o.n === 0) continue;
+          if ((o.canClose || c.canOpen) && (o.orig + c.orig) % 3 === 0 && !(o.orig % 3 === 0 && c.orig % 3 === 0)) continue;
+          found = j; break;
+        }
+        if (found < 0) { out.push(c); break; }
+        const o = out[found];
+        const use = c.ch === '~' ? 2 : (o.n >= 2 && c.n >= 2 ? 2 : 1);
+        const kids = out.splice(found + 1).map(delimToText);
+        out.push({ t: c.ch === '~' ? 'del' : (use === 2 ? 'strong' : 'em'), kids });
+        o.n -= use; c.n -= use;
+        if (o.n === 0) out.splice(found, 1);
+        if (c.n === 0) break;
       }
-      if (found < 0) { i += 1; continue; }
-      const o = tokens[found];
-      const use = c.ch === '~' ? 2 : (o.n >= 2 && c.n >= 2 ? 2 : 1);
-      const kids = tokens.slice(found + 1, i).map(delimToText);
-      const node = { t: c.ch === '~' ? 'del' : (use === 2 ? 'strong' : 'em'), kids };
-      o.n -= use; c.n -= use;
-      tokens.splice(found + 1, i - found - 1, node);
-      if (c.n === 0) tokens.splice(found + 2, 1);
-      if (o.n === 0) tokens.splice(found, 1);
-      i = o.n === 0 ? found + 1 : found + 2;
     }
-    return mergeText(tokens.map(delimToText));
+    return mergeText(out.map(delimToText));
   }
 
   /** 解析 (url "title")；回傳 { url, title, end } 或 null。每次最多往後看約 2000 字元。 */

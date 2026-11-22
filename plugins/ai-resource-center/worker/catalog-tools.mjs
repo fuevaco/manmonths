@@ -4,7 +4,7 @@ import { targetSummary, toolId, supportedTools } from './host-labels.mjs';
 import { HostIds, SurfaceIds } from './deploy/host-profiles.mjs';
 import { pendingRoots } from './deploy/root-coverage.mjs';
 import { currentReceipt, readSourceManifest, manifestContents, sourceExists, sourceMissingMessage } from './local-source.mjs';
-export function createCatalogTools({ packages, downloads, detectTargets, readReceipts = () => [], lastFailure = async () => null, lastSkipped = async () => null, refreshSkipped = async () => {}, backupsFor = async () => [], detachedFor = async () => [] }) {
+export function createCatalogTools({ packages, downloads, detectTargets, readReceipts = () => [], lastFailure = async () => null, lastSkipped = async () => null, refreshSkipped = async () => {}, backupsFor = async () => [], detachedFor = async () => [], platform = process.platform }) {
   const caches = new WeakMap();
   let active = 0;
   const waiters = [];
@@ -68,7 +68,8 @@ export function createCatalogTools({ packages, downloads, detectTargets, readRec
       const containsMcp = devSource ? (devContents.length ? devContents : receipts.filter(r => r.packageVersion === current.packageVersion)).some(c => c.kind === 'mcp')
         : meta?.containsMcp ?? p.type === 'mcp';
       const tools = supportedTools.filter(tool => {
-        if (tool.hostId === SurfaceIds.claudeDesktop && !containsMcp) return false;
+        // Linux 沒有官方 Claude Desktop（ADR-0005），不列為相容工具。
+        if (tool.hostId === SurfaceIds.claudeDesktop && (!containsMcp || platform === 'linux')) return false;
         return hosts === null ? local.some(tool.matches)
           : hosts.includes(tool.hostId) || (tool.hostId === SurfaceIds.claudeDesktop && hosts.includes(HostIds.claudeCode));
       }).map(({ hostId, label, matches }) => ({ hostId, label, deployed: (p.deployments ?? []).some(matches) }));

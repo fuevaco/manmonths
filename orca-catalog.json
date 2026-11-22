@@ -17,9 +17,9 @@
       ],
       "releases": [
         {
-          "version": "1.0.0",
-          "commit": "04c08c376ca3f859fb2df3d832ba3f83812152a9",
-          "contentHash": "c78ea5832aceac7807b1a5174570e22a451d59d0eb42a7f21689a388530df8a5",
+          "version": "1.1.0",
+          "commit": "97d925634c3eab202267e08f7f348ed81ba0be15",
+          "contentHash": "a3be86b889828bdf11a459283d539322eb70d99a9cd1fbe8dc3851fff3c1e53c",
           "execution": "trusted-worker",
           "minimumOrca": "1.4.259",
           "name": "AI 資源中心",

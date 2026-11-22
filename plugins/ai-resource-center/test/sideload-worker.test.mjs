@@ -213,7 +213,9 @@ test('市集沒有此資源包時只出現在「已安裝」篩選，名稱讀�
   assert.equal(card.devVersion, '0.1.0'); assert.equal(card.canSwitchToMarket, false);
   assert.equal(card.statusHint, '市集上沒有這個資源包');
   // 與從資料夾安裝相同：所有支援的 AI 工具；含 MCP 時列入 Claude Desktop（此環境未偵測到，未部署）。
-  assert.deepEqual(card.tools.map(tool => [tool.hostId, tool.deployed]), [['codex', true], ['claude-code', true], ['claude-desktop', false]]);
+  // Linux 沒有 Claude Desktop（ADR-0005），含 MCP 也不列為相容工具。
+  const desktop = process.platform === 'linux' ? [] : [['claude-desktop', false]];
+  assert.deepEqual(card.tools.map(tool => [tool.hostId, tool.deployed]), [['codex', true], ['claude-code', true], ...desktop]);
   assert.equal((await e.list({ installation: 'installed', search: '開發中' })).length, 1);
   assert.equal((await e.list({ installation: 'installed', type: 'skill' })).length, 0);
   const detail = await e.worker.call('rc.package.getDetails', { packageKey: KEY });

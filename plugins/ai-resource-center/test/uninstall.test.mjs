@@ -9,7 +9,7 @@ import { observe, observeTree } from '../worker/deploy/observer.mjs';
 import { build, setupMulti } from './multi-env.mjs';
 import { zip } from './zip-fixture.mjs';
 import { newBackupStamp } from '../worker/deploy/target-transaction.mjs';
-import { resolveWindowsOrcaAppData } from '../worker/deploy/orca-claude-mcp-cleanup.mjs';
+import { resolveOrcaAppData } from '../worker/deploy/orca-claude-mcp-cleanup.mjs';
 
 const rules = createPathRules();
 const key = 'synthetic-remove';
@@ -52,7 +52,7 @@ function writeOrcaProfile(appData, name, value) {
 
 function orcaRemovalFixture(t, platform = 'win32') {
   const appDataFor = dir => path.join(dir, 'roaming');
-  const e = fixture(t, dir => ({ platform, env: { APPDATA: appDataFor(dir) } }));
+  const e = fixture(t, dir => ({ platform, env: { APPDATA: appDataFor(dir), XDG_CONFIG_HOME: appDataFor(dir) } }));
   const main = e.add('.claude', 'settings.json', 'PatchConfig', '{}', { contentId: mcpId, ownedConfigFields: [`mcpServers.${mcpId}`] });
   main.destinationPath = path.join(e.userHome, '.claude.json');
   fs.writeFileSync(main.destinationPath, matchingText);
@@ -110,7 +110,30 @@ test('absent Windows Orca profiles are not created', async t => {
 });
 
 test('Windows Orca cleanup ignores relative AppData paths', () => {
-  assert.equal(resolveWindowsOrcaAppData('win32', { APPDATA: 'relative-roaming' }, os.tmpdir()), null);
+  assert.equal(resolveOrcaAppData('win32', { APPDATA: 'relative-roaming' }, os.tmpdir()), null);
+});
+
+test('Linux 解除安裝時清理 XDG 設定資料夾下 Orca 帳號中相同的 MCP 殘留', async t => {
+  const e = orcaRemovalFixture(t, 'linux');
+  const matching = e.write('matching', '{"mcpServers":{"synthetic.owned":{"command":"demo","args":["first","second"]},"other":{"command":"keep"}}}');
+  const differentText = '{"mcpServers":{"synthetic.owned":{"command":"custom"}}}';
+  const different = e.write('different', differentText);
+  const result = await e.run();
+  assert.equal(result.ok, true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(matching, 'utf8')).mcpServers, { other: { command: 'keep' } });
+  assert.equal(fs.readFileSync(different, 'utf8'), differentText);
+  assert.equal(result.warnings.length, 1);
+  assert.deepEqual(fs.readdirSync(e.appData), ['orca']);
+  assert.deepEqual(e.load(), []);
+});
+
+test('Linux Orca 資料夾取 XDG_CONFIG_HOME，未設定或為相對路徑時用 ~/.config', () => {
+  const home = path.join(os.tmpdir(), 'rc-home');
+  const config = path.join(os.tmpdir(), 'rc-xdg');
+  assert.equal(resolveOrcaAppData('linux', { XDG_CONFIG_HOME: config }, home), config);
+  assert.equal(resolveOrcaAppData('linux', {}, home), path.join(home, '.config'));
+  assert.equal(resolveOrcaAppData('linux', { XDG_CONFIG_HOME: 'relative' }, home), path.join(home, '.config'));
+  assert.equal(resolveOrcaAppData('darwin', { XDG_CONFIG_HOME: config }, home), null);
 });
 
 test('macOS leaves Orca profiles untouched', async t => {

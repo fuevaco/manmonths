@@ -12,7 +12,7 @@ import { badParams, RcError, ErrorCode } from './contract.mjs';
 import { packageInput } from './package-service.mjs';
 import { resolveLcAiPackHome } from './paths.mjs';
 import { createDeploymentPlanner, deployableTargets, blockedTargets } from './deploy/planner.mjs';
-import { resolveWindowsOrcaAppData } from './deploy/orca-claude-mcp-cleanup.mjs';
+import { resolveOrcaAppData } from './deploy/orca-claude-mcp-cleanup.mjs';
 import { locateClaudeCodeRoots } from './deploy/claude-code-roots.mjs';
 import { createPathRules } from './deploy/canonical-root.mjs';
 import { locateCodexRoots } from './deploy/codex-roots.mjs';
@@ -191,7 +191,7 @@ export function createDeployService({ downloads, installed, session = null, lcai
     // 動作決定設定命令的判斷意圖（同版略過、更新重跑、重新設定）；規劃與套用必須使用同一個意圖。
     const planner = guard(() => createDeploymentPlanner({ home, userHome, clientVersion, channel: state.channel, operatingSystem: platform === 'darwin' ? 'macos' : platform === 'linux' ? 'linux' : 'windows',
       shadowingProjectRoots: registeredProjects(), secrets: setupInput.secrets, mcpLauncherPath,
-      windowsOrcaAppDataDirectory: resolveWindowsOrcaAppData(platform, env, userHome),
+      orcaAppDataDirectory: resolveOrcaAppData(platform, env, userHome),
       setupPlanning: { intent: Actions[state.action].intent, runners, environment: setupEnvironment } }));
     const plan = guard(() => planner.plan(state.intent));
     pending = { ...state, plan, planner };

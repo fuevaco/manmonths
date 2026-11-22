@@ -28,7 +28,7 @@ import { createFullGuideService } from './full-guide-service.mjs';
 import { createUpdateService } from './update-service.mjs';
 import { migrateCodexSkills } from './deploy/codex-skill-migration.mjs';
 import { resolveLcAiPackHome } from './paths.mjs';
-import { findMcpLauncher } from './setup/find-mcp-launcher.mjs';
+import { findMcpLauncher, refreshMcpLauncher } from './setup/find-mcp-launcher.mjs';
 import { registerSideloadHandlers } from './handlers/sideload.mjs';
 
 /**
@@ -89,6 +89,10 @@ export default function activate(orca, deps = {}) {
   // 部署：lcaipackHome／userHome／env 可注入，測試以臨時使用者目錄隔離（預設依 LCAIPACK_HOME 與使用者家目錄）。
   let launcherPath;
   const resolveLauncher = () => launcherPath ??= findMcpLauncher({ env: deps.env, platform: deps.platform, userHome });
+  if (deps.mcpLauncherPath === undefined) {
+    try { refreshMcpLauncher({ env: deps.env, platform: deps.platform, userHome }); }
+    catch { orca.log('無法更新已安裝的 MCP launcher；下次安裝或更新需要執行期秘密的資源包時會再寫入。'); }
+  }
   const deployOptions = { downloads, installed, session, lcaipackHome: deps.lcaipackHome, userHome: deps.userHome, env: deps.env, platform: deps.platform,
     secretStore: deps.secretStore, mcpLauncherPath: deps.mcpLauncherPath === undefined ? resolveLauncher : deps.mcpLauncherPath,
     installReports: reporting, runners: deps.runners, setupEnvironment: deps.setupEnvironment, commandExecutor: deps.commandExecutor, commandTimeoutMs: deps.commandTimeoutMs };
@@ -104,7 +108,7 @@ export default function activate(orca, deps = {}) {
   router.handle('rc.install.saveSetup', async input => ({ parameters: await installation.setup(input, true) }));
   router.handle('rc.install.discard', input => installation.discard(input?.planId));
   registerSideloadHandlers(router, { installation, installed, storage: orca.storage, ready: () => migration });
-  const enrich = createCatalogTools({ packages, downloads, detectTargets: () => deploy.detectTargets(), readReceipts: () => installed.tryReceipts({ globalOnly: true }).records ?? [],
+  const enrich = createCatalogTools({ platform: deps.platform ?? process.platform, packages, downloads, detectTargets: () => deploy.detectTargets(), readReceipts: () => installed.tryReceipts({ globalOnly: true }).records ?? [],
     lastFailure: key => installation.lastFailure(key), lastSkipped: key => installation.lastSkipped(key), refreshSkipped: key => installation.refreshSkipped(key), backupsFor: key => installation.backupsFor(key), detachedFor: key => installation.detachedFor(key) });
   registerCatalogHandlers(router, { session, installed, preferences, enrich });
 
