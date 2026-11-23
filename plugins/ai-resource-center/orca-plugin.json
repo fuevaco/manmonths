@@ -30,7 +30,7 @@
   "main": "worker/index.mjs",
   "contributes": {
     "statusBarItems": [
-      { "id": "update-reminder", "text": "", "icon": "puzzle" }
+      { "id": "update-reminder", "text": "" }
     ],
     "panels": [
       {

@@ -37,10 +37,10 @@ export function createUpdateService({ orca, session, installed, packages, prefer
   async function updateStatus() {
     const value = currentSummary();
     const input = session.expired
-      ? { id: 'update-reminder', text: '需登入', tone: 'danger', visible: true,
+      ? { id: 'update-reminder', icon: 'puzzle', text: '需登入', tone: 'danger', visible: true,
         tooltip: '資源中心登入已過期，無法檢查更新。請到側欄「資源中心」分頁重新登入。' }
       : scheduledIdentity && scheduledMinutes && value.count
-      ? { id: 'update-reminder', text: String(value.count), tone: 'warning', visible: true,
+      ? { id: 'update-reminder', icon: 'puzzle', text: String(value.count), tone: 'warning', visible: true,
         tooltip: updateTooltip(value) }
       : { id: 'update-reminder', visible: false };
     try { await orca.host.call('statusBar.update', input); }

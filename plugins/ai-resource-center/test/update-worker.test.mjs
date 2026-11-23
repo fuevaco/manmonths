@@ -37,7 +37,7 @@ test('檢查完成在狀態列顯示更新數與定案版本提示，歸零時�
   e.catalog.push({ packageKey: 'other', name: '其他', type: 'skill', latestReleaseVersion: '2.0.0' });
   await e.save([e.receipt(), e.receipt({ packageKey: 'other' })]);
   await e.worker.call('rc.updates.checkNow');
-  assert.deepEqual(status(e.worker), { id: 'update-reminder', text: '2', tone: 'warning', visible: true,
+  assert.deepEqual(status(e.worker), { id: 'update-reminder', icon: 'puzzle', text: '2', tone: 'warning', visible: true,
     tooltip: '資源中心：2 個資源包可更新、・測試資源 1.0.0 → 1.1.0、・其他 1.0.0 → 2.0.0、請到側欄「資源中心」分頁更新' });
   await e.save([]);
   await e.worker.call('rc.updates.checkNow');
@@ -68,7 +68,7 @@ test('工作階段遭拒時儲存所屬市集，需登入優先於更新數且�
   e.market.revokeAllSessions();
   await assert.rejects(e.worker.call('rc.updates.checkNow'), { code: 'session_expired' });
   await settle();
-  assert.deepEqual(status(e.worker), { id: 'update-reminder', text: '需登入', tone: 'danger', visible: true,
+  assert.deepEqual(status(e.worker), { id: 'update-reminder', icon: 'puzzle', text: '需登入', tone: 'danger', visible: true,
     tooltip: '資源中心登入已過期，無法檢查更新。請到側欄「資源中心」分頁重新登入。' });
   assert.deepEqual(e.worker.state.storage.get('resource-center.session-expired'), { marketUrl: e.market.url });
   assert.deepEqual(await e.worker.call('rc.session.getState'), { marketUrl: e.market.url, signedIn: false, notice: '登入已過期，請重新登入' });
