@@ -64,7 +64,9 @@ test('外掛內容沒有預設的市集或內部網址', async () => {
       else if (/\.(mjs|js|json|html|css|md)$/.test(e.name)) {
         const text = await fs.readFile(p, 'utf8');
         for (const m of text.matchAll(/https?:\/\/[^\s"'`)<>]+/g)) {
-          if (!allowed.test(m[0])) offenders.push(`${path.relative(root, p)}: ${m[0]}`);
+          const docsRepository = (p === path.join(root, 'orca-plugin.json') && m[0] === manifest.repository)
+            || (p === path.join(root, 'README.md') && m[0] === `${manifest.repository}.git`);
+          if (!docsRepository && !allowed.test(m[0])) offenders.push(`${path.relative(root, p)}: ${m[0]}`);
         }
       }
     }

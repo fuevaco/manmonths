@@ -148,6 +148,11 @@ function deriveContributionSummary(manifest) {
       items.push({ kind: 'customEditors', name: ed.title || ed.id, ...(detail ? { detail } : {}) });
     }
   }
+  if (c.statusBarItems) {
+    for (const item of c.statusBarItems) {
+      items.push({ kind: 'statusBarItems', name: item.text || item.id });
+    }
+  }
   return items;
 }
 
@@ -322,7 +327,7 @@ export function generateCatalog() {
       id: qualifiedId,
       source: {
         kind: 'git',
-        url: 'https://github.com/fuevaco/manmonths.git',
+        url: 'https://github.com/linkchain-corp/manmonths.git',
         ref: 'main',
         path: relPath
       },
