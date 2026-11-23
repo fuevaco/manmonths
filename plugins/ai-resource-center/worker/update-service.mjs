@@ -7,14 +7,14 @@ const empty = () => ({ count: 0, packages: [], checkedAt: null });
 export function createUpdateService({ orca, session, installed, packages, preferences, now = Date.now,
   scheduler = { setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: id => clearTimeout(id) } }) {
   let summary = empty(), flight = null, timer = null, disposed = false, generation = 0, scheduleRevision = 0;
-  let scheduledIdentity = null, scheduledMinutes = null;
+  let scheduledIdentity = null, scheduledMinutes = null, firstCheckPending = false;
   let retryTimer = null, retryAttempt = 0;
   const safeCode = error => ['STORAGE_NOT_READY', 'SESSION_NOT_READY', 'API_NOT_READY', 'EACCES', 'EBUSY', 'ETIMEDOUT', 'ECONNRESET', 'signed_out', 'session_expired', 'market_unreachable'].includes(error?.code) ? error.code : 'unexpected_error';
   const log = () => orca.log('[updates] 無法檢查資源包更新');
   function cancelRetry() { if (retryTimer !== null) scheduler.clearTimeout(retryTimer); retryTimer = null; }
   function cancelTimer() { if (timer !== null) scheduler.clearTimeout(timer); timer = null; }
   function stop() {
-    generation++; scheduleRevision++; cancelTimer(); cancelRetry(); retryAttempt = 0; scheduledIdentity = null; scheduledMinutes = null; summary = empty();
+    generation++; scheduleRevision++; cancelTimer(); cancelRetry(); retryAttempt = 0; scheduledIdentity = null; scheduledMinutes = null; firstCheckPending = false; summary = empty();
   }
   function arm(minutes) {
     cancelTimer();
@@ -25,7 +25,7 @@ export function createUpdateService({ orca, session, installed, packages, prefer
       timer = null;
       try { await checkNow(); } catch { log(); }
       if (!disposed && revision === scheduleRevision) await reschedule();
-    }, minutes * 60000);
+    }, firstCheckPending ? 30000 : minutes * 60000);
     timer?.unref?.();
   }
   async function reschedule() {
@@ -39,6 +39,10 @@ export function createUpdateService({ orca, session, installed, packages, prefer
       if (disposed || revision !== scheduleRevision) return;
       const key = identity ? JSON.stringify(identity) : null;
       if (key !== scheduledIdentity) { generation++; summary = empty(); }
+      // 排程剛啟用時先檢查一次；計時器建立失敗則保留首次檢查，交由既有重試恢復。
+      if (!key || !saved.checkIntervalMinutes) firstCheckPending = false;
+      else if (key !== scheduledIdentity || !scheduledMinutes) firstCheckPending = true;
+      else if (saved.checkIntervalMinutes !== scheduledMinutes) firstCheckPending = false;
       scheduledIdentity = key; scheduledMinutes = saved.checkIntervalMinutes;
       phase = '計時器建立';
       arm(saved.checkIntervalMinutes);
@@ -57,6 +61,7 @@ export function createUpdateService({ orca, session, installed, packages, prefer
     }
   }
   async function run() {
+    firstCheckPending = false;
     await reschedule();
     const identity = await session.identity();
     if (!identity || disposed) { summary = empty(); return summary; }
