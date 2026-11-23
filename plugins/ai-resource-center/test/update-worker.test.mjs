@@ -189,15 +189,18 @@ test('重開 worker 沿用外掛通知清單；本機來源、新版已安裝、
   assert.equal(notifications(e.worker).length, 1);
 });
 
-test('排程採預設 15 分鐘、所有間隔可重排，關閉與登出停止；未登入手動檢查不連線', async t => {
+test('登入後 30 秒先檢查，之後採預設 15 分鐘；所有間隔可重排，關閉與登出停止', async t => {
   const e = await setup(t); await settle();
   assert.equal(e.timers.tasks.size, 0);
   assert.deepEqual(await e.worker.call('rc.updates.checkNow'), { count: 0, packages: [], checkedAt: null });
   assert.equal(e.market.requests.length, 0);
   await e.signIn(); await e.save([e.receipt()]);
-  assert.equal([...e.timers.tasks.values()][0].ms, 15 * 60000);
+  assert.equal([...e.timers.tasks.values()][0].ms, 30000);
+  assert.equal(e.market.requests.filter(r => r.route === '/api/market/packages').length, 0);
   await e.timers.tick();
   assert.equal((await e.worker.call('rc.updates.summary')).count, 1);
+  assert.equal(e.timers.tasks.size, 1);
+  assert.equal([...e.timers.tasks.values()][0].ms, 15 * 60000);
   for (const minutes of [60, 240, 1440, 15]) {
     await e.worker.call('rc.preferences.set', { checkIntervalMinutes: minutes }); await settle();
     assert.equal(e.timers.tasks.size, 1);
@@ -221,6 +224,63 @@ test('排程與同時手動檢查共用一次目錄請求，通知失敗只記�
   assert.equal(e.market.requests.filter(r => r.route === '/api/market/packages').length - before, 1);
   assert.equal(notifications(e.worker).length, 1);
   assert.ok(e.worker.state.logs.some(l => l.includes('無法顯示資源包更新通知')));
+});
+
+test('已登入時重開 worker，長間隔也在 30 秒後先檢查，完成後才等完整間隔', async t => {
+  for (const minutes of [15, 240, 1440]) {
+    const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+    await e.worker.call('rc.preferences.set', { checkIntervalMinutes: minutes }); await settle();
+    e.worker.dispose();
+    const worker = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => worker.dispose());
+    await settle(); await settle();
+    assert.equal(e.timers.tasks.size, 1);
+    assert.equal([...e.timers.tasks.values()][0].ms, 30000);
+    assert.equal(e.market.requests.filter(r => r.route === '/api/market/packages').length, 0);
+    await e.timers.tick();
+    assert.equal((await worker.call('rc.updates.summary')).count, 1);
+    assert.equal(e.timers.tasks.size, 1);
+    assert.equal([...e.timers.tasks.values()][0].ms, minutes * 60000);
+  }
+});
+
+test('關閉後重新啟用在 30 秒後先檢查；關閉時登入與未登入時啟用都不背景檢查', async t => {
+  const e = await setup(t); await settle();
+  await e.worker.call('rc.preferences.set', { checkIntervalMinutes: 0 }); await settle();
+  await e.signIn(); await e.save([e.receipt()]);
+  assert.equal(e.timers.tasks.size, 0);
+  assert.equal(e.market.requests.filter(r => r.route === '/api/market/packages').length, 0);
+  for (const minutes of [15, 60, 240, 1440]) {
+    await e.worker.call('rc.preferences.set', { checkIntervalMinutes: minutes }); await settle();
+    assert.equal(e.timers.tasks.size, 1);
+    assert.equal([...e.timers.tasks.values()][0].ms, 30000);
+    await e.timers.tick();
+    assert.equal((await e.worker.call('rc.updates.summary')).count, 1);
+    assert.equal([...e.timers.tasks.values()][0].ms, minutes * 60000);
+    await e.worker.call('rc.preferences.set', { checkIntervalMinutes: 0 }); await settle();
+    assert.equal(e.timers.tasks.size, 0);
+  }
+  await e.worker.call('rc.session.signOut');
+  const before = e.market.requests.filter(r => r.route === '/api/market/packages').length;
+  await e.worker.call('rc.preferences.set', { checkIntervalMinutes: 240 }); await settle();
+  assert.equal(e.timers.tasks.size, 0);
+  assert.equal(e.market.requests.filter(r => r.route === '/api/market/packages').length, before);
+  await e.signIn();
+  assert.equal([...e.timers.tasks.values()][0].ms, 30000);
+  await e.timers.tick();
+  assert.equal([...e.timers.tasks.values()][0].ms, 240 * 60000);
+});
+
+test('首次檢查前讀取登入狀態仍保留 30 秒檢查；切換非關閉間隔則沿用完整間隔重排', async t => {
+  const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+  assert.equal((await e.worker.call('rc.session.getState')).signedIn, true); await settle();
+  assert.equal(e.timers.tasks.size, 1);
+  assert.equal([...e.timers.tasks.values()][0].ms, 30000);
+  await e.worker.call('rc.preferences.set', { checkIntervalMinutes: 240 }); await settle();
+  assert.equal(e.timers.tasks.size, 1);
+  assert.equal([...e.timers.tasks.values()][0].ms, 240 * 60000);
+  await e.timers.tick();
+  assert.equal((await e.worker.call('rc.updates.summary')).count, 1);
+  assert.equal([...e.timers.tasks.values()][0].ms, 240 * 60000);
 });
 
 test('Preview 開關沿用 Release 優先規則；專案獨有收據完全忽略', async t => {
@@ -272,6 +332,7 @@ test('工作階段遭拒立即停止排程；背景暫時失敗仍排下一輪',
   e.market.override('GET /api/market/packages', () => ({ status: 503, body: {} }));
   await e.timers.tick();
   assert.equal(e.timers.tasks.size, 1);
+  assert.equal([...e.timers.tasks.values()][0].ms, 15 * 60000);
   assert.ok(e.worker.state.logs.some(l => l.includes('無法檢查資源包更新')));
   e.market.revokeAllSessions();
   e.market.override('GET /api/market/packages', () => ({ status: 401, body: {} }));
@@ -309,8 +370,9 @@ test('啟動時偏好儲存暫時未就緒，記錄安全原因並自動重試�
   assert.equal([...e.timers.tasks.values()][0].ms, 2000);
   await e.timers.tick(); await settle();
   assert.equal(e.timers.tasks.size, 1);
-  assert.equal([...e.timers.tasks.values()][0].ms, 15 * 60000);
+  assert.equal([...e.timers.tasks.values()][0].ms, 30000);
   await e.timers.tick(); assert.equal((await worker.call('rc.updates.summary')).count, 1);
+  assert.equal([...e.timers.tasks.values()][0].ms, 15 * 60000);
 });
 
 test('啟動讀取工作階段 API 暫時失敗後可重新載入登入並恢復排程', async t => {
@@ -325,8 +387,10 @@ test('啟動讀取工作階段 API 暫時失敗後可重新載入登入並恢復
   await settle(); await settle();
   assert.equal(e.timers.tasks.size, 1);
   await e.timers.tick(); await settle();
-  assert.equal((await worker.call('rc.session.getState')).signedIn, true);
+  assert.equal([...e.timers.tasks.values()][0].ms, 30000);
+  await e.timers.tick();
   assert.equal([...e.timers.tasks.values()][0].ms, 15 * 60000);
+  assert.equal((await worker.call('rc.session.getState')).signedIn, true);
   assert.match(e.worker.state.logs.join('\n'), /code=API_NOT_READY reason=工作階段讀取/);
 });
 
@@ -340,7 +404,7 @@ test('秘密儲存暫時失敗可重載；排程計時器暫時拋錯也會重�
   };
   const set = e.timers.setTimeout;
   e.timers.setTimeout = (fn, ms) => {
-    if (ms === 15 * 60000 && failTimer) { failTimer = false; throw Object.assign(new Error('synthetic API failure'), { code: 'API_NOT_READY' }); }
+    if (ms === 30000 && failTimer) { failTimer = false; throw Object.assign(new Error('synthetic API failure'), { code: 'API_NOT_READY' }); }
     return set(fn, ms);
   };
   const worker = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => worker.dispose());
@@ -348,6 +412,8 @@ test('秘密儲存暫時失敗可重載；排程計時器暫時拋錯也會重�
   await e.timers.tick(); await settle();
   assert.ok([...e.timers.tasks.values()][0].ms <= 60000);
   await e.timers.tick(); await settle();
+  assert.equal([...e.timers.tasks.values()][0].ms, 30000);
+  await e.timers.tick();
   assert.equal([...e.timers.tasks.values()][0].ms, 15 * 60000);
   assert.match(e.worker.state.logs.join('\n'), /code=EBUSY reason=工作階段讀取/);
   assert.match(e.worker.state.logs.join('\n'), /code=API_NOT_READY reason=計時器建立/);
