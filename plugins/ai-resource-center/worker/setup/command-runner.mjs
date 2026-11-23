@@ -100,8 +100,8 @@ export async function runSetupCommand({ command, context, operatingSystem, log, 
     if (outcome.reason === undefined) {
       // 等輸出管線收尾（有上限）才算完成，log 才收得到全部輸出。
       await Promise.race([closed, wait(STREAM_DRAIN_GRACE_MS)]);
-      log.writeCommandEnd(command.commandId, outcome.code, elapsed());
-      return result('Completed', outcome.code, outcome.code === 0 ? null : `設定命令以非零 exit code ${outcome.code} 結束；詳細輸出見 operation log。`);
+      const failureDetail = log.writeCommandEnd(command.commandId, outcome.code, elapsed());
+      return result('Completed', outcome.code, outcome.code === 0 ? null : failureDetail ?? `設定命令以非零 exit code ${outcome.code} 結束；詳細輸出見 operation log。`);
     }
     killProcessTree(child);
     // 已被終止的行程仍要等它真的收屍，否則 log 可能少掉最後幾行輸出。

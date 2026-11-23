@@ -20,10 +20,18 @@ export function openOperationLog({ logPath, masker, sessionNumber, reason, now =
   // 一行是一次不可分割的同步寫入：stdout 與 stderr 的 data 事件交錯時行邊界也不會壞。
   const writeRaw = line => { if (closed) throw new Error('operation log 已關閉'); fs.writeSync(fd, `${line}\n`); };
   const writeLine = (channel, text) => writeRaw(`[${stamp()}] [${channel}] ${masker.mask(text)}`);
+  let failureDetail = null;
 
   function maskedStream(channel) {
     let pending = '';
-    const emit = text => { for (const line of text.split('\n')) if (line.length) writeRaw(`[${stamp()}] [${channel}] ${line.replace(/\r+$/, '')}`); };
+    const emit = text => {
+      for (const line of text.split('\n')) {
+        if (!line.length) continue;
+        writeRaw(`[${stamp()}] [${channel}] ${line.replace(/\r+$/, '')}`);
+        const detail = line.match(/^\s*\[FAIL\]\s+(.+)/)?.[1].trim();
+        if (detail) failureDetail = detail.slice(0, 500);
+      }
+    };
     return {
       append(chunk) {
         if (!chunk) return;
@@ -54,11 +62,16 @@ export function openOperationLog({ logPath, masker, sessionNumber, reason, now =
     writeNote: text => writeLine('note', text),
     /** argv 逐項遮罩後記錄；秘密本來就不允許出現在 argv，這裡再遮一次是縱深防禦。 */
     writeCommandStart(commandId, runner, scriptPath, args) {
+      failureDetail = null;
       writeLine('command-start', `${commandId} runner=${runner} script=${scriptPath} argv=[${args.map(a => masker.mask(a)).join(' ')}]`);
     },
     writeStdout: chunk => stdout.append(chunk),
     writeStderr: chunk => stderr.append(chunk),
-    writeCommandEnd(commandId, exitCode, durationMs) { flushStreams(); writeLine('command-end', `${commandId} exitCode=${exitCode} durationMs=${Math.trunc(durationMs)}`); },
+    writeCommandEnd(commandId, exitCode, durationMs) {
+      flushStreams();
+      writeLine('command-end', `${commandId} exitCode=${exitCode} durationMs=${Math.trunc(durationMs)}`);
+      return failureDetail;
+    },
     writeCancelled(commandId, durationMs) { flushStreams(); writeLine('cancelled', `${commandId} durationMs=${Math.trunc(durationMs)}`); },
     writeTimedOut(commandId, timeoutMs) { flushStreams(); writeLine('timed-out', `${commandId} timeoutMinutes=${minutes(timeoutMs)}`); },
     writeTargetResult(targetKey, result, detail) { writeLine('target', `${targetKey} result=${result}${detail ? ` detail=${masker.mask(detail)}` : ''}`); },
