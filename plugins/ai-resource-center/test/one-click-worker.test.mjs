@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { startWorker } from './harness.mjs';
+import { startWorker, status } from './harness.mjs';
 import { startFakeMarket } from './fake-market.mjs';
 import { zip } from './zip-fixture.mjs';
 import { memoryStore } from './fake-secret-store.mjs';
@@ -33,6 +33,28 @@ async function environment(t, { setup, hosts = ['codex'], type = 'skill', deps =
   t.after(async () => { worker.dispose(); await market.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   await worker.call('rc.session.signIn', { marketUrl: market.url, username: 'alice', password: 'pw-alice' });
   return { worker, root, userHome, lcaipackHome, market, recommend(v) { recommended = v; }, run: input => worker.call('rc.install.run', { packageKey: key, ...input }), detail: () => worker.call('rc.package.getDetails', { packageKey: key }), list: async input => (await worker.call('rc.catalog.list', input ?? {})).data };
+}
+
+test('外掛內更新成功後立即重核收據，狀態列與面板摘要一起歸零', async t => {
+  const e = await environment(t);
+  await e.run({ action: 'install' }); e.recommend('2.0.0');
+  await e.worker.call('rc.updates.checkNow');
+  assert.equal(status(e.worker).text, '1');
+  assert.equal((await e.run({ action: 'update' })).ok, true);
+  assert.equal(status(e.worker).visible, false);
+  assert.equal((await e.worker.call('rc.updates.summary')).count, 0);
+});
+
+for (const action of ['install', 'uninstall']) {
+  test(`外掛內${action === 'install' ? '安裝' : '解除安裝'}成功後立即移除過時的狀態列更新數`, async t => {
+    const e = await environment(t);
+    await e.run({ action: 'install' }); e.recommend('2.0.0');
+    await e.worker.call('rc.updates.checkNow');
+    assert.equal(status(e.worker).text, '1');
+    assert.equal((await e.run({ action })).ok, true);
+    assert.equal(status(e.worker).visible, false);
+    assert.equal((await e.worker.call('rc.updates.summary')).count, 0);
+  });
 }
 
 test('一鍵安裝直接套用所有Codex 共用技能，不部署不相容工具', async t => {

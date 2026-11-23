@@ -236,7 +236,7 @@ for (const [label, config, code, message] of [
       e.market.override('GET /api/market/packages/demo/versions/1.0.0/download', () => ({ status: 200, raw: bytes }));
     } else e.add(config);
     await assert.rejects(e.worker.call('rc.guide.prepare', { packageKey: 'demo' }), e => e.code === code && message.test(e.message));
-    assert.equal(e.worker.state.hostCalls.length, 0);
+    assert.equal(e.worker.state.hostCalls.filter(c => c.method !== 'statusBar.update').length, 0);
     await assert.rejects(readFile(path.join(e.dir, 'index.html')), { code: 'ENOENT' });
   });
 }

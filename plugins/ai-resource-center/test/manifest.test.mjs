@@ -8,6 +8,23 @@ import { fileURLToPath } from 'node:url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await fs.readFile(path.join(root, 'orca-plugin.json'), 'utf8'));
 
+test('狀態列只宣告一個無點擊動作的項目；不帶文字與圖示，Orca 啟動時不顯示', () => {
+  assert.equal(manifest.contributes.statusBarItems?.length, 1);
+  const [item] = manifest.contributes.statusBarItems;
+  assert.match(item.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  assert.ok(item.id.length <= 64);
+  assert.ok(!['__proto__', 'prototype', 'constructor'].includes(item.id));
+  assert.ok(Object.keys(item).every(k => ['id', 'text', 'icon', 'tone', 'tooltip'].includes(k)));
+  // Orca 不畫沒有文字也沒有圖示的項目；圖示由 worker 顯示時才帶上。
+  assert.equal(Object.hasOwn(item, 'icon'), false);
+  assert.equal(item.text, '');
+  assert.equal(Object.hasOwn(item, 'command'), false);
+  assert.equal(typeof item.text, 'string');
+  assert.ok(item.text.length <= 64);
+  assert.ok(!item.tooltip || item.tooltip.length <= 256);
+  assert.ok(!item.tone || ['neutral', 'accent', 'success', 'warning', 'danger'].includes(item.tone));
+});
+
 test('外掛說明保留人月、市集與獨立登入，介紹一鍵安裝而不提供下載', () => {
   assert.match(manifest.description, /^人月維護/);
   assert.match(manifest.description, /有權使用的資源市集.*獨立登入/);

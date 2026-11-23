@@ -50,7 +50,8 @@ export default function activate(orca, deps = {}) {
   let uploads = null;
   const session = createSessionService({ orca, ...deps,
     onConnected: () => { reporting?.flush(); void updates?.reschedule(); },
-    onSessionEnded: () => { deploy?.discardPending(); installation?.discardPending(); updates?.stop(); guides?.stop(); void uploads?.clear().catch(() => orca.log('[upload] cleanup_failed')); } });
+    onMarketChanged: () => { updates?.stop(); void updates?.reschedule(); },
+    onSessionEnded: ({ expired }) => { deploy?.discardPending(); installation?.discardPending(); updates?.stop({ preserveSummary: expired }); guides?.stop(); void uploads?.clear().catch(() => orca.log('[upload] cleanup_failed')); } });
   reporting = createInstallReporting({ storage: orca.storage, session, clientVersion: deps.clientVersion ?? pluginVersion(), now: deps.now });
 
   registerSessionHandlers(router, { session, host: orca.host });
@@ -101,7 +102,7 @@ export default function activate(orca, deps = {}) {
   router.handle('rc.install.run', async input => {
     await migration;
     const result = await installation.run(input);
-    if (result.succeeded?.length) updates.refreshInstalledState();
+    if (result.succeeded?.length) await updates.refreshInstalledState();
     return result;
   });
   router.handle('rc.install.cancel', input => installation.cancel(input));
