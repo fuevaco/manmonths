@@ -58,7 +58,7 @@
   RC.sessionLost = (e) => SESSION_LOST.has(e && e.code);
 
   // 共用資料格式過新時只顯示易懂提示，不帶技術細節（細節已寫入 worker log）。
-  const SHARED_DATA_TOO_NEW = '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛';
+  const SHARED_DATA_TOO_NEW = '共用資料由較新版本寫入，請更新 Orca 外掛';
   RC.messageOf = (e) => (e && e.code === 'sharedDataTooNew' ? SHARED_DATA_TOO_NEW : (e && e.message) || String(e || '發生未知錯誤'));
 
   // ---------- 文字與提示 ----------
@@ -93,18 +93,28 @@
   };
 
   // ---------- 畫面 ----------
-  const VIEWS = ['loading', 'login', 'main', 'details'];
+  RC.DEVELOPER_TITLE = '我的資源包';
+  const VIEWS = ['loading', 'login', 'main', 'details', 'developer'];
   RC.isShown = (view) => !RC.$(`view-${view}`).classList.contains('hidden');
 
   RC.showView = function showView(name) {
     for (const v of VIEWS) RC.$(`view-${v}`).classList.toggle('hidden', v !== name);
-    const signedInView = name === 'main' || name === 'details';
+    const signedInView = name === 'main' || name === 'details' || name === 'developer';
     RC.$('btn-refresh').classList.toggle('hidden', !signedInView);
     RC.$('btn-settings').classList.toggle('hidden', !signedInView);
-    // 明細頁：頂部列左側是 ← 與資源包名稱；其他畫面恢復「● 資源中心」
-    RC.$('btn-back').classList.toggle('hidden', name !== 'details');
-    RC.$('status-dot').classList.toggle('hidden', name === 'details');
-    if (name !== 'details') RC.setHeaderTitle('');
+    // 明細頁與我的資源包：頂部列左側是 ← 與標題；其他畫面恢復「● 資源中心」
+    const hasBack = name === 'details' || name === 'developer';
+    RC.$('btn-back').classList.toggle('hidden', !hasBack);
+    RC.$('status-dot').classList.toggle('hidden', hasBack);
+    if (name === 'developer') {
+      RC.setHeaderTitle(RC.DEVELOPER_TITLE);
+      RC.$('btn-back').setAttribute('aria-label', '返回資源中心');
+      RC.$('btn-back').setAttribute('title', '返回資源中心');
+    } else if (name !== 'details') {
+      RC.setHeaderTitle('');
+      RC.$('btn-back').setAttribute('aria-label', '返回清單');
+      RC.$('btn-back').setAttribute('title', '返回清單');
+    }
     if (!signedInView) RC.closeMenu();
   };
 

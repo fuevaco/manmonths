@@ -1,4 +1,4 @@
-// 面板設定參數的輸入與揭露（對照 LcAiPack.Gui SetupFormCollector.TryCollect、SetupFieldViewModel、Core SetupInputCollector）。
+// 面板設定參數的輸入與揭露（對照 SetupFormCollector.TryCollect、SetupFieldViewModel、Core SetupInputCollector）。
 // - 揭露：只回傳非秘密有效值與來源；秘密只回報「是否已儲存」。
 // - 儲存：一般值寫入全域 setup.json；秘密只寫入作業系統安全儲存區。
 //   先完整驗證再寫入；錯誤訊息只含參數身分，不含任何值。
@@ -20,7 +20,7 @@ export function createSetupInputService({ home, userHome, platform = process.pla
     // 設定命令（對照 PlanRenderer.WriteSetupHuman）：身分、作者宣告的顯示名稱（作用）、runner 與腳本、已插值的非秘密參數、相容性、是否執行與理由。
     // 參數與命令都只在這裡揭露；確認前不執行任何命令。
     const commands = setup.commands.map(c => ({ commandId: c.commandId, name: c.name, runner: c.runner, script: c.script, arguments: c.arguments, operatingSystems: c.operatingSystems,
-      architectures: c.architectures, timeoutMinutes: c.timeoutMinutes, runOnUpdate: c.runOnUpdate, eligibility: c.eligibility, willExecute: c.willExecute, reason: c.reason }));
+      ...(c.borrowedFromOs ? { borrowedFromOs: c.borrowedFromOs } : {}), architectures: c.architectures, timeoutMinutes: c.timeoutMinutes, runOnUpdate: c.runOnUpdate, eligibility: c.eligibility, willExecute: c.willExecute, reason: c.reason }));
     return { scope: setup.scope, setupRoot: setup.setupRoot, commands, executableCommandIds: commands.filter(c => c.willExecute).map(c => c.commandId), parameters: setup.parameters.map(p => ({ parameterId: p.parameterId, label: p.label, type: p.type, description: p.description,
       required: p.required, visible: p.visible, isSecret: p.isSecret, secretUsage: p.secretUsage, value: p.isSecret ? null : p.effectiveValue,
       source: p.source, secretProvided: p.secretProvided, needsInput: p.needsInput, options: p.options })) };

@@ -1,4 +1,6 @@
-// 對照 Deployment/OrcaClaudeMcpCleanup.cs。只清理 Windows Orca 帳號中與主根相同的殘留。
+// 對照 Deployment/OrcaClaudeMcpCleanup.cs。只清理 Orca 帳號中與主根相同的殘留。
+// Windows 與既有行為相同；Linux 是外掛單方面的規則（ADR-0005）：Orca 開啟 Claude 時把主根的 mcpServers
+// 合併進帳號（只增不減），主根移除的 MCP 會留在帳號裡。macOS 與既有行為一致，維持不清理。
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -43,17 +45,25 @@ function serversOf(document) {
   return isObject(document?.mcpServers) && !JSON.isRawJSON?.(document.mcpServers) ? document.mcpServers : null;
 }
 
-export function resolveWindowsOrcaAppData(platform, env, userHome) {
+/** Orca 的 Electron appData（其下的 orca 為 Orca 資料夾）：Windows 為 %APPDATA%，Linux 為 $XDG_CONFIG_HOME 或 ~/.config；其他平台不清理。 */
+export function resolveOrcaAppData(platform, env, userHome) {
+  if (platform === 'linux') {
+    const configHome = env?.XDG_CONFIG_HOME?.trim();
+    // 測試以假家目錄執行時，不可碰到真實使用者的 XDG 設定資料夾。
+    const usable = configHome && path.isAbsolute(configHome) &&
+      !(env === process.env && path.resolve(userHome) !== path.resolve(os.homedir()));
+    return usable ? configHome : userHome?.trim() ? path.join(userHome, '.config') : null;
+  }
   if (platform !== 'win32' || !env?.APPDATA?.trim() || !path.isAbsolute(env.APPDATA)) return null;
   if (env === process.env && path.resolve(userHome).toLowerCase() !== path.resolve(os.homedir()).toLowerCase()) return null;
   return env.APPDATA;
 }
 
-export function createOrcaClaudeMcpCleanup(target, { userHome, windowsOrcaAppDataDirectory } = {}) {
+export function createOrcaClaudeMcpCleanup(target, { userHome, orcaAppDataDirectory } = {}) {
   const removed = new Map();
   const problems = [];
   const enabled = target.host.hostId === 'claude-code' && target.host.surfaceId === 'claude-code-cli' &&
-    target.scope === 'global' && windowsOrcaAppDataDirectory?.trim();
+    target.scope === 'global' && orcaAppDataDirectory?.trim();
   const main = enabled ? path.resolve(userHome, configName).toLowerCase() : null;
   const warn = (summary, file) => problems.push(warning(ProblemCodes.orcaClaudeMcpCleanupSkipped, summary, file,
     { host: target.host, scope: target.scope, path: file }));
@@ -79,7 +89,7 @@ export function createOrcaClaudeMcpCleanup(target, { userHome, windowsOrcaAppDat
       if (matched.length) {
         for (const server of matched) delete servers[server];
         // 暫存檔放在 Orca 目錄之外的同磁碟，只有已存在的設定檔會被替換。
-        const temp = path.join(windowsOrcaAppDataDirectory, `.lcaipack-orca-cleanup-${randomUUID()}.tmp`);
+        const temp = path.join(orcaAppDataDirectory, `.lcaipack-orca-cleanup-${randomUUID()}.tmp`);
         const descriptor = fs.openSync(temp, 'wx', 0o600);
         try {
           try { fs.writeFileSync(descriptor, JSON.stringify(document, null, 2)); }
@@ -108,7 +118,7 @@ export function createOrcaClaudeMcpCleanup(target, { userHome, windowsOrcaAppDat
     },
     run() {
       if (!removed.size) return problems;
-      const orca = path.join(windowsOrcaAppDataDirectory, 'orca');
+      const orca = path.join(orcaAppDataDirectory, 'orca');
       const profiles = path.join(orca, 'claude-profiles');
       try {
         if (!stat(orca)?.isDirectory() || !stat(profiles)?.isDirectory()) return problems;

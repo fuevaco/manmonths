@@ -7,5 +7,5 @@ License: BSD-3-Clause; see LICENSE.
 
 The trusted worker uses the parser to validate the complete TOML document before
 planning a semantic MCP patch. Serialization of existing configuration remains in
-`deploy/toml-mcp-text-patcher.mjs`, matching LC-AI-Pack's table patch behavior.
+`deploy/toml-mcp-text-patcher.mjs`, matching the existing table patch behavior.
 The bundled file requires no npm install or build step on the user's machine.

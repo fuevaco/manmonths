@@ -1,4 +1,4 @@
-// 設定命令的秘密交付（對照 LcAiPack.Core Setup/SetupSecretChannel.cs，ticket 02.4）。
+// 設定命令的秘密交付（對照 Setup/SetupSecretChannel.cs，ticket 02.4）。
 // 秘密只透過「子行程的 redirected standard input」交付：一次性、單向、即關即棄。不進 argv、環境變數、暫存檔、Plan、
 // 收據、輸出 JSON、Host 設定或 operation log。
 // Wire 格式（一律 LF）：

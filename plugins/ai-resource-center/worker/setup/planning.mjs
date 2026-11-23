@@ -1,4 +1,4 @@
-// 安裝設定的參數規劃（對照 LcAiPack.Core Setup/SetupPlanning.cs 的參數部分、SetupRoot.cs、PlanDigest.AppendSetup）。
+// 安裝設定的參數規劃（對照 Setup/SetupPlanning.cs 的參數部分、SetupRoot.cs、PlanDigest.AppendSetup）。
 // 規劃零寫入：只讀已儲存值、查詢秘密有無；秘密的有效值永遠是 null。
 // 設定命令（setup.commands，對照 SetupPlanner.PlanCommands）：揭露身分、runner、腳本雜湊、已插值參數、相容性與「這次要不要跑」；
 // 規劃階段不啟動任何子行程。
@@ -126,14 +126,19 @@ function planCommands({ setup, packageKey, packageVersion, scope, projectRoot, h
   if (!declared.length) return [];
   const completions = SetupCommandCompletionStore.forScope({ scope, projectRoot, home });
   // 作者可以「一個 OS 一條命令」宣告；不適用的手足命令只是「本機用不到」，只有整包在此環境完全沒有設定路徑時才阻擋。
-  const anyEligible = declared.some(c => evaluateEligibility(c, environment) === 'Eligible');
+  const linux = environment.operatingSystem === 'linux';
+  const nativeLinux = linux && declared.some(c => c.operatingSystems?.includes('linux') && evaluateEligibility(c, environment) === 'Eligible');
+  const borrowed = c => linux && !nativeLinux && c.operatingSystems?.includes('macos') && c.runner === SetupRunners.bash &&
+    (!c.architectures?.length || c.architectures.includes(environment.architecture));
+  const eligibilityOf = c => borrowed(c) ? 'Eligible' : evaluateEligibility(c, environment);
+  const anyEligible = declared.some(c => eligibilityOf(c) === 'Eligible' && !(linux && c.runner === SetupRunners.powershell));
   return declared.map(command => {
     const commandId = command.commandId ?? '', script = command.script ?? '', runner = command.runner ?? '';
     const sha = script.length ? scriptSha256(script) : '';
     const timeout = command.timeoutMinutes ?? SetupCommandLimits.defaultTimeoutMinutes;
     const runOnUpdate = command.runOnUpdate ?? SetupCommandLimits.defaultRunOnUpdate;
-    const eligibility = evaluateEligibility(command, environment);
-    const resolved = runners.resolve(runner, environment.operatingSystem);
+    const eligibility = eligibilityOf(command);
+    const resolved = linux && runner === SetupRunners.powershell ? null : runners.resolve(runner, environment.operatingSystem);
     const decision = completions.decide({ packageKey, commandId, packageVersion, scriptSha256: sha, intent, runOnUpdate });
     const willExecute = decision.shouldRun && eligibility === 'Eligible' && resolved != null;
     if (timeout < SetupCommandLimits.minTimeoutMinutes || timeout > SetupCommandLimits.maxTimeoutMinutes) {
@@ -152,6 +157,7 @@ function planCommands({ setup, packageKey, packageVersion, scope, projectRoot, h
     }
     return { commandId, name: command.name ?? commandId, runner, script, scriptSha256: sha, arguments: interpolate(command.arguments, effective),
       operatingSystems: [...(command.operatingSystems ?? [])], architectures: [...(command.architectures ?? [])], timeoutMinutes: timeout, runOnUpdate,
+      ...(borrowed(command) ? { borrowedFromOs: 'macos' } : {}),
       eligibility, runnerExecutable: resolved?.executable ?? null, willExecute, reason: decision.reason };
   });
 }
@@ -176,6 +182,7 @@ export function appendSetupDigest(plan, rules = createPathRules()) {
   for (const c of [...plan.commands].sort((x, y) => ordinal(x.commandId, y.commandId))) {
     b += `setup.command=${[c.commandId, c.runner, c.script, c.scriptSha256, c.arguments.join('\u001f'), c.operatingSystems.join(','), c.architectures.join(','), c.timeoutMinutes,
       c.runOnUpdate ? 'run-on-update' : 'no-run-on-update', c.eligibility, c.willExecute ? 'execute' : 'skip', c.reason].join('|')}\n`;
+    if (c.borrowedFromOs) b += `setup.command.borrowed=${c.commandId}|${c.borrowedFromOs}\n`;
   }
   for (const p of [...plan.problems].sort((x, y) => ordinal(x.code, y.code) || ordinal(x.summary, y.summary))) b += `setup.problem=${p.code}|${p.severity}\n`;
   return b;

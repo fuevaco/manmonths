@@ -8,7 +8,7 @@ const invalid = message => { throw new RcError(ErrorCode.invalidPackage, `資源
 
 const MB = 1024 * 1024;
 /**
- * 資源包大小上限。LC-AI-Pack 只限制壓縮後大小（市集 Market:MaxPackageSizeMB，預設 100），沒有項目數或解壓上限；
+ * 資源包大小上限。原本只限制壓縮後大小（市集 Market:MaxPackageSizeMB，預設 100），沒有項目數或解壓上限；
  * 這裡在記憶體中解壓，所以多加項目數、單檔與總解壓上限，避免 zip bomb 耗盡記憶體。
  */
 export const PackageLimits = Object.freeze({ maxDownloadBytes: 100 * MB, maxEntries: 5000, maxEntryBytes: 100 * MB, maxTotalBytes: 500 * MB });

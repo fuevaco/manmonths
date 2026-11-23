@@ -1,4 +1,4 @@
-// 對照 LC-AI-Pack LcAiPackHome：預設 ~/.lcaipack，可用 LCAIPACK_HOME 覆寫。以模擬目錄涵蓋 Windows 與 macOS。
+// 共用資料目錄：預設 ~/.lcaipack，可用 LCAIPACK_HOME 覆寫。以模擬目錄涵蓋 Windows 與 macOS。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveLcAiPackHome } from '../worker/paths.mjs';

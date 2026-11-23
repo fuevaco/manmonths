@@ -2,7 +2,7 @@
 import { ErrorCode, RcError } from './contract.mjs';
 
 /**
- * 去頭尾空白與結尾斜線（對照 LC-AI-Pack LoginViewModel 存檔前的 Trim().TrimEnd('/')）。
+ * 去頭尾空白與結尾斜線（對照 LoginViewModel 存檔前的 Trim().TrimEnd('/')）。
  * 只接受 http / https 絕對網址，不接受帳密、查詢字串或片段。
  * @returns {string} 正規化後的市集根網址（保留子路徑）
  */

@@ -1,4 +1,4 @@
-// 生命週期編排（對照 LcAiPack.Tests DeploymentOperationOrchestratorTests、SetupCancellationTests 的編排部分、SetupRetrySessionTests）：
+// 生命週期編排（對照 DeploymentOperationOrchestratorTests、SetupCancellationTests 的編排部分、SetupRetrySessionTests）：
 // operation 先落地 → 前置檢查 → 依宣告順序執行設定命令 → 受管 MCP 啟動描述 → 命令全部成功後才逐 target 套用。
 // 命令以替身 executor 注入，因此順序保證（命令失敗時 target 零呼叫）能在不啟動真實子行程的情況下被鎖定；真實子行程見 setup-runner 與 setup-worker。
 import test from 'node:test';
@@ -231,7 +231,7 @@ test('沒有設定命令的資源包（只有參數或完全沒有 setup）走�
 });
 
 test('受管 MCP 啟動描述在命令之後、target 之前寫入（managed-mcp checkpoint）', async t => {
-  const launcher = path.join(os.tmpdir(), 'launcher', 'lcaipack.exe');
+  const launcher = path.join(os.tmpdir(), 'launcher', 'lcaipack-mcp-launch.mjs');
   const e = environment(t, { launcher });
   const setup = { parameters: [{ parameterId: 'api-key', label: 'API key', type: 'secret', required: true, secretUsage: 'runtime' }], commands: [command('prepare')] };
   const manifestPkg = () => {

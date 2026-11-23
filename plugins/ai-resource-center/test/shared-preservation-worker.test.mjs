@@ -39,12 +39,12 @@ test('一鍵全域安裝、儲存與更新逐欄保留共用收據的專案項�
  assert.equal(SetupValueStore.forGlobal({home:e.lcaipackHome,userProfile:e.userHome}).getValues('pkg-a').endpoint,'global-value');
  const globals=JSON.parse(fs.readFileSync(receiptFile)).receipts.filter(r=>r.scope==='global');assert.equal(globals.length,3);assert.ok(globals.every(r=>r.packageVersion==='1.1.0'));
 });
-test('LC-AI-Pack golden 收據與 Orca 全域收據依共用格式接續更新，版本與 clientVersion 分開記錄',async t=>{
+test('golden 收據與 Orca 全域收據依共用格式接續更新，版本與 clientVersion 分開記錄',async t=>{
  const e=await setupMulti(t);const golden=JSON.parse(fs.readFileSync(new URL('./fixtures/lcaipack-receipts.windows.golden.json',import.meta.url),'utf8'));
  fs.mkdirSync(e.lcaipackHome,{recursive:true});const file=path.join(e.lcaipackHome,'receipts.json');fs.writeFileSync(file,JSON.stringify(golden));
  assert.equal((await e.run()).ok,true);
  const first=parseReceiptFile(fs.readFileSync(file,'utf8'),file);assert.equal(first.receipts.filter(r=>r.packageKey==='pkg-a').length,3);
- // 以 LC-AI-Pack 相同的 Upsert／序列化契約模擬另一用戶端接續寫入；不啟動真實使用者環境。
+ // 以相同的 Upsert／序列化契約模擬另一用戶端接續寫入；不啟動真實使用者環境。
  const store=ReceiptStore.forGlobal({home:e.lcaipackHome,userProfile:e.userHome});
  store.upsert(first.receipts.filter(r=>r.packageKey==='pkg-a').map(r=>({...r,clientVersion:'9.8.7-reference'})));
  const lcBytes=serializeReceiptFile(store.load(),'\r\n');fs.writeFileSync(file,lcBytes);

@@ -120,12 +120,19 @@
   };
 
   /** 返回清單：保留篩選條件，先顯示原清單並還原捲動位置，再於背景重新整理狀態。 */
-  RC.backToList = function backToList() {
+  /** 離開明細頁（回清單或轉到其他畫面）：作廢進行中的讀取並清掉明細狀態。 */
+  RC.leaveDetails = function leaveDetails() {
     state.detailsRequest += 1;
     state.currentPackage = null;
     state.currentDetail = null;
     state.detailSeed = null;
     RC.resetReader();
+  };
+  /** 進入明細前清單的捲動位置（供「我的資源包」從明細頁進入後返回時還原）。 */
+  RC.listScrollPosition = () => listScroll;
+
+  RC.backToList = function backToList() {
+    RC.leaveDetails();
     RC.showView('main');
     $('view-main').scrollTop = listScroll;
     return RC.loadCatalog({ keepList: true });

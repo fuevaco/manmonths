@@ -25,7 +25,7 @@ function withFlavor(node, flavor) {
 export function renderMcpNode(content, flavor, operatingSystem, setup = null) {
   const definition = content.definition;
   if (setup && runtimeSecretIds(definition, setup).length) {
-    return withFlavor({ command: setup.launcherPath, args: managedLauncherArgs(setup.packageKey, content.id, setup.scope, setup.canonicalRoot) }, flavor);
+    return withFlavor({ command: 'node', args: [setup.launcherPath, ...managedLauncherArgs(setup.packageKey, content.id, setup.scope, setup.canonicalRoot)] }, flavor);
   }
   const node = resolveLaunch(definition, operatingSystem, setup);
   if (definition.env && typeof definition.env === 'object') {

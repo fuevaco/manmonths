@@ -1,5 +1,5 @@
-// 設定參數值（對照 LcAiPack.Tests SetupStateTests、SetupScopeIsolationTests、SetupAtomicWriteTests）。
-// 與 LC-AI-Pack 共用 {home}/setup.json 與 {project}/.lcaipack/setup.json，格式必須逐位元組相容。
+// 設定參數值（對照 SetupStateTests、SetupScopeIsolationTests、SetupAtomicWriteTests）。
+// 與其他用戶端共用 {home}/setup.json 與 {project}/.lcaipack/setup.json，格式必須逐位元組相容。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -32,7 +32,7 @@ test('檔案不存在時讀成空值且不建立任何檔案', t => {
   assert.equal(fs.existsSync(d.home), false);
 });
 
-test('LC-AI-Pack 產生的全域與專案設定值可讀取，原樣再寫回逐位元組相同', t => {
+test('既有的全域與專案設定值可讀取，原樣再寫回逐位元組相同', t => {
   const d = dirs(t);
   for (const [name, store] of [['lcaipack-setup.global.windows.golden.json', d.global()], ['lcaipack-setup.project.windows.golden.json', d.project()]]) {
     fs.mkdirSync(path.dirname(store.filePath), { recursive: true });

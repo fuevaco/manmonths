@@ -292,8 +292,10 @@ test('Claude Desktop 只有 MCP 列入安裝，工具名稱保持友善', async 
     fs.mkdirSync(path.join(e.userHome, 'AppData', 'Roaming', 'Claude'), { recursive: true });
     const result = await e.run({ action: 'install' });
     assert.equal(result.ok, true);
-    assert.equal(result.succeeded.some(t => t.hostId === 'claude-desktop'), type === 'mcp');
-    if (type === 'mcp') assert.equal(result.succeeded.find(t => t.hostId === 'claude-desktop').label, 'Claude Desktop');
+    // 這裡建立的是 Windows 的 Claude Desktop 安裝樹；Linux 沒有 Claude Desktop（ADR-0005），一律不列入。
+    const desktop = type === 'mcp' && process.platform === 'win32';
+    assert.equal(result.succeeded.some(t => t.hostId === 'claude-desktop'), desktop);
+    if (desktop) assert.equal(result.succeeded.find(t => t.hostId === 'claude-desktop').label, 'Claude Desktop');
   }
 });
 

@@ -1,4 +1,4 @@
-// 規劃與套用入口（對照 LC-AI-Pack DeploymentPlannerTests、RollbackCharacterisationTests）。
+// 規劃與套用入口（對照 DeploymentPlannerTests、RollbackCharacterisationTests）。
 // 全部使用隔離的暫存目錄，不接觸使用者真實家目錄。
 import test from 'node:test';
 import assert from 'node:assert/strict';

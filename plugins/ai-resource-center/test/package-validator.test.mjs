@@ -39,7 +39,7 @@ test('setup 依 canonical 規則拒絕秘密預設值、未知欄位、循環與
   }
 });
 
-test('Agent 平台指定接受 LC-AI-Pack 的 GitHub Copilot 鍵', () => {
+test('Agent 平台指定接受既有的 GitHub Copilot 鍵', () => {
   const m = { ...manifest, type: 'agent', contents: [{ id: 'hello', kind: 'agent', path: 'resources/hello.md', hosts: { 'github-copilot': { tools: ['read'], model: 'model-name' } } }] };
   assert.equal(validatePackage(pack(m), identity).manifest.type, 'agent');
 });

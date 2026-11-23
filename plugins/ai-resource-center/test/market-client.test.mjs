@@ -1,4 +1,4 @@
-// 對照 LC-AI-Pack AuthenticatingHandlerTests：帶 token、401 續期後重送一次、同源限制、補續通知、相容模式。
+// 對照 AuthenticatingHandlerTests：帶 token、401 續期後重送一次、同源限制、補續通知、相容模式。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createMarketClient, SESSION_TEMPORARILY_UNAVAILABLE } from '../worker/market-client.mjs';

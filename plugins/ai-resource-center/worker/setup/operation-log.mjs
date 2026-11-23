@@ -1,4 +1,4 @@
-// 每個 OperationId 一個 UTF-8（無 BOM）log 檔，永遠追加不覆寫（對照 LcAiPack.Core Setup/SetupOperationLog.cs）。
+// 每個 OperationId 一個 UTF-8（無 BOM）log 檔，永遠追加不覆寫（對照 Setup/SetupOperationLog.cs）。
 // 重試沿用同一個檔案，只追加一段 session header。遮罩是串流的：子行程的 stdout／stderr 是任意切分的 chunk，秘密很可能被切成兩半，
 // 因此把 chunk 併進 pending buffer、對整個 buffer 遮罩、只輸出「最後一個換行之前，且距離結尾至少留下（最長秘密長度 − 1）個字元」的部分。
 import fs from 'node:fs';

@@ -58,7 +58,7 @@
   };
   RC.clearSecrets = (inputs) => { for (const field of inputs.values()) if (field.type === 'password') field.value = ''; };
 
-  /** 儲存參數（與 LC-AI-Pack 共用；秘密只存入作業系統的安全儲存區）。 */
+  /** 儲存參數（與其他用戶端共用；秘密只存入作業系統的安全儲存區）。 */
   RC.saveSetup = (packageKey, values, secrets) => call('rc.install.saveSetup', { packageKey, values, secrets }, SAVE_TIMEOUT_MS);
 
   // ---------- 明細區塊 ----------
@@ -86,7 +86,7 @@
     save.addEventListener('click', saveSetupAndReapply);
     setupFold = el('details', { className: 'fold', 'data-role': 'setup', open: wasOpen }, el('summary', { textContent: '設定參數' }),
       el('div', { className: 'setup-form' }, ...params.map(p => RC.paramField(p, setupInputs)),
-        el('div', { className: 'hint', textContent: '與 LC-AI-Pack 共用同一份設定；秘密只存入作業系統的安全儲存區，留空表示不變。' }),
+        el('div', { className: 'hint', textContent: '設定儲存在這台電腦的共用設定檔；秘密只存入作業系統的安全儲存區，留空表示不變。' }),
         el('div', { className: 'error hidden', 'data-role': 'setup-error', role: 'alert' }), save));
     box.replaceChildren(setupFold);
     RC.updateSetupButton();

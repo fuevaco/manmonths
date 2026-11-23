@@ -1,4 +1,10 @@
 // Orca 資源中心 trusted worker 入口：建立共用的服務，並註冊各領域的面板請求。
+import { createDeveloperService } from './developer-service.mjs';
+import { createUploadService } from './upload-service.mjs';
+import { registerUploadHandlers } from './handlers/upload.mjs';
+import { registerDeveloperHandlers } from './handlers/developer.mjs';
+import { createFolderPickerService } from './folder-picker.mjs';
+import { registerDevHandlers } from './handlers/dev.mjs';
 import { createInstalledService } from './installed-service.mjs';
 import { registerClientHandlers } from './handlers/client.mjs';
 import { createRouter } from './contract.mjs';
@@ -22,6 +28,8 @@ import { createFullGuideService } from './full-guide-service.mjs';
 import { createUpdateService } from './update-service.mjs';
 import { migrateCodexSkills } from './deploy/codex-skill-migration.mjs';
 import { resolveLcAiPackHome } from './paths.mjs';
+import { findMcpLauncher, refreshMcpLauncher } from './setup/find-mcp-launcher.mjs';
+import { registerSideloadHandlers } from './handlers/sideload.mjs';
 
 /**
  * @param {object} orca  Orca 主機 API
@@ -30,6 +38,7 @@ import { resolveLcAiPackHome } from './paths.mjs';
 export default function activate(orca, deps = {}) {
   orca.log('AI 資源中心 worker 已啟動');
   const router = createRouter(orca);
+  registerDevHandlers(router, { folders: createFolderPickerService({ platform: deps.platform, spawn: deps.folderPickerSpawn }) });
   const preferences = createPreferences(router, orca.storage);
   // 安裝回報（工項 12）：成功連線時補送待送項目；回報需要登入工作階段，所以以延遲綁定接上 session。
   let reporting = null;
@@ -38,12 +47,17 @@ export default function activate(orca, deps = {}) {
   let installation = null;
   let updates = null;
   let guides = null;
+  let uploads = null;
   const session = createSessionService({ orca, ...deps,
     onConnected: () => { reporting?.flush(); void updates?.reschedule(); },
-    onSessionEnded: () => { deploy?.discardPending(); installation?.discardPending(); updates?.stop(); guides?.stop(); } });
+    onSessionEnded: () => { deploy?.discardPending(); installation?.discardPending(); updates?.stop(); guides?.stop(); void uploads?.clear().catch(() => orca.log('[upload] cleanup_failed')); } });
   reporting = createInstallReporting({ storage: orca.storage, session, clientVersion: deps.clientVersion ?? pluginVersion(), now: deps.now });
 
-  registerSessionHandlers(router, { session });
+  registerSessionHandlers(router, { session, host: orca.host });
+  const developer = createDeveloperService(session);
+  registerDeveloperHandlers(router, { developer });
+  uploads = createUploadService({ session, developer, temporaryRoot: deps.uploadTemporaryRoot });
+  registerUploadHandlers(router, { uploads });
   const installed = createInstalledService({ ...deps, log: message => orca.log(message) });
   const packages = createPackageService(session, installed);
   registerPackageHandlers(router, { packages, preferences, getParameters: input => installation.setup(input), enrich: async (detail, input) =>
@@ -73,11 +87,17 @@ export default function activate(orca, deps = {}) {
   router.handle('rc.updates.checkNow', () => updates.checkNow());
   void updates.reschedule();
   // 部署：lcaipackHome／userHome／env 可注入，測試以臨時使用者目錄隔離（預設依 LCAIPACK_HOME 與使用者家目錄）。
+  let launcherPath;
+  const resolveLauncher = () => launcherPath ??= findMcpLauncher({ env: deps.env, platform: deps.platform, userHome });
+  if (deps.mcpLauncherPath === undefined) {
+    try { refreshMcpLauncher({ env: deps.env, platform: deps.platform, userHome }); }
+    catch { orca.log('無法更新已安裝的 MCP launcher；下次安裝或更新需要執行期秘密的資源包時會再寫入。'); }
+  }
   const deployOptions = { downloads, installed, session, lcaipackHome: deps.lcaipackHome, userHome: deps.userHome, env: deps.env, platform: deps.platform,
-    secretStore: deps.secretStore, mcpLauncherPath: deps.mcpLauncherPath,
+    secretStore: deps.secretStore, mcpLauncherPath: deps.mcpLauncherPath === undefined ? resolveLauncher : deps.mcpLauncherPath,
     installReports: reporting, runners: deps.runners, setupEnvironment: deps.setupEnvironment, commandExecutor: deps.commandExecutor, commandTimeoutMs: deps.commandTimeoutMs };
   deploy = createDeployService(deployOptions);
-  installation = createInstallService({ packages, session, preferences, installed, downloads, log: message => orca.log(message), removal: createRemovalService({ ...deps, installed, detectTargets: () => deploy.detectTargets() }), storage: orca.storage, createDeploy: () => createDeployService(deployOptions) });
+  installation = createInstallService({ packages, session, preferences, installed, downloads, log: message => orca.log(message), tempRoot: deps.tempRoot, removal: createRemovalService({ ...deps, installed, detectTargets: () => deploy.detectTargets() }), storage: orca.storage, createDeploy: () => createDeployService(deployOptions) });
   router.handle('rc.install.run', async input => {
     await migration;
     const result = await installation.run(input);
@@ -86,12 +106,14 @@ export default function activate(orca, deps = {}) {
   });
   router.handle('rc.install.cancel', input => installation.cancel(input));
   router.handle('rc.install.saveSetup', async input => ({ parameters: await installation.setup(input, true) }));
-  const enrich = createCatalogTools({ packages, downloads, detectTargets: () => deploy.detectTargets(), readReceipts: () => installed.tryReceipts({ globalOnly: true }).records ?? [],
+  router.handle('rc.install.discard', input => installation.discard(input?.planId));
+  registerSideloadHandlers(router, { installation, installed, storage: orca.storage, ready: () => migration });
+  const enrich = createCatalogTools({ platform: deps.platform ?? process.platform, packages, downloads, detectTargets: () => deploy.detectTargets(), readReceipts: () => installed.tryReceipts({ globalOnly: true }).records ?? [],
     lastFailure: key => installation.lastFailure(key), lastSkipped: key => installation.lastSkipped(key), refreshSkipped: key => installation.refreshSkipped(key), backupsFor: key => installation.backupsFor(key), detachedFor: key => installation.detachedFor(key) });
   registerCatalogHandlers(router, { session, installed, preferences, enrich });
 
   return {
     session,
-    dispose: () => { guides.dispose(); updates.dispose(); session.dispose(); }
+    dispose: () => { guides.dispose(); updates.dispose(); session.dispose(); return uploads.clear().catch(() => orca.log('[upload] cleanup_failed')); }
   };
 }

@@ -30,6 +30,7 @@
   /** 狀態列右側的主要動作：未安裝→安裝、可更新→更新（一併補齊待補裝目標）、只有待補裝目標→補裝；其餘不顯示。 */
   function mainAction(p) {
     if (p.installedError) return null;
+    if (RC.installState(p).dev) return RC.pendingCount(p) > 0 ? 'fillPending' : null; // 開發中版本只補裝；改用市集版另有按鈕（devActions）
     const { status } = RC.installState(p);
     if (status === 'notInstalled') return 'install';
     if (status === 'updateAvailable') return 'update';
@@ -54,9 +55,23 @@
     return button;
   }
 
+  /**
+   * 開發中版本（從資料夾安裝）的按鈕：待補裝時「補裝」（主要；來源資料夾不存在時停用並以 title 說明）、
+   * 市集有此資源包時「改用市集版」（一般安裝推薦版本，覆蓋後收據回到市集語意）、再接「解除安裝」。
+   */
+  function devActions(p) {
+    const fill = RC.pendingCount(p) > 0 ? el('button', { type: 'button', className: 'btn btn-action btn-primary', 'data-action': ACTIONS.fillPending.dataAction, textContent: ACTIONS.fillPending.label,
+      disabled: RC.confirmOpen() || Boolean(p.fillUnavailableReason), ...(p.fillUnavailableReason ? { title: p.fillUnavailableReason } : {}) }) : null;
+    fill?.addEventListener('click', () => RC.startAction(p.packageKey, 'fillPending'));
+    const sw = p.canSwitchToMarket === true ? el('button', { type: 'button', className: 'btn btn-action', 'data-action': 'switch-market', textContent: '改用市集版', disabled: RC.confirmOpen() }) : null;
+    sw?.addEventListener('click', () => RC.startAction(p.packageKey, 'install'));
+    return [fill, sw, canUninstall(p) ? uninstallButton(p, false) : null];
+  }
+
   RC.actionButton = function actionButton(p) {
     const action = mainAction(p);
     const busy = state.running.get(p.packageKey);
+    if (!busy && !p.installedError && RC.installState(p).dev) return devActions(p);
     if (busy === 'uninstall') return uninstallButton(p, true); // 解除安裝不執行命令，不提供取消
     if (busy === 'detach') return el('button', { type: 'button', className: 'btn btn-action', 'data-action': 'running', textContent: ACTIONS.detach.running, disabled: true }); // 只刪安裝紀錄，同樣不提供取消
     if (!action && !busy) return canUninstall(p) ? uninstallButton(p, false) : null;
@@ -279,6 +294,7 @@
     const tasks = [];
     if (state.currentPackage?.packageKey === key && RC.isShown('details')) tasks.push(RC.reloadDetails());
     if (RC.isShown('main')) tasks.push(RC.loadCatalog({ keepList: true }));
+    if (RC.isShown('developer')) tasks.push(RC.loadLocalPackages?.());
     await Promise.all(tasks);
   }
 })();

@@ -1,4 +1,4 @@
-// 設定命令的固定 runner 與本機環境（對照 LcAiPack.Core Setup/SetupRunnerRegistry.cs、SetupPlanEnvironment）。
+// 設定命令的固定 runner 與本機環境（對照 Setup/SetupRunnerRegistry.cs、SetupPlanEnvironment）。
 // runner 是白名單而非查表執行：runner 只能是 powershell（Windows）或 bash（macOS），對應的可執行檔由平台決定，
 // 資源包無法影響；永遠以 argv 陣列啟動，不接受完整 shell command string；第一版不支援提權。
 import fs from 'node:fs';
@@ -59,5 +59,5 @@ export function createRunnerRegistry({ probeDirectories, exists, env = process.e
 
 /** 偵測本機環境；GUI 與外掛都以本機判斷為準，市集不參與。未知架構回傳原始名稱，讓計畫能如實揭露不相容。 */
 export function detectSetupEnvironment({ platform = process.platform, arch = os.arch() } = {}) {
-  return { operatingSystem: platform === 'darwin' ? 'macos' : 'windows', architecture: arch === 'x64' ? 'x64' : arch === 'arm64' ? 'arm64' : String(arch).toLowerCase() };
+  return { operatingSystem: platform === 'darwin' ? 'macos' : platform === 'linux' ? 'linux' : 'windows', architecture: arch === 'x64' ? 'x64' : arch === 'arm64' ? 'arm64' : String(arch).toLowerCase() };
 }

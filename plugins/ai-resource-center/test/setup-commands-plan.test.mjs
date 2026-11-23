@@ -1,4 +1,4 @@
-// 設定命令的規劃與完成狀態（對照 LcAiPack.Tests SetupPlanningTests 的命令情境、SetupCommandCompletionTests、
+// 設定命令的規劃與完成狀態（對照 SetupPlanningTests 的命令情境、SetupCommandCompletionTests、
 // SetupPlanDigestTests、SetupRetrySessionTests 的判斷部分、SetupPerOsPackageTests 的規劃部分）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -237,7 +237,7 @@ test('摘要涵蓋命令：腳本雜湊、timeout、已插值參數與是否執�
   assert.notEqual(baseline, digest(e.plan(base, { intent: SetupIntent.reinstall })));
 });
 
-test('摘要的命令行格式與 LC-AI-Pack 相同（參數以 U+001F 串接、列舉以 .NET 名稱）', t => {
+test('摘要的命令行格式與既有格式相同（參數以 U+001F 串接、列舉以 .NET 名稱）', t => {
   const e = environment(t);
   const plan = e.plan({ commands: [command('prepare', { arguments: ['-A', 'b'], operatingSystems: ['windows'], architectures: ['x64', 'arm64'], timeoutMinutes: 5, runOnUpdate: true })] });
   const rows = computeSetupDigestText(plan).split('\n').filter(l => l.startsWith('setup.command='));

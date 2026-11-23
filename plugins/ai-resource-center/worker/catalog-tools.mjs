@@ -3,8 +3,8 @@ import { withDisplayPath } from './display-path.mjs';
 import { targetSummary, toolId, supportedTools } from './host-labels.mjs';
 import { HostIds, SurfaceIds } from './deploy/host-profiles.mjs';
 import { pendingRoots } from './deploy/root-coverage.mjs';
-import { compareVersions } from './package-service.mjs';
-export function createCatalogTools({ packages, downloads, detectTargets, readReceipts = () => [], lastFailure = async () => null, lastSkipped = async () => null, refreshSkipped = async () => {}, backupsFor = async () => [], detachedFor = async () => [] }) {
+import { currentReceipt, readSourceManifest, manifestContents, sourceExists, sourceMissingMessage } from './local-source.mjs';
+export function createCatalogTools({ packages, downloads, detectTargets, readReceipts = () => [], lastFailure = async () => null, lastSkipped = async () => null, refreshSkipped = async () => {}, backupsFor = async () => [], detachedFor = async () => [], platform = process.platform }) {
   const caches = new WeakMap();
   let active = 0;
   const waiters = [];
@@ -57,11 +57,19 @@ export function createCatalogTools({ packages, downloads, detectTargets, readRec
     // 同一讀取請求依序重查；只有存在略過紀錄的資源包才會進行部署規劃。
     for (const p of data) await refreshSkipped(p.packageKey);
     return Promise.all(data.map(async p => {
-      const meta = await metadata(client, p, previewMode);
-      const hosts = meta?.hosts ?? null;
-      const containsMcp = meta?.containsMcp ?? p.type === 'mcp';
+      const receipts = receiptsByPackage.get(p.packageKey) ?? [];
+      const current = receipts.length ? currentReceipt(receipts) : null;
+      // 開發中版本（對照 InstalledViewModel.RootContent）：各根目錄需要的內容讀來源資料夾的 lcpack.json，讀不到時退回同版本收據。
+      // 相容工具與從資料夾安裝相同：所有支援的 AI 工具，Claude Desktop 只在含 MCP 時列入。
+      const devSource = current?.source === 'local';
+      const devContents = devSource ? manifestContents(readSourceManifest(current.sourcePath)) : [];
+      const meta = devSource ? null : await metadata(client, p, previewMode);
+      const hosts = devSource ? [HostIds.codex, HostIds.claudeCode] : meta?.hosts ?? null;
+      const containsMcp = devSource ? (devContents.length ? devContents : receipts.filter(r => r.packageVersion === current.packageVersion)).some(c => c.kind === 'mcp')
+        : meta?.containsMcp ?? p.type === 'mcp';
       const tools = supportedTools.filter(tool => {
-        if (tool.hostId === SurfaceIds.claudeDesktop && !containsMcp) return false;
+        // Linux 沒有官方 Claude Desktop（ADR-0005），不列為相容工具。
+        if (tool.hostId === SurfaceIds.claudeDesktop && (!containsMcp || platform === 'linux')) return false;
         return hosts === null ? local.some(tool.matches)
           : hosts.includes(tool.hostId) || (tool.hostId === SurfaceIds.claudeDesktop && hosts.includes(HostIds.claudeCode));
       }).map(({ hostId, label, matches }) => ({ hostId, label, deployed: (p.deployments ?? []).some(matches) }));
@@ -71,10 +79,8 @@ export function createCatalogTools({ packages, downloads, detectTargets, readRec
       const detached = await detachedFor(p.packageKey);
       const skipped = rawSkipped ? { ...rawSkipped, targets: rawSkipped.targets.map(t => withDisplayPath(t, local)) } : null;
       let pending = [];
-      const receipts = receiptsByPackage.get(p.packageKey) ?? [];
       if (receipts.length && hosts !== null && failure?.action !== 'uninstall') {
-        const current = [...receipts].sort((a, b) => compareVersions(b.packageVersion, a.packageVersion))[0];
-        const contents = (current.source !== 'local' ? await deployedContents(client, p.packageKey, current.packageVersion) : null)
+        const contents = (devSource ? devContents.length ? devContents : null : await deployedContents(client, p.packageKey, current.packageVersion))
           ?? receipts.filter(r => r.packageVersion === current.packageVersion).map(r => ({ kind: r.kind, id: r.contentId }));
         pending = pendingRoots({ contents, receipts, targets: local.filter(t => tools.some(tool => tool.hostId === toolId(t))),
           excluded: [...(failure?.targets ?? []).map(t => t.targetId), ...(skipped?.targets ?? []).map(t => t.targetId), ...detached] }).map(targetSummary);
@@ -82,7 +88,10 @@ export function createCatalogTools({ packages, downloads, detectTargets, readRec
       const backups = (await backupsFor(p.packageKey)).map(t => withDisplayPath(t, local));
       return { ...p, ...(p.deployments ? { deployments: p.deployments.map(d => ({ ...withDisplayPath(d, local), label: targetSummary(d).label,
         backupPaths: backups.filter(b => b.targetId === d.id).map(b => b.backupPath) })) } : {}),
-        hosts, tools, pendingTargets: { count: pending.length, targets: pending }, lastFailure: failure, lastSkipped: skipped, backups };
+        hosts, tools, pendingTargets: { count: pending.length, targets: pending },
+        // 補裝開發中版本要從來源資料夾重新打包；來源已不存在時停用「補裝」並說明原因。
+        fillUnavailableReason: pending.length && devSource && !sourceExists(current.sourcePath) ? sourceMissingMessage(current.sourcePath) : null,
+        lastFailure: failure, lastSkipped: skipped, backups };
     }));
   };
 }

@@ -31,14 +31,27 @@
     if (RC.menuOpen() && !ev.target?.closest?.('#settings-menu, #btn-settings')) RC.closeMenu();
   };
 
-  // 齒輪選單只顯示 Orca 外掛自己的版本；讀不到時不顯示該行。
+  /** 身分列：圓形縮寫頭像（帳號第一個字元，大寫）、帳號、只含主機名稱的市集網址（滑過顯示完整網址）。 */
+  RC.renderMenuIdentity = function renderMenuIdentity(session) {
+    const account = String(session?.account || '').trim();
+    const url = String(session?.marketUrl || '').trim();
+    let host = url;
+    try { host = new URL(url).hostname || url; } catch (e) { /* 不是有效網址時照原文顯示 */ }
+    $('menu-avatar').textContent = (Array.from(account)[0] || '?').toUpperCase();
+    $('menu-account').textContent = account;
+    $('menu-account').setAttribute('title', account);
+    $('menu-url').textContent = host;
+    $('menu-url').setAttribute('title', url);
+  };
+
+  // 齒輪選單最底部以小字顯示 Orca 外掛自己的版本；讀不到時不顯示該行。
   RC.loadPluginVersion = async function loadPluginVersion() {
     const request = state.detailsRequest;
     RC.setText('menu-version', '');
     try {
       const result = await call('rc.client.getVersions', {});
       if (request !== state.detailsRequest || !result?.orca?.version) return;
-      RC.setText('menu-version', `Orca 外掛 ${result.orca.version}`);
+      RC.setText('menu-version', `外掛 v${String(result.orca.version).replace(/^v/i, '')}`);
     } catch (e) {
       if (request !== state.detailsRequest) return;
       if (RC.sessionLost(e)) return RC.load();

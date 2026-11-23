@@ -1,4 +1,4 @@
-// TomlMcpTextPatcher：LC-AI-Pack 的 table 文字替換規則；不重序列化整份設定檔。
+// TomlMcpTextPatcher：既有的 table 文字替換規則；不重序列化整份設定檔。
 import toml from '../vendor/smol-toml/index.cjs';
 import { isDeepStrictEqual } from 'node:util';
 export const tomlKey = key => /^[a-zA-Z0-9_-]+$/.test(key) ? key : JSON.stringify(key);
@@ -75,6 +75,6 @@ export function patchToml(current, id, node) {
     for (let i = (next < 0 ? lines.length : next) - 1; i > index && !lines[i].content.trim(); i--) suffix = lines[i].start;
     result = text.slice(0, lines[index].start) + rendered + text.slice(suffix);
   }
-  // 對齊 LC-AI-Pack Encode：UTF8Encoding(true).GetBytes 不含 preamble，因此寫入會去除 BOM。
+  // 對齊 Encode：UTF8Encoding(true).GetBytes 不含 preamble，因此寫入會去除 BOM。
   return Buffer.from(result);
 }

@@ -1,4 +1,4 @@
-// LC-AI-Pack VersionVisibility / VersionSelection：先過濾，再按通道及版號排序。
+// VersionVisibility / VersionSelection：先過濾，再按通道及版號排序。
 import { RcError, ErrorCode, badParams } from './contract.mjs';
 import { statusError, unreachableError } from './auth.mjs';
 import { HttpError, parseJson } from './http.mjs';

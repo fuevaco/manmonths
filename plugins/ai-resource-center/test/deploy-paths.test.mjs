@@ -1,4 +1,4 @@
-// 對照 LC-AI-Pack CanonicalRootResolver、LcAiPackHome、CodexRootLocator／CodexRootLayout：
+// 對照 CanonicalRootResolver、CodexRootLocator／CodexRootLayout：
 // Windows 與 macOS 的規則都以注入平台的方式在任一作業系統驗證。
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +26,7 @@ test('Windows 與 macOS 的正規化根目錄一律小寫、去除結尾分隔�
   assert.equal(mac.isWithin('/Users/a/.codex', '/users/a/.codex'), true);
 });
 
-test('macOS 的 LC-AI-Pack 資料目錄為 ~/.lcaipack，LCAIPACK_HOME 有值時覆寫', () => {
+test('macOS 的共用資料目錄為 ~/.lcaipack，LCAIPACK_HOME 有值時覆寫', () => {
   assert.equal(resolveLcAiPackHome({ env: {}, platform: 'darwin', homedir: '/Users/alice' }), '/Users/alice/.lcaipack');
   assert.equal(resolveLcAiPackHome({ env: { LCAIPACK_HOME: '/tmp/lc' }, platform: 'darwin', homedir: '/Users/alice' }), '/tmp/lc');
 });

@@ -8,6 +8,7 @@ import { ReceiptStore, ReceiptFileError, targetKeyOf } from './deploy/receipts.m
 import { RcError, ErrorCode, sharedDataError } from './contract.mjs';
 import { hostLabel } from './host-labels.mjs';
 import { compareVersions } from './package-service.mjs';
+import { sourceExists } from './local-source.mjs';
 
 export function createInstalledService({ lcaipackHome, userHome = os.homedir(), env = process.env, log = () => {} } = {}) {
   const home = lcaipackHome ?? resolveLcAiPackHome({ env, homedir: userHome });
@@ -42,13 +43,19 @@ export function createInstalledService({ lcaipackHome, userHome = os.homedir(), 
       const sameContent = comparable && market.sha256.toLowerCase() === r.packageSha256.toLowerCase();
       return { id: targetKeyOf(r), label: hostLabel(r), hostId: r.hostId, surfaceId: r.surfaceId, scope: r.scope, rootPath: r.canonicalRoot,
         version: r.packageVersion, channel: sameContent ? market.channel : r.channel, contentDiffersFromMarket: comparable && !sameContent, source: r.source === 'local' ? 'local' : 'market',
+        ...(r.source === 'local' ? { sourcePath: r.sourcePath ?? null } : {}),
         status: updateVersion ? 'updateAvailable' : r.source !== 'local' && latestVersion && compareVersions(r.packageVersion, latestVersion) > 0 ? 'newer'
           : (!latestVersion || (versions && !market)) && r.source !== 'local' ? 'unavailable' : 'current', updateVersion };
     });
     const installationStatus = !deployments.length ? 'notInstalled' : deployments.some(d => d.updateVersion) ? 'updateAvailable'
       : deployments.some(d => d.status === 'unavailable') ? 'unavailable' : deployments.some(d => d.status === 'newer') ? 'newer' : 'current';
-    return { installationStatus, deployments, ...(installationStatus === 'unavailable'
-      ? { statusHint: '已自市集下架或你已無權限查看；本機仍可繼續使用與解除安裝' } : {}) };
+    // 開發中版本（從資料夾安裝）：不算可更新；市集有此資源包時可「改用市集版」（對照 InstalledPlatform.CanSwitchToMarket）。
+    const dev = deployments.filter(d => d.source === 'local').sort((a, b) => compareVersions(b.version, a.version))[0] ?? null;
+    const devOnly = !!dev && deployments.every(d => d.source === 'local');
+    return { installationStatus, deployments, devVersion: dev?.version ?? null, devSourcePath: dev?.sourcePath ?? null,
+      devSourceExists: dev ? sourceExists(dev.sourcePath) : false, canSwitchToMarket: !!dev && !!latestVersion,
+      ...(installationStatus === 'unavailable' ? { statusHint: '已自市集下架或你已無權限查看；本機仍可繼續使用與解除安裝' }
+        : devOnly && !latestVersion ? { statusHint: '市集上沒有這個資源包' } : {}) };
   }
   /** 收據無法讀取時不擲錯：回傳 { error }，讓目錄與詳情照常瀏覽、只有已安裝狀態標示錯誤。 */
   function tryReceipts(options) {
@@ -59,7 +66,7 @@ export function createInstalledService({ lcaipackHome, userHome = os.homedir(), 
     }
   }
   /**
-   * 共用收據記錄的「最後執行部署的用戶端版本」（installedAt 最新的一筆）。收據由 LC-AI-Pack 與 Orca 外掛共用，
+   * 共用收據記錄的「最後執行部署的用戶端版本」（installedAt 最新的一筆）。收據由多個用戶端共用，
    * 版本字串無法分辨來源，所以排除與 excludeVersion（Orca 外掛目前版本）相同者；收據讀不到或沒有符合的收據時為 null。
    */
   function lastDeployingClientVersion(excludeVersion = null) {

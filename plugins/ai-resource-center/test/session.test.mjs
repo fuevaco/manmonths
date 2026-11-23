@@ -316,7 +316,7 @@ test('市集離線時登出仍立即清除本機工作階段', async () => {
   assert.equal(state.secrets.has('session.v1'), false);
 });
 
-test('登出只清除 Orca 的工作階段，不影響 LC-AI-Pack 的登入狀態', async () => {
+test('登出只清除 Orca 的工作階段，不影響其他用戶端的登入狀態', async () => {
   const lcHome = await fs.mkdtemp(path.join(os.tmpdir(), 'rc-lcaipack-'));
   cleanup.push(() => fs.rm(lcHome, { recursive: true, force: true }));
   const env = { LCAIPACK_HOME: lcHome };

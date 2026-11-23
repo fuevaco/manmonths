@@ -45,7 +45,7 @@ export function splitShellCommand(command) {
 }
 
 /**
- * 差異（ADR 0002）：LC-AI-Pack 的計畫只要有一個目標受阻就整份不可套用。資源中心改為「至少有一個可部署的目標、
+ * 差異（ADR 0002）：原計畫只要有一個目標受阻就整份不可套用。資源中心改為「至少有一個可部署的目標、
  * 且沒有計畫層級的阻擋（資源包格式、設定參數與設定命令前置條件）」即可確認；受阻的目標維持原狀並列出原因。
  */
 export function withCanApply(plan) {
@@ -58,14 +58,14 @@ export const blockedTargets = (plan) => plan.targets.filter(t => !t.canApply);
 
 /**
  * @param {object} options
- * @param {string} options.home        LC-AI-Pack 資料目錄（收據、鎖定）
+ * @param {string} options.home        共用資料目錄（收據、鎖定）
  * @param {string} [options.userHome]  使用者家目錄（全域收據的正規化根目錄）
  * @param {string} options.clientVersion  寫入收據的用戶端版本（Orca 外掛版本）
  * @param {string} [options.channel]   寫入收據的版本通道
  * @param {string[]} [options.shadowingProjectRoots]
  * @param {number} [options.lockTimeoutMs]
  * @param {object} [options.secrets]  秘密存取層（createSecretManager）；預設為作業系統安全儲存區，只在資源包宣告秘密時建立
- * @param {string} [options.mcpLauncherPath]  受管 MCP launcher 可執行檔；未提供時需要執行期秘密的 MCP 受阻
+ * @param {string|(() => string|null)} [options.mcpLauncherPath]  外掛自帶 MCP launcher 腳本路徑；未提供時需要執行期秘密的 MCP 受阻
  * @param {{intent?: string, runners?: object, environment?: {operatingSystem: string, architecture: string}}} [options.setupPlanning]
  *        設定命令規劃選項（對照 SetupPlanningOptions）：意圖（決定同版略過、更新重跑與重新設定）、固定 runner registry、權威本機環境；測試可注入替身。
  */
@@ -74,15 +74,15 @@ export function createDeploymentPlanner(options) {
   const userHome = options.userHome ?? os.homedir();
   const channel = options.channel ?? 'release';
   const opts = { ...options, channel, userHome };
-  const operatingSystem = opts.operatingSystem ?? (process.platform === 'darwin' ? 'macos' : 'windows');
+  const operatingSystem = opts.operatingSystem ?? detectSetupEnvironment({ platform: opts.platform }).operatingSystem;
   const setupIntent = opts.setupPlanning?.intent ?? SetupIntent.install;
   const setupRunners = opts.setupPlanning?.runners ?? createRunnerRegistry();
   const setupEnvironment = opts.setupPlanning?.environment ?? { operatingSystem, architecture: detectSetupEnvironment().architecture };
   let defaultSecrets = null;
   // 只有真的查詢秘密時才建立平台安全儲存區（對照 SetupSecretStores.CreateNone 的用意）。
   const secrets = () => opts.secrets ?? (defaultSecrets ??= createSecretManager({
-    existsMany: keys => createDefaultSecretStore().existsMany(keys), get: key => createDefaultSecretStore().get(key),
-    set: (key, value) => createDefaultSecretStore().set(key, value), delete: key => createDefaultSecretStore().delete(key) }, rules));
+    existsMany: keys => createDefaultSecretStore({ platform: opts.platform }).existsMany(keys), get: key => createDefaultSecretStore({ platform: opts.platform }).get(key),
+    set: (key, value) => createDefaultSecretStore({ platform: opts.platform }).set(key, value), delete: key => createDefaultSecretStore({ platform: opts.platform }).delete(key) }, rules));
 
   /** 規劃安裝設定；沒有 setup 的資源包回傳 null。安全儲存區無法查詢時回傳阻擋問題（對照 PlanSetup）。 */
   function planSetupFor(pkg, intent) {
@@ -120,7 +120,7 @@ export function createDeploymentPlanner(options) {
       }
       return { roots: [...new Set(roots.map(r => rules.normalize(r)))].sort(ordinal) };
     }
-    return { problem: blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請使用 LC-AI-Pack。') };
+    return { problem: blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請改用全域安裝。') };
   }
 
   const storeFor = () => ReceiptStore.forGlobal({ home: opts.home, userProfile: userHome, rules });
@@ -156,7 +156,7 @@ export function createDeploymentPlanner(options) {
     const rootOrigin = Object.entries(origins).find(([root]) => rules.normalize(root) === canonicalRoot)?.[1];
     const ctx = { package: pkg, intent, host, profile, surface, scope: intent.scope, canonicalRoot, ownership, rules,
       rootOrigin,
-      userHome: rules.normalize(userHome), operatingSystem, setup: buildSetupRenderContext(pkg, setupPlan, canonicalRoot, opts.mcpLauncherPath),
+      userHome: rules.normalize(userHome), operatingSystem, setup: buildSetupRenderContext(pkg, setupPlan, opts.mcpLauncherPath),
       allowBackupAndReplace: intent.existingContent === 'BackupAndReplace' };
 
     const mutations = [], problems = [], configuration = [], artifacts = new Map();
@@ -185,9 +185,8 @@ export function createDeploymentPlanner(options) {
         continue;
       }
       if (content.kind === 'mcp' && ctx.setup && !ctx.setup.launcherPath && runtimeSecretIds(content.definition, ctx.setup).length) {
-        // LC-AI-Pack 由自身可執行檔擔任受管 launcher；Orca 尚無對應的 launcher，不寫出無法啟動的設定。
-        problems.push(blocking(ProblemCodes.unsupportedContentKind, `資源中心目前尚不支援需要執行期秘密的 MCP '${content.id}'`,
-          '此 MCP 需要受管 launcher 在啟動時交付秘密；Orca 尚未提供 launcher，本次不會寫入任何檔案。設定參數與秘密已可儲存，供桌面工具沿用。',
+        problems.push(blocking(ctx.setup.launcherUnavailableReason ? ProblemCodes.mcpLauncherUnavailable : ProblemCodes.unsupportedContentKind, ctx.setup.launcherUnavailableReason ?? `找不到可啟動 MCP '${content.id}' 的受管 launcher`,
+          ctx.setup.launcherUnavailableReason ?? '需要 Node.js 才能啟動此 MCP；請安裝 Node.js，重新開啟 Orca 後再安裝。',
           { host, scope: intent.scope, contentId: content.id }));
         continue;
       }
@@ -281,7 +280,7 @@ export function createDeploymentPlanner(options) {
     }
     const planProblems = [];
     if (!intent.hosts?.length) planProblems.push(blocking(ProblemCodes.unsupportedHost, '未選擇任何 AI 工具', '請至少選擇一個 Host／Surface。'));
-    if (intent.scope !== Scope.global) return rejected(intent, blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請使用 LC-AI-Pack。'), pkg);
+    if (intent.scope !== Scope.global) return rejected(intent, blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請改用全域安裝。'), pkg);
     const { setupPlan = null, problem: setupProblem } = planSetupFor(pkg, intent);
     if (setupProblem) planProblems.push(setupProblem);
     if (setupPlan) planProblems.push(...setupPlan.problems);
@@ -386,14 +385,14 @@ export function createDeploymentPlanner(options) {
 
   /** 需要受管 launcher 啟動描述的 MCP 內容（對照 ManagedMcpLaunchPlanner.RequiresManagedLauncher）。 */
   function managedMcpContents(pkg, setupPlan) {
-    const context = buildSetupRenderContext(pkg, setupPlan, setupPlan?.canonicalRoot, opts.mcpLauncherPath);
+    const context = buildSetupRenderContext(pkg, setupPlan, opts.mcpLauncherPath);
     if (!context?.launcherPath) return [];
     return pkg.contents.filter(c => c.kind === 'mcp' && runtimeSecretIds(c.definition, context).length);
   }
 
   /** 對照 WriteManagedMcpDescriptors：啟動描述以 setup 身分根建構，寫在 setup root。 */
   function writeManagedMcpDescriptors(pkg, setupPlan) {
-    const context = buildSetupRenderContext(pkg, setupPlan, setupPlan?.canonicalRoot, opts.mcpLauncherPath);
+    const context = buildSetupRenderContext(pkg, setupPlan, opts.mcpLauncherPath);
     for (const content of managedMcpContents(pkg, setupPlan)) {
       saveLaunchDescriptor(buildLaunchDescriptor(content, context, operatingSystem, resolveLaunch, rules));
     }
