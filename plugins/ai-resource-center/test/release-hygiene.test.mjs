@@ -43,6 +43,14 @@ function allowedHost(host) {
   return /(^|\.)example(\.(com|org|invalid|local))?$/.test(h) || /\.invalid$/.test(h);
 }
 
+function isPublicRepositoryUrl(match, line, rel) {
+  const suffix = rel === 'README.md' ? '\\.git' : '';
+  if (rel !== 'README.md' && rel !== 'orca-plugin.json') return false;
+  const repository = new RegExp(`https:[/][/]github\\.com/linkchain-corp/manmonths${suffix}(?=["\x60\\s]|$)`, 'g');
+  return [...line.matchAll(repository)].some((url) =>
+    match.index >= url.index && match.index + match[0].length <= url.index + url[0].length);
+}
+
 function findings(rules, { skip = () => false } = {}) {
   const found = [];
   for (const file of textFiles) {
@@ -73,7 +81,8 @@ test('沒有內部位址：IP 只允許 127.0.0.1，不得有內網網段、內�
     // 非 URL 形式的內部網域尾碼與公司網域名稱。
     ['內部網域', /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:corp|lan|intra|intranet|com\.tw|org\.tw|gov\.tw)\b/gi],
     ['組織名稱', /linkchain|aiworkcenter|aiworkcentre/gi,
-      (m, line, rel) => /com\.linkchain\.lcaipack/.test(line) && ['worker/setup/secrets.mjs', 'worker/setup/mcp-launcher/lcaipack-mcp-launch.mjs', 'test/setup-secrets.test.mjs', 'test/linux-support.test.mjs', 'README.md'].includes(rel)]
+      (m, line, rel) => isPublicRepositoryUrl(m, line, rel)
+        || (/com\.linkchain\.lcaipack/.test(line) && ['worker/setup/secrets.mjs', 'worker/setup/mcp-launcher/lcaipack-mcp-launch.mjs', 'test/setup-secrets.test.mjs', 'test/linux-support.test.mjs', 'README.md'].includes(rel))]
   ];
   assert.deepEqual(findings(rules), []);
 });
