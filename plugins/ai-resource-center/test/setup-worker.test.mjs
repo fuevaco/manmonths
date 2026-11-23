@@ -1,4 +1,4 @@
-// 設定參數的 worker 請求契約（對照 LcAiPack.Tests MarketplaceSetupInputTests、GuiSetupFieldTests、SecretCanaryScanTests）：
+// 設定參數的 worker 請求契約（對照 MarketplaceSetupInputTests、GuiSetupFieldTests、SecretCanaryScanTests）：
 // 部署摘要揭露缺少的參數；面板送回的值依安裝範圍落地到共用的 setup.json，秘密只進安全儲存區，之後重新規劃。
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -57,7 +57,7 @@ test('一鍵安裝要求必要設定參數；秘密只有 isSet，缺值不寫�
   assert.deepEqual(detail.parameters.find(p=>p.parameterId==='region').options,[{value:'north',label:'North'},{value:'south',label:'South'}]);
   assert.equal(fs.existsSync(path.join(e.userHome,'.claude.json')),false);
 });
-test('儲存全域參數及秘密可供 LC-AI-Pack 沿用；執行期秘密缺 launcher 仍受阻且不外洩', async t => {
+test('儲存全域參數及秘密可供其他用戶端沿用；執行期秘密缺 launcher 仍受阻且不外洩', async t => {
   const e = await environment(t); await run(e);
   const saved = await save(e,{values:{endpoint:' https://edited.example ',region:'south',verbose:true},secrets:{'api-key':CANARY}});
   const field = id=>saved.parameters.find(p=>p.parameterId===id);
@@ -75,7 +75,7 @@ test('設定參數型別、選項、未知參數及秘密通道驗證拒絕整�
   for(const input of [{values:{nope:'x'}},{values:{verbose:'yes'}},{values:{region:'west'}},{values:{'api-key':CANARY}},{secrets:{endpoint:CANARY}},{secrets:{'api-key':''}}]) await assert.rejects(save(e,input),{code:'invalid_params'});
   assert.equal(fs.existsSync(path.join(e.lcaipackHome,'setup.json')),false);assert.equal(e.secretStore.values.size,0);
 });
-test('全域安裝前的設定參數沿用 LC-AI-Pack 儲存值；Orca 儲存並重新套用後內容及值可讀回',async t=>{
+test('全域安裝前的設定參數沿用既有儲存值；Orca 儲存並重新套用後內容及值可讀回',async t=>{
  const e=await environment(t,{secret:false});SetupValueStore.forGlobal({home:e.lcaipackHome,userProfile:e.userHome}).setValues('demo-params',{endpoint:'https://global.example',region:'south'});
  assert.equal((await run(e)).ok,true);
  await save(e,{values:{endpoint:'https://edited.example',region:'north',verbose:false}});

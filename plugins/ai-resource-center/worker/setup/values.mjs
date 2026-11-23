@@ -1,5 +1,5 @@
-// 設定參數的非秘密值（對照 LcAiPack.Core Setup/SetupValueStore.cs、SetupJsonFile.cs，setupFormatVersion 1）。
-// 全域：{home}/setup.json；專案覆寫：{projectRoot}/.lcaipack/setup.json。與 LC-AI-Pack 共用同一份檔案，
+// 設定參數的非秘密值（對照 Setup/SetupValueStore.cs、SetupJsonFile.cs，setupFormatVersion 1）。
+// 全域：{home}/setup.json；專案覆寫：{projectRoot}/.lcaipack/setup.json。與其他用戶端共用同一份檔案，
 // 序列化沿用部署收據的 .NET 相容規則（JsonSerializerDefaults.Web + WriteIndented、預設 encoder、作業系統換行）。
 // 秘密值永遠不進這裡：呼叫端提供秘密參數身分時，在任何 I/O 之前整批拒絕。
 import fs from 'node:fs';

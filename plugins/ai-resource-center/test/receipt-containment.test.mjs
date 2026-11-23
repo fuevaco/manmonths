@@ -1,4 +1,4 @@
-// 收據驅動的遞迴刪除必須受限在目標根目錄內。LC-AI-Pack 的 TargetApplyExecutor 直接信任收據路徑；
+// 收據驅動的遞迴刪除必須受限在目標根目錄內。TargetApplyExecutor 直接信任收據路徑；
 // 資源中心額外加上包含檢查，竄改或損壞的 receipts.json 不得讓套用刪到根目錄以外的檔案。
 import test from 'node:test';
 import assert from 'node:assert/strict';

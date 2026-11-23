@@ -1,4 +1,4 @@
-// 面板設定參數的輸入與揭露（對照 LcAiPack.Gui SetupFormCollector.TryCollect、SetupFieldViewModel、Core SetupInputCollector）。
+// 面板設定參數的輸入與揭露（對照 SetupFormCollector.TryCollect、SetupFieldViewModel、Core SetupInputCollector）。
 // - 揭露：只回傳非秘密有效值與來源；秘密只回報「是否已儲存」。
 // - 儲存：一般值寫入全域 setup.json；秘密只寫入作業系統安全儲存區。
 //   先完整驗證再寫入；錯誤訊息只含參數身分，不含任何值。

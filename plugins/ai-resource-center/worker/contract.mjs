@@ -41,9 +41,9 @@ export const ErrorCode = Object.freeze({
   saveFailed: 'save_failed',
   /** 部署計畫已失效（本機狀態改變、未審核或目標集合不符），需重新規劃並確認 */
   planStale: 'plan_stale',
-  /** LC-AI-Pack 共用的部署收據檔無法讀取 */
+  /** 共用的部署收據檔無法讀取 */
   receiptInvalid: 'receipt_invalid',
-  /** LC-AI-Pack 共用的設定值檔（setup.json）無法讀取 */
+  /** 共用的設定值檔（setup.json）無法讀取 */
   setupInvalid: 'setup_invalid',
   sharedDataTooNew: 'sharedDataTooNew',
   /** 作業系統安全儲存區無法存取秘密；不會改用明文 */
@@ -63,7 +63,7 @@ export class RcError extends Error {
 }
 
 export const badParams = (message) => new RcError(ErrorCode.invalidParams, message);
-export const sharedDataError = () => new RcError(ErrorCode.sharedDataTooNew, '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛');
+export const sharedDataError = () => new RcError(ErrorCode.sharedDataTooNew, '共用資料由較新版本寫入，請更新 Orca 外掛');
 
 /** 取字串欄位；不是字串時回傳空字串。 */
 export const str = (input, key) => (typeof input?.[key] === 'string' ? input[key] : '');

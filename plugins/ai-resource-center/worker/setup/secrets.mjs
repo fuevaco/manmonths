@@ -1,4 +1,4 @@
-// 秘密設定參數（對照 LcAiPack.Core Setup/SetupSecrets.cs 與 Mcp/McpSecrets.cs）。
+// 秘密設定參數（對照 Setup/SetupSecrets.cs 與 Mcp/McpSecrets.cs）。
 // - 識別：lcaipack:setup:{packageKey}:{parameterId}:{scope}:{sha256(正規化根目錄) 前 24 碼}，不含版本與原始路徑；
 // - Windows：Credential Manager Generic credential（target name = key、UTF-8 blob、Persist=LocalMachine、
 //   Comment "LC-AI-Pack"、UserName "lcaipack"），經 Windows PowerShell 的 P/Invoke 存取；
@@ -72,7 +72,7 @@ const defaultRun = (file, args, input) => {
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 };
 
-// 與 LC-AI-Pack WindowsCredentialSecretStore 相同的 native 呼叫；輸入為 stdin 的 base64 行，輸出也只回到本行程。
+// 與 WindowsCredentialSecretStore 相同的 native 呼叫；輸入為 stdin 的 base64 行，輸出也只回到本行程。
 const WINDOWS_SCRIPT = String.raw`$ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
@@ -154,9 +154,9 @@ export function createWindowsCredentialStore({ run = defaultRun, systemRoot = pr
 const quote = text => `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
 export function createMacKeychainStore({ run = defaultRun } = {}) {
-  // 與 LC-AI-Pack MacKeychainSecretStore 相同：讀取以 exit code 判斷有無，寫入與刪除不因 exit code 中斷。
-  // 差異：LC-AI-Pack 的 Trim() 會吃掉秘密前後的空白，這裡只去掉 `security -w` 附加的單一結尾換行；
-  // 存在性查詢不帶 -w（LC-AI-Pack 的 Exists 其實是讀出值再判斷 null），只看 exit code，不讀出秘密。
+  // 與 MacKeychainSecretStore 相同：讀取以 exit code 判斷有無，寫入與刪除不因 exit code 中斷。
+  // 差異：原實作的 Trim() 會吃掉秘密前後的空白，這裡只去掉 `security -w` 附加的單一結尾換行；
+  // 存在性查詢不帶 -w（原實作的 Exists 其實是讀出值再判斷 null），只看 exit code，不讀出秘密。
   const get = key => {
     const r = run('security', ['find-generic-password', '-a', key, '-s', KeychainService, '-w'], undefined);
     return r.status === 0 ? r.stdout.replace(/\n$/, '') : null;

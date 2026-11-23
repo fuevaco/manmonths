@@ -1,4 +1,4 @@
-// 正規化根目錄與路徑（對照 LcAiPack.Core CanonicalRootResolver）。
+// 正規化根目錄與路徑（對照 CanonicalRootResolver）。
 // - 完整路徑化 → 只解析「最深一層已存在節點本身」的連結（含 Windows junction）→ 去除結尾分隔符；
 // - Windows 與 macOS 視為大小寫不敏感，統一轉小寫。
 // 平台可注入，讓 macOS 規則能在 Windows 上以自動測試驗證；注入非本機平台時不碰檔案系統。

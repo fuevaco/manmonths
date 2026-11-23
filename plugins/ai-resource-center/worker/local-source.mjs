@@ -1,5 +1,5 @@
 // 從資料夾安裝的開發中版本（本機來源）：預檢、打包到暫存目錄，以及讀取來源資料夾的 lcpack.json。
-// 對照 LC-AI-Pack SourceFolderArtifactResolver：每次都重新打包到新建的系統暫存目錄（lcaipack-sideload-<guid>）、
+// 對照 SourceFolderArtifactResolver：每次都重新打包到新建的系統暫存目錄（lcaipack-sideload-<guid>）、
 // 計算 SHA-256，不使用受管快取（同版號內容可能已改變）；呼叫端在套用結束、取消或失敗後刪除暫存目錄。
 import fs from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -60,7 +60,7 @@ export async function resolveSourceFolder(folder, { tempRoot = os.tmpdir() } = {
   }
 }
 
-/** 刪除暫存打包產物；刪不掉不影響已完成的部署（同 LC-AI-Pack 靜默略過）。 */
+/** 刪除暫存打包產物；刪不掉不影響已完成的部署（同樣靜默略過）。 */
 export async function disposeArtifact(artifact) {
   if (artifact?.tempDirectory) await rm(artifact.tempDirectory, { recursive: true, force: true }).catch(() => {});
 }

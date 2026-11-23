@@ -1,4 +1,4 @@
-// 從資料夾安裝（開發中版本）：預檢、打包、一鍵規劃、收據（對照 LC-AI-Pack LocalSourceReceiptFieldTests）、
+// 從資料夾安裝（開發中版本）：預檢、打包、一鍵規劃、收據（對照 LocalSourceReceiptFieldTests）、
 // 本機開發中清單、資源中心卡片的開發中版本、改用市集版、待補裝依來源 manifest 與補裝從來源重新打包。
 // 全部是合成資料；來源資料夾、家目錄與暫存目錄都在測試臨時目錄。
 import test from 'node:test';

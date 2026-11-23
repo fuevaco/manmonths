@@ -1,4 +1,4 @@
-// Codex 設定根偵測（對照 LcAiPack.Core Detection/CodexRootLocator、ClientRootRules、CodexRootLayout）。
+// Codex 設定根偵測（對照 Detection/CodexRootLocator、ClientRootRules、CodexRootLayout）。
 // 唯讀：名稱只縮小候選範圍，設定檔（config.toml 或 auth.json）才是判準；不建立任何檔案或目錄。
 import fs from 'node:fs';
 import os from 'node:os';

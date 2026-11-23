@@ -1,4 +1,4 @@
-// 生命週期編排（對照 LcAiPack.Core Deployment/DeploymentOperationOrchestrator.cs 與 DeploymentOperationContracts.cs 的 Apply 路徑）。
+// 生命週期編排（對照 Deployment/DeploymentOperationOrchestrator.cs 與 DeploymentOperationContracts.cs 的 Apply 路徑）。
 // 把設定命令放到既有 Plan／Apply 外層的「薄」編排層，順序不可改變：
 //   1. 建立 operation——在任何副作用之前，中斷後才能被接手；
 //   2. 前置檢查（授權 digest、blocking problem、動作與規劃意圖、實際狀態是否 stale）——零命令、零 target 寫入；

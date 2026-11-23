@@ -1,4 +1,4 @@
-// package × scope 安裝根目錄底下的確定性配置與設定命令的執行 context（對照 LcAiPack.Core Setup/SetupExecutionContext.cs）。
+// package × scope 安裝根目錄底下的確定性配置與設定命令的執行 context（對照 Setup/SetupExecutionContext.cs）。
 // 三個固定子目錄、責任互斥：
 //   payload/  平台擁有：每次執行前從已驗證 zip 重建，只落地作者明確宣告的 script 與 payloads；
 //   runtime/  發布者腳本自己的可寫區：平台不解讀也不清除，也是設定命令的 working directory；

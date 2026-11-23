@@ -58,7 +58,7 @@
   RC.sessionLost = (e) => SESSION_LOST.has(e && e.code);
 
   // 共用資料格式過新時只顯示易懂提示，不帶技術細節（細節已寫入 worker log）。
-  const SHARED_DATA_TOO_NEW = '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛';
+  const SHARED_DATA_TOO_NEW = '共用資料由較新版本寫入，請更新 Orca 外掛';
   RC.messageOf = (e) => (e && e.code === 'sharedDataTooNew' ? SHARED_DATA_TOO_NEW : (e && e.message) || String(e || '發生未知錯誤'));
 
   // ---------- 文字與提示 ----------

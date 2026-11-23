@@ -128,7 +128,7 @@ test('相容性詳情依 packageKey@version 快取，所有同時清單共用最
   await e.worker.call('rc.catalog.list'); assert.equal(requests, 10);
 });
 
-test('用戶端版本只回傳 Orca 外掛版本，不查詢 LC-AI-Pack 發行資料', async t => {
+test('用戶端版本只回傳 Orca 外掛版本，不查詢其他用戶端的發行資料', async t => {
   const e = await fixture(t);
   const result = await e.worker.call('rc.client.getVersions');
   assert.deepEqual(Object.keys(result), ['orca']);
@@ -139,7 +139,7 @@ test('用戶端版本只回傳 Orca 外掛版本，不查詢 LC-AI-Pack 發行�
 test('收據格式版本不支援時提供可辨識錯誤與友善提示，損壞錯誤維持原樣', async t => {
   const e = await fixture(t);
   e.details();
-  const message = '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛';
+  const message = '共用資料由較新版本寫入，請更新 Orca 外掛';
   fs.writeFileSync(path.join(e.home, 'receipts.json'), JSON.stringify({ receiptFormatVersion: 99 }));
   assert.deepEqual((await e.worker.call('rc.catalog.list')).installedError, { code: 'sharedDataTooNew', message });
   assert.deepEqual((await e.worker.call('rc.package.getDetails', { packageKey: 'demo' })).installedError, { code: 'sharedDataTooNew', message });
@@ -164,7 +164,7 @@ test('setup 值與完成狀態的格式版本不支援時轉成友善錯誤，�
   for (const name of ['setup.json', 'setup-commands.json']) {
     const file = path.join(e.home, name);
     fs.writeFileSync(file, JSON.stringify({ setupFormatVersion: 99 }));
-    await assert.rejects(e.worker.call('rc.install.run', input), { code: 'sharedDataTooNew', message: '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛' });
+    await assert.rejects(e.worker.call('rc.install.run', input), { code: 'sharedDataTooNew', message: '共用資料由較新版本寫入，請更新 Orca 外掛' });
     assert.ok(e.worker.state.logs.some(l => l.includes('99') && l.includes(name)));
     fs.writeFileSync(file, '{broken');
     await assert.rejects(e.worker.call('rc.install.run', input), { code: 'setup_invalid' });

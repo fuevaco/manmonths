@@ -1,4 +1,4 @@
-// 對照 LC-AI-Pack SessionRevokerTests 與 LogoutFlowTests。
+// 對照 SessionRevokerTests 與 LogoutFlowTests。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRevoker, clearSession } from '../worker/logout.mjs';

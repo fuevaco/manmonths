@@ -1,6 +1,6 @@
-// 登入工作階段的儲存（對照 LC-AI-Pack GUI SessionStore）。
+// 登入工作階段的儲存（對照 SessionStore）。
 //
-// 差異（ADR 0001）：存在外掛自己的秘密儲存（orca.secrets），不寫 LC-AI-Pack 的 gui-session.json；
+// 差異（ADR 0001）：存在外掛自己的秘密儲存（orca.secrets），不寫共用資料目錄的 gui-session.json；
 // 並記錄登入當時的市集網址，只有目前設定的市集網址相同時才續用。
 
 export const SESSION_SECRET_KEY = 'session.v1';

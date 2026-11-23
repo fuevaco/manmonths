@@ -293,7 +293,7 @@ test('登出失敗時顯示錯誤並保留已登入畫面；選單先收合', as
   assert.equal(hidden(panel, 'settings-menu'), true);
 });
 
-test('不再顯示 LC-AI-Pack 版本：即使 worker 仍回傳 lcAiPack 欄位也不呈現；版本讀取失敗時不顯示版本行', async () => {
+test('不再顯示其他用戶端版本：即使 worker 仍回傳 lcAiPack 欄位也不呈現；版本讀取失敗時不顯示版本行', async () => {
   let { panel } = await startSignedIn({ 'rc.client.getVersions': async () => ({ orca: { version: '1.2.3' }, lcAiPack: { version: '0.9.7', receiptVersion: '0.9.5' } }) });
   await openMenu(panel);
   assert.doesNotMatch(['menu-account', 'menu-url', 'menu-version'].map(id => textOf(panel.get(id))).join(' '), /LC-AI-Pack|0\.9\.7|0\.9\.5/);
@@ -319,8 +319,8 @@ test('↻ 在清單頁重新讀取登入狀態與目錄；在明細頁重新讀�
   assert.equal(hidden(panel, 'view-main'), true);
 });
 
-test('共用資料由較新的 LC-AI-Pack 寫入時，顯示易懂提示而非技術細節', async () => {
-  const friendly = '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛';
+test('共用資料由較新版本寫入時，顯示易懂提示而非技術細節', async () => {
+  const friendly = '共用資料由較新版本寫入，請更新 Orca 外掛';
   const tooNew = () => Object.assign(new Error('receiptFormatVersion 99 is newer than supported 1 (receipts.json)'), { code: 'sharedDataTooNew' });
   let { panel } = await startSignedIn({ 'rc.catalog.list': async () => { throw tooNew(); } });
   assert.equal(textOf(panel.get('catalog-status')).trim(), friendly);

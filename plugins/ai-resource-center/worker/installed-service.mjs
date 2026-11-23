@@ -66,7 +66,7 @@ export function createInstalledService({ lcaipackHome, userHome = os.homedir(), 
     }
   }
   /**
-   * 共用收據記錄的「最後執行部署的用戶端版本」（installedAt 最新的一筆）。收據由 LC-AI-Pack 與 Orca 外掛共用，
+   * 共用收據記錄的「最後執行部署的用戶端版本」（installedAt 最新的一筆）。收據由多個用戶端共用，
    * 版本字串無法分辨來源，所以排除與 excludeVersion（Orca 外掛目前版本）相同者；收據讀不到或沒有符合的收據時為 null。
    */
   function lastDeployingClientVersion(excludeVersion = null) {

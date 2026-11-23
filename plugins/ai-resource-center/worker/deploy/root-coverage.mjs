@@ -1,4 +1,4 @@
-// 對照 LC-AI-Pack InstalledViewModel 的未涵蓋根目錄判斷。
+// 對照 InstalledViewModel 的未涵蓋根目錄判斷。
 import { HostIds, HostProfiles } from './host-profiles.mjs';
 import { getDriver } from './resource-drivers.mjs';
 import { targetKeyOf } from './receipts.mjs';

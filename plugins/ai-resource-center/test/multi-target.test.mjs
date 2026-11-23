@@ -1,6 +1,6 @@
 // 工項 12：多個部署目標的部分成功與結果明細（ADR 0002）。
-// 從面板使用的 worker 請求契約進入。行為對照 LC-AI-Pack：每個部署目標是獨立交易（TargetApplyExecutor、
-// RollbackCharacterisationTests）、他包擁有的目標受阻（OwnershipIndex）。差異（ADR 0002）：LC-AI-Pack 計畫只要有
+// 從面板使用的 worker 請求契約進入。行為對照既有實作：每個部署目標是獨立交易（TargetApplyExecutor、
+// RollbackCharacterisationTests）、他包擁有的目標受阻（OwnershipIndex）。差異（ADR 0002）：原計畫只要有
 // 一個目標受阻就整份不可套用；資源中心改為可部署的目標照常套用、受阻的目標維持原狀並列出原因。
 import test from 'node:test';
 import assert from 'node:assert/strict';

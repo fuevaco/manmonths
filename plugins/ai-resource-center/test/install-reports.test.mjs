@@ -1,5 +1,5 @@
-// 工項 12：安裝回報（對照 LcAiPack.Tests InstallReportBuilderTests、InstallReportOutboxTests、GuiRegistryInstallReportingTests）。
-// builder 與 outbox 以公開介面測試；outbox 持久在外掛儲存（orca.storage），差異：LC-AI-Pack 以檔案儲存。
+// 工項 12：安裝回報（對照 InstallReportBuilderTests、InstallReportOutboxTests、GuiRegistryInstallReportingTests）。
+// builder 與 outbox 以公開介面測試；outbox 持久在外掛儲存（orca.storage），差異：原實作以檔案儲存。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildInstallReport, createInstallReportOutbox, INSTALL_REPORTS_KEY } from '../worker/install-reports.mjs';

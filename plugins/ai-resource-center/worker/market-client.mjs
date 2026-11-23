@@ -1,4 +1,4 @@
-// 帶登入工作階段的市集請求（對照 LC-AI-Pack GUI AuthenticatingHandler）。後續工項的目錄、詳情、下載都經過這裡。
+// 帶登入工作階段的市集請求（對照 AuthenticatingHandler）。後續工項的目錄、詳情、下載都經過這裡。
 //
 // - 只有與市集同源（scheme／host／port）的請求才帶 token 並走 401 流程；其他請求原樣送出。
 // - 每次送出前即時讀取目前 access token。

@@ -45,7 +45,7 @@ export function splitShellCommand(command) {
 }
 
 /**
- * 差異（ADR 0002）：LC-AI-Pack 的計畫只要有一個目標受阻就整份不可套用。資源中心改為「至少有一個可部署的目標、
+ * 差異（ADR 0002）：原計畫只要有一個目標受阻就整份不可套用。資源中心改為「至少有一個可部署的目標、
  * 且沒有計畫層級的阻擋（資源包格式、設定參數與設定命令前置條件）」即可確認；受阻的目標維持原狀並列出原因。
  */
 export function withCanApply(plan) {
@@ -58,7 +58,7 @@ export const blockedTargets = (plan) => plan.targets.filter(t => !t.canApply);
 
 /**
  * @param {object} options
- * @param {string} options.home        LC-AI-Pack 資料目錄（收據、鎖定）
+ * @param {string} options.home        共用資料目錄（收據、鎖定）
  * @param {string} [options.userHome]  使用者家目錄（全域收據的正規化根目錄）
  * @param {string} options.clientVersion  寫入收據的用戶端版本（Orca 外掛版本）
  * @param {string} [options.channel]   寫入收據的版本通道
@@ -120,7 +120,7 @@ export function createDeploymentPlanner(options) {
       }
       return { roots: [...new Set(roots.map(r => rules.normalize(r)))].sort(ordinal) };
     }
-    return { problem: blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請使用 LC-AI-Pack。') };
+    return { problem: blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請改用全域安裝。') };
   }
 
   const storeFor = () => ReceiptStore.forGlobal({ home: opts.home, userProfile: userHome, rules });
@@ -280,7 +280,7 @@ export function createDeploymentPlanner(options) {
     }
     const planProblems = [];
     if (!intent.hosts?.length) planProblems.push(blocking(ProblemCodes.unsupportedHost, '未選擇任何 AI 工具', '請至少選擇一個 Host／Surface。'));
-    if (intent.scope !== Scope.global) return rejected(intent, blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請使用 LC-AI-Pack。'), pkg);
+    if (intent.scope !== Scope.global) return rejected(intent, blocking(ProblemCodes.unsupportedRoute, 'Orca 只支援全域部署', '專案範圍請改用全域安裝。'), pkg);
     const { setupPlan = null, problem: setupProblem } = planSetupFor(pkg, intent);
     if (setupProblem) planProblems.push(setupProblem);
     if (setupPlan) planProblems.push(...setupPlan.problems);

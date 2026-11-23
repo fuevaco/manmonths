@@ -1,4 +1,4 @@
-// 帳密登入（對照 LC-AI-Pack GUI AuthService）：POST {market}/api/auth/login，client 固定為 "gui"。
+// 帳密登入（對照 AuthService）：POST {market}/api/auth/login，client 固定為 "gui"。
 import { ErrorCode, RcError } from './contract.mjs';
 import { HttpError, parseJson } from './http.mjs';
 import { createSecretMasker } from './setup/masker.mjs';

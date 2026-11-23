@@ -1,11 +1,11 @@
-// 工項 13：公開發布衛生檢查（對照 LC-AI-Pack SecretCanaryScanTests 的精神）。
+// 工項 13：公開發布衛生檢查（對照 SecretCanaryScanTests 的精神）。
 // 掃描整個外掛資料夾（原始碼、測試、測試資料、README、manifest），確認沒有組織內部位址、
 // 真實帳號、本機使用者路徑或憑證；並確認第三方授權與版本號一致。
 //
 // 決定（寫在這裡，README「發布前檢查」也有記載）：
 // - 開發用後端的測試帳號（genius／manager 與其密碼）屬於測試環境資料，整個資料夾（含測試）一律不得出現；
 //   測試只使用 alice／example.invalid 這類合成資料。唯一可連的「本機」位址是 localhost 與 127.0.0.1。
-// - `com.linkchain.lcaipack` 是與 LC-AI-Pack 桌面工具共用 Keychain 項目的協定常數，不是位址或帳號，
+// - `com.linkchain.lcaipack` 是與其他用戶端共用 Keychain 項目的協定常數，不是位址或帳號，
 //   只允許出現在 worker/setup/secrets.mjs 與對應測試、README 的說明。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

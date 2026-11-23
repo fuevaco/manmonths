@@ -1,5 +1,5 @@
-// 部署收據（對照 LcAiPack.Core Deployment/DeploymentReceipts.cs，receiptFormatVersion 2）。
-// 與 LC-AI-Pack 共用同一份檔案（ADR 0001），因此序列化必須與 .NET System.Text.Json
+// 部署收據（對照 Deployment/DeploymentReceipts.cs，receiptFormatVersion 2）。
+// 與其他用戶端共用同一份檔案（ADR 0001），因此序列化必須與 .NET System.Text.Json
 // （JsonSerializerDefaults.Web + WriteIndented）逐位元組相同：
 // - 欄位順序固定，含唯讀計算欄位 targetKey；source／sourcePath 為 null 時省略；
 // - 兩格縮排，換行用作業系統預設（Windows CRLF、macOS LF），檔尾無換行；
@@ -178,7 +178,7 @@ function sort(file) {
 }
 
 export const ReceiptStore = Object.freeze({
-  /** 使用者全域：{LC-AI-Pack 資料目錄}/receipts.json，正規化根目錄為使用者家目錄。 */
+  /** 使用者全域：{共用資料目錄}/receipts.json，正規化根目錄為使用者家目錄。 */
   forGlobal({ home, userProfile = os.homedir(), rules = createPathRules(), newline = os.EOL }) {
     return createStore(rules.path.join(home, FileName), userProfile, 'global', rules, newline);
   },

@@ -409,7 +409,7 @@ test('拒絕收據越界路徑，該目標內容與收據完整保留', async t 
   assert.deepEqual(fs.readFileSync(path.join(e.home, 'receipts.json')), before);
 });
 
-test('LC-AI-Pack golden 收據部署可移除（僅將 fixture 路徑搬到 harness 臨時根）', async t => {
+test('golden 收據部署可移除（僅將 fixture 路徑搬到 harness 臨時根）', async t => {
   const e = fixture(t);
   const golden = JSON.parse(fs.readFileSync(new URL('./fixtures/lcaipack-receipts.windows.golden.json', import.meta.url))).receipts.find(r => r.packageKey === 'demo.pkg');
   const local = e.add('.codex', 'skills/hello', 'SyncTree', 'golden deployment');

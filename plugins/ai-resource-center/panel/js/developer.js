@@ -104,7 +104,7 @@
     return box;
   }
 
-  /** 目前的正式版：版號最新的 release 且 active 的版本（停用與否都算；LC-AI-Pack 沒有另外的定義）。 */
+  /** 目前的正式版：版號最新的 release 且 active 的版本（停用與否都算；沒有另外的定義）。 */
   const currentRelease = (pack) => pack.versions.find(v => v.channel === 'release' && v.status === 'active') || null;
 
   /** 版本「⋯」選單：第一段是這個版本的主要動作（藍色粗體，沒有就不出現），其次是停用／啟用與審核歷程，Preview 才有紅色刪除。 */

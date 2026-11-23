@@ -1,9 +1,9 @@
-// 安裝回報（對照 LcAiPack.Core Registry/InstallReportBuilder、InstallReportOutbox 與 GUI RegistryService.ReportInstallAsync）。
+// 安裝回報（對照 Registry/InstallReportBuilder、InstallReportOutbox 與 GUI RegistryService.ReportInstallAsync）。
 //
 // 成功安裝或更新至少一個部署目標後，向市集回報 `POST api/market/packages/{key}/versions/{version}/installs`，供市集統計安裝數。
 // 回報是安裝後的附帶作業：builder、enqueue、flush 的任何失敗都留在這個邊界內，不能把已成功的安裝變成失敗。
 //
-// 差異（工項 12）：LC-AI-Pack 把待送回報存成 {home}/install-reports/{gui|cli}/{operationId}.json；
+// 差異（工項 12）：原實作把待送回報存成 {home}/install-reports/{gui|cli}/{operationId}.json；
 // 資源中心存在外掛自己的儲存（orca.storage 的 `install-reports.v1`），與桌面工具各自儲存、互不讀寫。
 // 回報內容只有資源包、版本、動作、成功的 host／surface、範圍、通道與用戶端版本；不含任何路徑、秘密、登入憑證或本機帳戶，
 // 儲存的項目另記市集登入帳號，只用來確保回報只用同一個帳號補送（不會送給市集）。

@@ -1,4 +1,4 @@
-// 設定參數規劃（對照 LcAiPack.Tests SetupPlanningTests、SetupPlanDigestTests 的參數情境）。
+// 設定參數規劃（對照 SetupPlanningTests、SetupPlanDigestTests 的參數情境）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -102,7 +102,7 @@ test('安裝根目錄由 Core 規則決定：家目錄下、依 package 與 scop
   assert.ok(plan.setupRoot.startsWith(path.resolve(e.home)));
   assert.notEqual(plan.setupRoot, e.plan({ parameters: [param('x', { default: 'y' })] }, { scope: 'global' }).setupRoot);
   assert.equal(fs.existsSync(e.home), false);
-  // 期望值由 LcAiPack.Core SetupRootResolver.Resolve 實際產生。
+  // 期望值由 SetupRootResolver.Resolve 實際產生。
   assert.equal(resolveSetupRoot('C:\\lchome', 'orca-rc-demo-mcp-params', 'global', 'C:\\Users\\Demo\\', createPathRules({ platform: 'win32', resolveLinks: false })),
     'C:\\lchome\\setup-roots\\orca-rc-demo-mcp-params\\global-dda80ed47911b770');
 });

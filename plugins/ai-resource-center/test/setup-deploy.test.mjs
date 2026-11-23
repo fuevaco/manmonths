@@ -1,4 +1,4 @@
-// 部署規劃與設定參數整合（對照 LcAiPack.Tests SetupPlanDigestTests、SecretCanaryScanTests、ManagedMcpLauncherTests 的部署面）。
+// 部署規劃與設定參數整合（對照 SetupPlanDigestTests、SecretCanaryScanTests、ManagedMcpLauncherTests 的部署面）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

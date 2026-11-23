@@ -1,4 +1,4 @@
-// 安裝操作狀態的持久層（對照 LcAiPack.Core Setup/SetupOperations.cs，operationFormatVersion 1）：
+// 安裝操作狀態的持久層（對照 Setup/SetupOperations.cs，operationFormatVersion 1）：
 // {home}/operations/{operationId}.json，log 是同目錄的 {operationId}.log。
 // operation state 一律放在使用者 home，即使是 Project 範圍也一樣——Project 移除不可能影響 Global，也不會連帶刪掉歷史 log。
 // create 在回傳前就已落檔，呼叫端可以安全地遵守「任何外部副作用前先持久化 operation」。
@@ -50,7 +50,7 @@ function serialize(record, nl) {
 
 /**
  * @param {object} options
- * @param {string} options.home  LC-AI-Pack 家目錄
+ * @param {string} options.home  共用資料目錄
  * @param {() => Date} [options.now]  時間來源（測試用）
  */
 export function createOperationStore({ home, now = () => new Date(), rules = createPathRules() }) {

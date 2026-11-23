@@ -186,7 +186,7 @@ test('既有 SemVer build 版本可刪除，路徑編碼且確認值保持完整
   assert.equal(market.requests.at(-1).body.confirmationVersion, value);
 });
 
-test('版本審核狀態與通道缺值採 LC-AI-Pack 降級，舊上傳者與缺少安裝次數', async t => {
+test('版本審核狀態與通道缺值採既有降級規則，舊上傳者與缺少安裝次數', async t => {
   const { call } = await fixture(t, { myPackages: [pack([version({ channel: 'Preview', status: null, uploadedBy: ' ', installCount: undefined })])] });
   const result = (await list(call))[0];
   assert.equal(result.installCount, 0);

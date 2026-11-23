@@ -1,4 +1,4 @@
-// LC-AI-Pack RemovalIntent：全部全域根、BackupAndRemove、保留 setup 與秘密（不 purge）。
+// RemovalIntent：全部全域根、BackupAndRemove、保留 setup 與秘密（不 purge）。
 import { displayPath } from './display-path.mjs';
 import os from 'node:os';
 import path from 'node:path';

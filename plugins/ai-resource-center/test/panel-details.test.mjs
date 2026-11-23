@@ -261,7 +261,7 @@ test('明細一律取推薦版本：不指定版本；勾選 Preview 時以 prev
   assert.deepEqual(normal.calls.findLast(c => c.method === 'rc.package.getDetails').input, { packageKey: 'demo', previewMode: false });
 });
 
-test('在明細頁按 ↻ 重新讀取推薦版本與已安裝狀態（例如 LC-AI-Pack 裝了舊版後出現可更新）', async () => {
+test('在明細頁按 ↻ 重新讀取推薦版本與已安裝狀態（例如其他用戶端裝了舊版後出現可更新）', async () => {
   let installed = false;
   const { panel, calls, open } = await start({ detail: () => installed
     ? detailOf({ installationStatus: 'updateAvailable', deployments: [dep({ version: '1.0.0', status: 'updateAvailable', updateVersion: '1.2.0' })] }) : detailOf() });

@@ -1,4 +1,4 @@
-// ConfigDocumentAdapters：只管理 MCP 的直接欄位，雜湊格式與 LC-AI-Pack 相同。
+// ConfigDocumentAdapters：只管理 MCP 的直接欄位，雜湊格式與既有格式相同。
 import { jsonString } from './receipts.mjs';
 import { ofText, ordinal } from './digest.mjs';
 import { renderMcpNode } from './mcp-node-renderer.mjs';

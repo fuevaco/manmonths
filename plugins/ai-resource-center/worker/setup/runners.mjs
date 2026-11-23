@@ -1,4 +1,4 @@
-// 設定命令的固定 runner 與本機環境（對照 LcAiPack.Core Setup/SetupRunnerRegistry.cs、SetupPlanEnvironment）。
+// 設定命令的固定 runner 與本機環境（對照 Setup/SetupRunnerRegistry.cs、SetupPlanEnvironment）。
 // runner 是白名單而非查表執行：runner 只能是 powershell（Windows）或 bash（macOS），對應的可執行檔由平台決定，
 // 資源包無法影響；永遠以 argv 陣列啟動，不接受完整 shell command string；第一版不支援提權。
 import fs from 'node:fs';

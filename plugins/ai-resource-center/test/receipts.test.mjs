@@ -1,5 +1,5 @@
-// 對照 LC-AI-Pack StoreLayoutCharacterisationTests 與 RealFileSystemContractTests（狀態檔原子寫入），
-// 並以 LC-AI-Pack（LcAiPack.Core ReceiptStore.Upsert）實際產生的收據檔確認位元組相容。
+// 對照 StoreLayoutCharacterisationTests 與 RealFileSystemContractTests（狀態檔原子寫入），
+// 並以 ReceiptStore.Upsert 實際產生的收據檔確認位元組相容。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
@@ -23,7 +23,7 @@ const receipt = (overrides = {}) => ({
   installedAt: '2026-11-21T03:04:05.12+00:00', clientVersion: '1.0.0', hostProfileVersion: 'codex/2026.10.1', ...overrides
 });
 
-test('共用 Codex 技能的 v2 收據與 LC-AI-Pack 產生的 Windows 檔逐位元組相容', async () => {
+test('共用 Codex 技能的 v2 收據與既有 Windows 收據檔逐位元組相容', async () => {
   const bytes = await readFile(new URL('./fixtures/lcaipack-shared-skill-v2.windows.golden.json', import.meta.url));
   const root = 'c:\\synthetic\\home';
   const shared = receipt({ packageKey: 'demo.skill', canonicalRoot: root, destinationPath: root + '\\.agents\\skills\\hello',
@@ -32,7 +32,7 @@ test('共用 Codex 技能的 v2 收據與 LC-AI-Pack 產生的 Windows 檔逐位
   assert.deepEqual(Buffer.from(serializeReceiptFile({ receiptFormatVersion: 2, receipts: [shared] }, '\r\n')), bytes);
 });
 
-test('LC-AI-Pack 產生的收據檔可讀回，原樣再序列化後逐位元組相同（Windows 換行）', async () => {
+test('既有收據檔可讀回，原樣再序列化後逐位元組相同（Windows 換行）', async () => {
   const bytes = await readFile(golden);
   const file = parseReceiptFile(bytes.toString('utf8'), 'golden');
   assert.equal(file.receipts.length, 3);
@@ -42,7 +42,7 @@ test('LC-AI-Pack 產生的收據檔可讀回，原樣再序列化後逐位元組
   assert.deepEqual(Buffer.from(serializeReceiptFile(file, '\r\n'), 'utf8'), bytes);
 });
 
-test('Orca 建立的收據與 LC-AI-Pack 寫出的格式一致：欄位順序、跳脫、targetKey 與時間格式', async () => {
+test('Orca 建立的收據與既有收據的格式一致：欄位順序、跳脫、targetKey 與時間格式', async () => {
   const expected = (await readFile(golden)).toString('utf8');
   const file = { receiptFormatVersion: 1, receipts: [
     { ...receipt({ packageKey: 'demo.pkg', packageSha256: 'ab', sourceSha256: 'ab', installedSha256: 'cd', canonicalRoot: 'c:\\users\\使用者\\.codex',

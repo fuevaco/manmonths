@@ -1,6 +1,6 @@
 // 對照 Deployment/OrcaClaudeMcpCleanup.cs。只清理 Orca 帳號中與主根相同的殘留。
-// Windows 與 LC-AI-Pack 相同；Linux 是外掛單方面的規則（ADR-0005）：Orca 開啟 Claude 時把主根的 mcpServers
-// 合併進帳號（只增不減），主根移除的 MCP 會留在帳號裡。macOS 與 LC-AI-Pack 一致，維持不清理。
+// Windows 與既有行為相同；Linux 是外掛單方面的規則（ADR-0005）：Orca 開啟 Claude 時把主根的 mcpServers
+// 合併進帳號（只增不減），主根移除的 MCP 會留在帳號裡。macOS 與既有行為一致，維持不清理。
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

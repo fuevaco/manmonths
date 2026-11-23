@@ -1,4 +1,4 @@
-// 對照 LC-AI-Pack HostProfileGoldenTests：路由表與 matrix digest 必須與桌面工具逐字一致。
+// 對照 HostProfileGoldenTests：路由表與 matrix digest 必須與桌面工具逐字一致。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HostProfiles, HostIds, SurfaceIds, isSafeTemplate } from '../worker/deploy/host-profiles.mjs';
@@ -34,7 +34,7 @@ const golden = [
   ['github-copilot', 'vscode', 'global', 'mcp', null]
 ];
 
-test('路由表與 LC-AI-Pack 的 golden 逐列一致', () => {
+test('路由表與 golden 逐列一致', () => {
   for (const [hostId, surfaceId, scope, kind, template] of golden) {
     const row = HostProfiles.rows.find(r => r.hostId === hostId && r.surfaceId === surfaceId && r.scope === scope && r.kind === kind);
     assert.ok(row, `${hostId}/${surfaceId}/${scope}/${kind}`);
@@ -42,8 +42,8 @@ test('路由表與 LC-AI-Pack 的 golden 逐列一致', () => {
   }
 });
 
-test('matrix digest 等於 LC-AI-Pack 計算出的值，代表路由表、版本與 root base 完全相同', () => {
-  // 取自 LC-AI-Pack HostProfileGoldenTests.Matrix_digest_is_stable_and_changes_with_the_table
+test('matrix digest 等於既有實作計算出的值，代表路由表、版本與 root base 完全相同', () => {
+  // 取自 HostProfileGoldenTests.Matrix_digest_is_stable_and_changes_with_the_table
   assert.equal(HostProfiles.matrixDigest, '8c5d9f5e56667df678fbe89ab6985453d980e30e0608ca7889890a9de2b6afbf');
 });
 

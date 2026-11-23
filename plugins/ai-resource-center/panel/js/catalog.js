@@ -6,7 +6,7 @@
   const { $, el, call, state } = RC;
 
   // ---------- 排序 ----------
-  // 可選的排序欄位只寫在 index.html 的 #catalog-sort-field 選項；方向預設依欄位而定（比照 LC-AI-Pack MarketSort）。
+  // 可選的排序欄位只寫在 index.html 的 #catalog-sort-field 選項；方向預設依欄位而定（比照 MarketSort）。
   const DEFAULT_SORT_FIELD = 'installCount';
   const sortFields = () => RC.optionValues($('catalog-sort-field'));
   const defaultDirection = (field) => (field === 'installCount' || field === 'uploadedAt' ? 'desc' : 'asc');
@@ -19,7 +19,7 @@
     sortDirection = direction === 'asc' || direction === 'desc' ? direction : defaultDirection(sortField);
   };
 
-  /** 方向鈕文字，比照 LC-AI-Pack MarketSort.DirectionText。 */
+  /** 方向鈕文字，比照 MarketSort.DirectionText。 */
   function directionText(field, direction) {
     const desc = direction === 'desc';
     const words = field === 'installCount' ? ['多→少', '少→多'] : field === 'uploadedAt' ? ['新→舊', '舊→新'] : ['Z→A', 'A→Z'];

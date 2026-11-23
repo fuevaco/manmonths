@@ -1,5 +1,5 @@
 // 主要驗收：從面板使用的 worker 請求契約進入，以臨時使用者目錄與合成資源包，
-// 依序走完登入、查詢、下載、規劃、確認套用及讀回（對照 LC-AI-Pack GuiPlanSharingTests、PlanConsentRegenerationTests）。
+// 依序走完登入、查詢、下載、規劃、確認套用及讀回（對照 GuiPlanSharingTests、PlanConsentRegenerationTests）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';

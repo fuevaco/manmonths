@@ -6,7 +6,7 @@
   const RC = window.RcPanel;
   const { $, el, call, state } = RC;
 
-  // 設定命令執行或略過的理由（對照 LC-AI-Pack PlanRenderer.DescribeReason）
+  // 設定命令執行或略過的理由（對照 PlanRenderer.DescribeReason）
   const REASON_LABELS = { FirstRun: '第一次執行', PreviousFailure: '上一次執行沒有成功，這次重試', ScriptChanged: '腳本內容與上次成功時不同', Reconfigure: '重新套用設定',
     UpdateRunOnUpdate: '版本改變且作者宣告更新時執行', SkippedAlreadySucceeded: '同版本且上次已成功', SkippedUpdateWithoutRunOnUpdate: '版本改變但作者未宣告更新時執行' };
   const BORROWED_NOTICE = '此命令是為 macOS 撰寫，將在 Linux 以 bash 執行。'; // Linux 借用 macOS 命令（planning.mjs 的 borrowedFromOs）
@@ -112,7 +112,7 @@
     $('confirm-body').replaceChildren(...[
       st.replanned ? el('div', { className: 'notice', 'data-role': 'replanned', textContent: '本機狀態已改變，以下是重新規劃後的內容，請再確認一次。' }) : null,
       !allBlocked && plan.missingParameters?.length ? confirmSection('missingParameters', '需要設定參數',
-        el('div', { className: 'hint', textContent: '儲存後與 LC-AI-Pack 共用；秘密只存入作業系統的安全儲存區。' }),
+        el('div', { className: 'hint', textContent: '設定儲存在這台電腦的共用設定檔；秘密只存入作業系統的安全儲存區。' }),
         ...plan.missingParameters.map(param => RC.paramField(param, st.inputs))) : null,
       !allBlocked && plan.setupCommands?.length ? commandSection(plan.setupCommands) : null,
       plan.blockedTargets?.length ? blockedSection(plan, spec.label, allBlocked) : null].filter(Boolean));

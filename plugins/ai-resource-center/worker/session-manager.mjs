@@ -1,4 +1,4 @@
-// 登入工作階段續期（對照 LC-AI-Pack GUI SessionManager）。
+// 登入工作階段續期（對照 SessionManager）。
 //
 // - single-flight：並行呼叫共用同一個 HTTP 請求與結果。
 // - 分類：200 且內容完整 → refreshed；401 auth.account-unavailable → rejected(account_unavailable)；

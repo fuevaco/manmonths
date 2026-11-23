@@ -1,4 +1,4 @@
-// 設定命令完成狀態（對照 LcAiPack.Core Setup/SetupCommandCompletionStore.cs，setupFormatVersion 1）。
+// 設定命令完成狀態（對照 Setup/SetupCommandCompletionStore.cs，setupFormatVersion 1）。
 // 全域：{home}/setup-commands.json；專案：{projectRoot}/.lcaipack/setup-commands.json。
 // identity 是資源包 × 範圍 × commandId，不含版本；紀錄只有版本、腳本雜湊與成功與否，絕不儲存參數或秘密。
 import fs from 'node:fs';

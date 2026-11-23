@@ -1,4 +1,4 @@
-// 穩定 SHA-256 計算（對照 LcAiPack.Core Deployment/ResourceDrivers.cs 的 Digest）。
+// 穩定 SHA-256 計算（對照 Deployment/ResourceDrivers.cs 的 Digest）。
 import { createHash } from 'node:crypto';
 
 /** bytes 的小寫十六進位 SHA-256。 */

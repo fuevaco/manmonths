@@ -1,4 +1,4 @@
-// 部署問題碼（對照 LcAiPack.Contract ProblemCodes；字串值必須一致）。
+// 部署問題碼（對照 ProblemCodes；字串值必須一致）。
 export const ProblemCodes = Object.freeze({
   invalidPackage: 'deployment.invalid-package',
   unsupportedContentKind: 'deployment.unsupported-content-kind',

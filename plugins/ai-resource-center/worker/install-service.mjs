@@ -141,7 +141,7 @@ export function createInstallService({ packages, session, preferences, installed
           state.unavailable.push(...previous.targets.filter(t => retried(t) && keyOfRecord(t) === key && !targets.some(local => local.id === t.targetId))
             .map(t => ({ ...t, reason: '找不到原本的部署位置，請確認工具與根目錄仍然存在' })));
         }
-        // 開發中版本沒有市集的相容工具清單：與 LC-AI-Pack 從資料夾安裝相同，列出所有支援的 AI 工具（Claude Desktop 仍只在含 MCP 時列入）。
+        // 開發中版本沒有市集的相容工具清單：與從資料夾安裝的既有行為相同，列出所有支援的 AI 工具（Claude Desktop 仍只在含 MCP 時列入）。
         const hosts = exact.localSource ? null : (await marketSelection()).detail.versions.find(v => v.version === nextVersion)?.hosts
           ?? (await packages.details(await session.requireClient(), exact)).versions.find(v => v.version === nextVersion).hosts;
         const containsMcp = contents.some(c => c.kind === 'mcp');

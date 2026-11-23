@@ -1,4 +1,4 @@
-// 安裝設定的參數規劃（對照 LcAiPack.Core Setup/SetupPlanning.cs 的參數部分、SetupRoot.cs、PlanDigest.AppendSetup）。
+// 安裝設定的參數規劃（對照 Setup/SetupPlanning.cs 的參數部分、SetupRoot.cs、PlanDigest.AppendSetup）。
 // 規劃零寫入：只讀已儲存值、查詢秘密有無；秘密的有效值永遠是 null。
 // 設定命令（setup.commands，對照 SetupPlanner.PlanCommands）：揭露身分、runner、腳本雜湊、已插值參數、相容性與「這次要不要跑」；
 // 規劃階段不啟動任何子行程。

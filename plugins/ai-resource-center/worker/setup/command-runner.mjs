@@ -1,4 +1,4 @@
-// 設定命令的執行器（對照 LcAiPack.Core Setup/SetupCommandRunner.cs）。這是平台唯一允許啟動 publisher setup script 的入口。
+// 設定命令的執行器（對照 Setup/SetupCommandRunner.cs）。這是平台唯一允許啟動 publisher setup script 的入口。
 //
 // 安全形狀：
 // - 只接受固定 runner 白名單解析出的可執行檔；資源包永遠提供不了完整 shell command string；
