@@ -4,7 +4,7 @@
   "id": "tfs-work-items",
   "publisher": "manmonths",
   "name": "Azure DevOps",
-  "version": "1.2.9",
+  "version": "1.3.0",
   "description": "人月維護的 Azure DevOps / 地端 TFS 工項互動面板，支援使用 PAT 查詢、新增（Task / Bug）、更新狀態、留言與一鍵派工給 Orca Agent。",
   "icon": "assets/icon.png",
   "author": {
@@ -81,6 +81,16 @@
         "type": "string",
         "default": "claude",
         "placeholder": "claude"
+      },
+      {
+        "key": "maxLoadedItems",
+        "title": "清單最多載入的工項數",
+        "description": "符合條件的工項超過這個數量時，只載入最近更新的這些筆（清單上方仍會顯示真實總數並提示被截斷）。調高會讓載入變慢。範圍 50–5000，預設 1000。",
+        "type": "integer",
+        "default": 1000,
+        "minimum": 50,
+        "maximum": 5000,
+        "placeholder": "1000"
       }
     ]
   },

@@ -378,6 +378,7 @@ html, body {
 .field input[type="text"],
 .field input[type="password"],
 .field input[type="url"],
+.field input[type="number"],
 .field select,
 .field textarea {
   width: 100%;
@@ -635,3 +636,68 @@ html, body {
 }
 
 .hidden { display: none !important; }
+
+/* 狀態複選下拉 */
+.multi { position: relative; flex: 1; min-width: 100px; }
+.multi-btn {
+  height: 24px;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  padding-right: 20px;
+  position: relative;
+}
+.multi-btn::after {
+  content: '▾';
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.multi-btn.has-selection { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.multi-pop {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 2px;
+  min-width: 100%;
+  width: max-content;
+  max-width: 280px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  padding: 3px 0;
+}
+.multi-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.multi-item:hover { background: var(--hover-bg); }
+.multi-item input { accent-color: var(--accent); margin: 0; cursor: pointer; }
+.multi-all { border-bottom: 1px solid var(--border); margin-bottom: 3px; padding-bottom: 6px; font-weight: 600; }
+
+/* 清單上方的總數說明 */
+.list-summary {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 2px 6px;
+}
+.list-summary.truncated {
+  color: var(--warn-color);
+  background: rgba(210, 153, 34, 0.12);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}

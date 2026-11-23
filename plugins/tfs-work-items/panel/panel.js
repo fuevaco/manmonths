@@ -15,7 +15,10 @@
   let projectFilter = '__ALL__';
   let scope = 'mine';
   let typeFilter = 'All';
-  let stateFilter = '__ALL_OPEN__';
+  let selectedStates = new Set(); // 狀態複選；空集合 = 所有（未結案）狀態
+  let knownStates = [];           // 目前看過的狀態，用來列出可勾選的選項
+  let listMeta = { total: 0, loaded: 0, truncated: false }; // 伺服器回報的符合總數與載入數
+  let stateRefreshTimer = null;
   let searchText = '';
   let createType = 'Task';
   let projects = []; // [{ name, description, label }]
@@ -46,7 +49,8 @@
   let filterCombo = null;   // 首頁專案篩選（可搜尋）
   let settingsCombo = null; // 設定頁預設專案（可搜尋）
   const searchInput = document.getElementById('search-input');
-  const stateSelectFilter = document.getElementById('state-filter');
+  const stateBtn = document.getElementById('state-filter-btn');
+  const statePop = document.getElementById('state-filter-pop');
 
   // Settings
   const cfgUrl = document.getElementById('cfg-url');
@@ -58,6 +62,7 @@
   const btnClearPat = document.getElementById('btn-clear-pat');
   const cfgApiVersion = document.getElementById('cfg-api-version');
   const cfgInsecureTls = document.getElementById('cfg-insecure-tls');
+  const cfgMaxItems = document.getElementById('cfg-max-items');
   const cfgProject = document.getElementById('cfg-project');
   const projectComboList = document.getElementById('project-combo-list');
   const cfgProjectClear = document.getElementById('cfg-project-clear');
@@ -445,6 +450,7 @@
     if (settingsCombo) settingsCombo.setValue(cfg.project || '');
     cfgApiVersion.value = cfg.apiVersion || '5.0';
     cfgInsecureTls.checked = Boolean(cfg.allowInsecureTls);
+    cfgMaxItems.value = cfg.maxLoadedItems || 1000;
     cfgAgent.value = cfg.defaultAgent || 'claude';
     cfgPat.value = '';
     if (cfg.hasPat) {
@@ -481,31 +487,66 @@
     return merged;
   }
 
+  // 狀態篩選改由伺服器端處理（才不會因為只載入部分工項而算錯數量），
+  // 所以選項要自己累積：選了某些狀態後，清單裡只剩那些狀態，其他選項不能因此消失。
   function populateStateFilter(list) {
-    const prev = stateSelectFilter.value || stateFilter;
-    const states = getOpenStatesList(list);
-    stateSelectFilter.innerHTML = '<option value="__ALL_OPEN__">所有狀態</option>';
-    for (const st of states) {
-      const opt = document.createElement('option');
-      opt.value = st;
-      opt.textContent = st;
-      stateSelectFilter.appendChild(opt);
+    for (const st of getOpenStatesList(list)) {
+      if (!knownStates.includes(st)) knownStates.push(st);
     }
-    if (prev && Array.from(stateSelectFilter.options).some((o) => o.value === prev)) {
-      stateSelectFilter.value = prev;
-      stateFilter = prev;
-    } else {
-      stateSelectFilter.value = '__ALL_OPEN__';
-      stateFilter = '__ALL_OPEN__';
+    for (const st of selectedStates) {
+      if (!knownStates.includes(st)) knownStates.push(st);
+    }
+    renderStatePop();
+    updateStateButton();
+  }
+
+  function updateStateButton() {
+    const sel = knownStates.filter((s) => selectedStates.has(s));
+    let label = '所有狀態';
+    if (sel.length === 1) label = sel[0];
+    else if (sel.length === 2) label = sel.join('、');
+    else if (sel.length > 2) label = `${sel.slice(0, 2).join('、')} +${sel.length - 2}`;
+    stateBtn.textContent = label;
+    stateBtn.title = sel.length ? `狀態：${sel.join('、')}（可複選）` : '依工作狀態篩選（可複選）';
+    stateBtn.classList.toggle('has-selection', sel.length > 0);
+  }
+
+  function renderStatePop() {
+    statePop.textContent = '';
+    const makeItem = (text, checked, attrs, cls = '') => {
+      const label = document.createElement('label');
+      label.className = `multi-item ${cls}`.trim();
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = checked;
+      for (const [k, v] of Object.entries(attrs)) cb.setAttribute(k, v);
+      const span = document.createElement('span');
+      span.textContent = text;
+      label.append(cb, span);
+      return label;
+    };
+    statePop.appendChild(makeItem('所有狀態', selectedStates.size === 0, { 'data-all': '1' }, 'multi-all'));
+    for (const st of knownStates) {
+      statePop.appendChild(makeItem(st, selectedStates.has(st), { 'data-state': st }));
     }
   }
 
+  function setStatePopOpen(open) {
+    statePop.classList.toggle('hidden', !open);
+    stateBtn.setAttribute('aria-expanded', String(open));
+  }
+
+  // 連續勾選多個狀態時只重新查詢一次
+  function onStateSelectionChanged() {
+    updateStateButton();
+    renderStatePop();
+    clearTimeout(stateRefreshTimer);
+    stateRefreshTimer = setTimeout(() => refreshWorkItems(), 300);
+  }
+
+  // 清單已由伺服器依狀態篩選過，這裡只負責重新繪製
   function applyStateFilter() {
-    if (stateFilter === '__ALL_OPEN__') {
-      items = allItems;
-    } else {
-      items = allItems.filter((i) => i.state === stateFilter);
-    }
+    items = allItems;
     renderList();
   }
 
@@ -517,8 +558,16 @@
         project: projectFilter,
         scope,
         type: typeFilter,
+        states: [...selectedStates],
         search: searchText
       });
+      listMeta = {
+        total: Number.isFinite(res.total) ? res.total : (res.items || []).length,
+        loaded: Number.isFinite(res.loaded) ? res.loaded : (res.items || []).length,
+        truncated: Boolean(res.truncated),
+        queryLimitReached: Boolean(res.queryLimitReached),
+        limit: Number.isFinite(res.limit) ? res.limit : null
+      };
       if (res.projects) {
         populateProjectsUI(res.projects);
       }
@@ -596,12 +645,31 @@
     return card;
   }
 
+  // 清單上方的總數說明：沒有被截斷時就是目前顯示的筆數（含剛新增、尚未同步的項目）；
+  // 被截斷時顯示伺服器回報的真實總數，並提醒使用者縮小範圍。
+  function createListSummary() {
+    const div = document.createElement('div');
+    if (listMeta.truncated) {
+      const total = Math.max(listMeta.total, items.length);
+      div.className = 'list-summary truncated';
+      div.textContent =
+        `共 ${total}${listMeta.queryLimitReached ? '+' : ''} 筆符合條件，` +
+        `僅載入最近更新的 ${items.length} 筆。請用專案、狀態或關鍵字縮小範圍，` +
+        `或到 ⚙️ 設定調高「清單最多載入的工項數」${listMeta.limit ? `（目前 ${listMeta.limit}）` : ''}。`;
+    } else {
+      div.className = 'list-summary';
+      div.textContent = `共 ${items.length} 筆`;
+    }
+    return div;
+  }
+
   function renderList() {
     viewList.innerHTML = '';
     if (items.length === 0) {
       viewList.innerHTML = '<div class="empty-state">找不到符合條件的 Task / Bug 工項。</div>';
       return;
     }
+    viewList.appendChild(createListSummary());
 
     // Group by project description when showing all projects
     if (projectFilter === '__ALL__') {
@@ -632,7 +700,8 @@
 
         const countSpan = document.createElement('span');
         countSpan.className = 'project-group-count';
-        countSpan.textContent = String(group.items.length);
+        // 被截斷時，各專案的數字只是「已載入的」，加上 + 表示實際可能更多
+        countSpan.textContent = `${group.items.length}${listMeta.truncated ? '+' : ''}`;
 
         header.append(titleSpan, countSpan);
         viewList.appendChild(header);
@@ -880,6 +949,8 @@
           apiVersion: cfgApiVersion.value,
           allowInsecureTls: cfgInsecureTls.checked,
           defaultAgent: cfgAgent.value,
+          // 留空代表用預設值；超出 50–5000 的數字由 worker 夾回範圍
+          ...(cfgMaxItems.value.trim() === '' ? {} : { maxLoadedItems: Number(cfgMaxItems.value) }),
           authMode: cfgAuthMode.value,
           ...(cfgPat.value.trim() ? { pat: cfgPat.value.trim() } : {})
         });
@@ -910,9 +981,30 @@
       refreshWorkItems();
     });
 
-    stateSelectFilter.addEventListener('change', () => {
-      stateFilter = stateSelectFilter.value;
-      applyStateFilter();
+    // 狀態複選下拉
+    stateBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setStatePopOpen(statePop.classList.contains('hidden'));
+    });
+    statePop.addEventListener('click', (e) => e.stopPropagation());
+    statePop.addEventListener('change', (e) => {
+      const cb = e.target;
+      if (cb.getAttribute('data-all')) {
+        selectedStates.clear(); // 「所有狀態」＝清除所有勾選
+      } else {
+        const st = cb.getAttribute('data-state');
+        if (!st) return;
+        if (cb.checked) selectedStates.add(st);
+        else selectedStates.delete(st);
+      }
+      onStateSelectionChanged();
+    });
+    document.addEventListener('click', () => setStatePopOpen(false));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !statePop.classList.contains('hidden')) {
+        setStatePopOpen(false);
+        stateBtn.focus();
+      }
     });
 
     searchInput.addEventListener('input', () => {
@@ -999,9 +1091,11 @@
             b.classList.toggle('active', b.dataset.scope === 'all')
           );
         }
-        if (stateFilter !== '__ALL_OPEN__' && stateFilter !== created.state) {
-          stateFilter = '__ALL_OPEN__';
-          stateSelectFilter.value = '__ALL_OPEN__';
+        // 新建工項的狀態不在目前勾選的狀態內時，清除狀態篩選，才看得到剛建立的項目
+        if (selectedStates.size > 0 && !selectedStates.has(created.state)) {
+          selectedStates.clear();
+          updateStateButton();
+          renderStatePop();
         }
 
         // Optimistically prepend immediately, then sync with server while keeping banner

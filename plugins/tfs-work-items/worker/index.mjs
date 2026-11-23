@@ -176,6 +176,7 @@ async function loadConfig(orca) {
     allowInsecureTls: Boolean(all.allowInsecureTls),
     defaultAgent: String(all.defaultAgent || 'claude').trim() || 'claude',
     authMode: normalizeAuthMode(all.authMode),
+    maxLoadedItems: normalizeMaxLoaded(all.maxLoadedItems),
     pat: pat || ''
   };
 }
@@ -558,6 +559,49 @@ const WORK_ITEM_FIELDS = [
   'Microsoft.VSTS.TCM.ReproSteps'
 ].join(',');
 
+// 工項查詢的數量上限：
+// - WIQL 只回傳 id，單一查詢最多 20000 筆（TFS / Azure DevOps 的限制），所以總數（total）是準確的
+// - 批次取得工項明細一次最多 200 筆，超過會被伺服器拒絕，所以要分批
+// - 面板最多載入「設定的筆數」明細（最近更新的優先），避免一次拉太多資料；超過時會標示被截斷
+//   筆數可在設定調整（maxLoadedItems），預設 1000，限制在 50–5000
+const WIQL_MAX_IDS = 20000;
+const WORK_ITEMS_BATCH = 200;
+const MAX_LOADED_DEFAULT = 1000;
+const MAX_LOADED_MIN = 50;
+const MAX_LOADED_MAX = 5000;
+const DETAIL_CONCURRENCY = 3;
+
+// 設定值轉成合法的載入上限：不是數字就用預設值，超出範圍就夾回 50–5000
+function normalizeMaxLoaded(value) {
+  const n = Math.trunc(Number(value));
+  if (value === '' || value === null || value === undefined || !Number.isFinite(n)) return MAX_LOADED_DEFAULT;
+  return Math.min(MAX_LOADED_MAX, Math.max(MAX_LOADED_MIN, n));
+}
+
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i], i);
+      }
+    })
+  );
+  return results;
+}
+
+// 狀態篩選：支援多選（states 陣列），也相容舊的單選 state 字串。
+// 回傳 { wanted: string[], impossible: boolean }；impossible = 使用者只選了「已關閉」類狀態，
+// 而面板本來就不顯示這類工項，所以結果必然是 0 筆，不需要查詢。
+function normalizeStateFilter(input) {
+  const raw = Array.isArray(input.states) ? input.states : input.state ? [input.state] : [];
+  const requested = [...new Set(raw.map((s) => String(s ?? '').trim()).filter((s) => s && s !== '__ALL_OPEN__'))];
+  const wanted = requested.filter((s) => !CLOSED_STATES.has(s));
+  return { wanted, impossible: requested.length > 0 && wanted.length === 0 };
+}
+
 export default function activate(orca) {
   orca.log('TFS Work Items worker activated.');
 
@@ -570,6 +614,7 @@ export default function activate(orca) {
       allowInsecureTls: cfg.allowInsecureTls,
       defaultAgent: cfg.defaultAgent,
       authMode: cfg.authMode,
+      maxLoadedItems: cfg.maxLoadedItems,
       hasPat: Boolean(cfg.pat)
     };
   });
@@ -592,6 +637,9 @@ export default function activate(orca) {
     }
     if (typeof input.authMode === 'string') {
       await orca.settings.set('authMode', normalizeAuthMode(input.authMode));
+    }
+    if (input.maxLoadedItems !== undefined) {
+      await orca.settings.set('maxLoadedItems', normalizeMaxLoaded(input.maxLoadedItems));
     }
     if (typeof input.pat === 'string' && input.pat.trim()) {
       await orca.secrets.set(SECRET_PAT_KEY, input.pat.trim());
@@ -663,7 +711,7 @@ export default function activate(orca) {
     const projectFilter = String(input.project !== undefined ? input.project : cfg.project || '').trim();
     const scope = input.scope || 'mine'; // 'mine' | 'all'
     const typeFilter = input.type || 'All'; // 'All' | 'Task' | 'Bug'
-    const stateFilter = String(input.state || '').trim();
+    const { wanted: wantedStates, impossible: onlyClosedStates } = normalizeStateFilter(input);
     const search = String(input.search || '').trim();
 
     // Direct #ID lookup (collection-level, works across all projects)
@@ -674,10 +722,13 @@ export default function activate(orca) {
         cfg,
         `_apis/wit/workitems/${targetId}?fields=${encodeURIComponent(WORK_ITEM_FIELDS)}&api-version=${encodeURIComponent(cfg.apiVersion)}`
       );
-      return {
-        items: item ? [normalizeWorkItem(cfg, item, projectMap)] : [],
-        projects
-      };
+      const found = item ? [normalizeWorkItem(cfg, item, projectMap)] : [];
+      return { items: found, projects, total: found.length, loaded: found.length, truncated: false };
+    }
+
+    // 只選了「已關閉」類狀態：面板不顯示這類工項，不必查詢
+    if (onlyClosedStates) {
+      return { items: [], projects, total: 0, loaded: 0, truncated: false };
     }
 
     const conditions = [];
@@ -699,8 +750,10 @@ export default function activate(orca) {
     // Always exclude closed/done/removed items (both English and Chinese TFS states)
     conditions.push(`[System.State] NOT IN (${CLOSED_STATES_WIQL})`);
 
-    if (stateFilter && stateFilter !== '__ALL_OPEN__') {
-      conditions.push(`[System.State] = '${stateFilter.replace(/'/g, "''")}'`);
+    if (wantedStates.length === 1) {
+      conditions.push(`[System.State] = '${wantedStates[0].replace(/'/g, "''")}'`);
+    } else if (wantedStates.length > 1) {
+      conditions.push(`[System.State] IN (${wantedStates.map((s) => `'${s.replace(/'/g, "''")}'`).join(', ')})`);
     }
 
     if (search) {
@@ -713,8 +766,8 @@ export default function activate(orca) {
     // Collection-level WIQL endpoint works across ALL projects when projectFilter is empty
     const wiqlPath =
       projectFilter && projectFilter !== '__ALL__'
-        ? `${encodeURIComponent(projectFilter)}/_apis/wit/wiql?$top=100&api-version=${encodeURIComponent(cfg.apiVersion)}`
-        : `_apis/wit/wiql?$top=100&api-version=${encodeURIComponent(cfg.apiVersion)}`;
+        ? `${encodeURIComponent(projectFilter)}/_apis/wit/wiql?$top=${WIQL_MAX_IDS}&api-version=${encodeURIComponent(cfg.apiVersion)}`
+        : `_apis/wit/wiql?$top=${WIQL_MAX_IDS}&api-version=${encodeURIComponent(cfg.apiVersion)}`;
 
     const wiqlRes = await tfsRequest(cfg, wiqlPath, {
       method: 'POST',
@@ -724,19 +777,40 @@ export default function activate(orca) {
     const sampleProj = (projectFilter && projectFilter !== '__ALL__') ? projectFilter : projects[0]?.name;
     const openStates = await fetchOpenStatesCatalog(cfg, sampleProj);
 
-    const ids = (wiqlRes?.workItems || []).map((w) => w.id).slice(0, 100);
-    if (ids.length === 0) {
-      return { items: [], projects, openStates };
+    // WIQL 依「最近更新」排序，所以截斷時留下的是最近更新的工項
+    const ids = (wiqlRes?.workItems || []).map((w) => w.id);
+    const total = ids.length;
+    // 恰好等於查詢上限，代表實際可能更多（伺服器已在上限截斷）
+    const queryLimitReached = total >= WIQL_MAX_IDS;
+    if (total === 0) {
+      return { items: [], projects, openStates, total: 0, loaded: 0, truncated: false };
     }
 
-    const batchRes = await tfsRequest(
-      cfg,
-      `_apis/wit/workitems?ids=${ids.join(',')}&fields=${encodeURIComponent(WORK_ITEM_FIELDS)}&api-version=${encodeURIComponent(cfg.apiVersion)}`
+    const loadIds = ids.slice(0, cfg.maxLoadedItems);
+    const chunks = [];
+    for (let i = 0; i < loadIds.length; i += WORK_ITEMS_BATCH) chunks.push(loadIds.slice(i, i + WORK_ITEMS_BATCH));
+    const batches = await mapLimit(chunks, DETAIL_CONCURRENCY, (chunk) =>
+      tfsRequest(
+        cfg,
+        `_apis/wit/workitems?ids=${chunk.join(',')}&fields=${encodeURIComponent(WORK_ITEM_FIELDS)}&api-version=${encodeURIComponent(cfg.apiVersion)}`
+      )
     );
 
-    const byId = new Map((batchRes?.value || []).map((item) => [item.id, normalizeWorkItem(cfg, item, projectMap)]));
-    const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
-    return { items: ordered, projects, openStates };
+    const byId = new Map();
+    for (const batchRes of batches) {
+      for (const item of batchRes?.value || []) byId.set(item.id, normalizeWorkItem(cfg, item, projectMap));
+    }
+    const ordered = loadIds.map((id) => byId.get(id)).filter(Boolean);
+    return {
+      items: ordered,
+      projects,
+      openStates,
+      total,
+      loaded: ordered.length,
+      limit: cfg.maxLoadedItems,
+      truncated: total > ordered.length || queryLimitReached,
+      ...(queryLimitReached ? { queryLimitReached: true } : {})
+    };
   });
 
   orca.panels.handle('tfs.createWorkItem', async (input = {}) => {
