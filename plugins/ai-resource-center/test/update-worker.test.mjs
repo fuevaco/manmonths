@@ -61,6 +61,151 @@ test('未登入先隱藏；關閉間隔、重新啟用、登出與登入立即�
   assert.equal(status(e.worker).visible, false, '新工作階段不沿用登出前摘要');
 });
 
+test('工作階段遭拒時儲存所屬市集，需登入優先於更新數且面板提示不變', async t => {
+  const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+  await e.worker.call('rc.updates.checkNow');
+  assert.equal(status(e.worker).text, '1');
+  e.market.revokeAllSessions();
+  await assert.rejects(e.worker.call('rc.updates.checkNow'), { code: 'session_expired' });
+  await settle();
+  assert.deepEqual(status(e.worker), { id: 'update-reminder', text: '需登入', tone: 'danger', visible: true,
+    tooltip: '資源中心登入已過期，無法檢查更新。請到側欄「資源中心」分頁重新登入。' });
+  assert.deepEqual(e.worker.state.storage.get('resource-center.session-expired'), { marketUrl: e.market.url });
+  assert.deepEqual(await e.worker.call('rc.session.getState'), { marketUrl: e.market.url, signedIn: false, notice: '登入已過期，請重新登入' });
+  assert.equal(e.timers.tasks.size, 0);
+});
+
+test('關閉檢查仍顯示需登入，共用 host state 重開後恢復提醒且不改面板提示', async t => {
+  const e = await setup(t); await e.signIn();
+  await e.worker.call('rc.preferences.set', { checkIntervalMinutes: 0 }); await settle();
+  e.market.revokeAllSessions();
+  await assert.rejects(e.worker.call('rc.updates.checkNow'), { code: 'session_expired' });
+  await settle();
+  const previous = status(e.worker);
+  assert.equal(previous.text, '需登入'); assert.equal(previous.visible, true);
+  e.worker.dispose();
+  const before = e.market.requests.length;
+  const restarted = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => restarted.dispose());
+  assert.deepEqual(await restarted.call('rc.session.getState'), { marketUrl: e.market.url, signedIn: false });
+  await settle();
+  assert.deepEqual(status(restarted), previous);
+  assert.deepEqual(restarted.state.storage.get('resource-center.session-expired'), { marketUrl: e.market.url });
+  assert.equal(e.timers.tasks.size, 0);
+  assert.equal(e.market.requests.length, before);
+});
+
+test('登入失敗保留過期提醒；重新登入成功清除旗標並恢復更新數顯示', async t => {
+  const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+  e.market.revokeAllSessions();
+  await assert.rejects(e.worker.call('rc.updates.checkNow'), { code: 'session_expired' }); await settle();
+  await assert.rejects(e.worker.call('rc.session.signIn', { marketUrl: e.market.url, username: 'alice', password: 'wrong' }));
+  assert.equal(status(e.worker).text, '需登入');
+  assert.deepEqual(e.worker.state.storage.get('resource-center.session-expired'), { marketUrl: e.market.url });
+  await e.signIn();
+  assert.equal(e.worker.state.storage.has('resource-center.session-expired'), false);
+  assert.equal(status(e.worker).visible, false);
+  await e.worker.call('rc.updates.checkNow');
+  assert.equal(status(e.worker).text, '1'); assert.equal(status(e.worker).tone, 'warning');
+  assert.equal(status(e.worker).visible, true);
+});
+
+test('過期後主動登出立即清除旗標並隱藏，重開也不再提醒', async t => {
+  const e = await setup(t); await e.signIn();
+  e.market.revokeAllSessions();
+  await assert.rejects(e.worker.call('rc.updates.checkNow'), { code: 'session_expired' }); await settle();
+  assert.equal(status(e.worker).text, '需登入');
+  assert.deepEqual(await e.worker.call('rc.session.signOut'), { marketUrl: e.market.url, signedIn: false });
+  assert.equal(e.worker.state.storage.has('resource-center.session-expired'), false);
+  assert.deepEqual(status(e.worker), { id: 'update-reminder', visible: false });
+  e.worker.dispose();
+  const restarted = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => restarted.dispose());
+  await restarted.call('rc.session.getState'); await settle();
+  assert.deepEqual(status(restarted), { id: 'update-reminder', visible: false });
+});
+
+test('啟動時過期旗標所屬市集不同即刪除並隱藏，不改登入畫面', async t => {
+  const e = await setup(t); await e.signIn();
+  e.market.revokeAllSessions();
+  await assert.rejects(e.worker.call('rc.updates.checkNow'), { code: 'session_expired' }); await settle();
+  e.worker.dispose();
+  e.worker.state.settings.set('marketUrl', 'https://other.example');
+  const restarted = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => restarted.dispose());
+  assert.deepEqual(await restarted.call('rc.session.getState'), { marketUrl: 'https://other.example', signedIn: false }); await settle();
+  assert.equal(restarted.state.storage.has('resource-center.session-expired'), false);
+  assert.deepEqual(status(restarted), { id: 'update-reminder', visible: false });
+});
+
+test('啟動發現舊工作階段綁定其他市集時，同時清除過期旗標並隱藏', async t => {
+  const e = await setup(t); await e.signIn();
+  const previousSession = e.worker.state.secrets.get('session.v1');
+  e.worker.dispose();
+  e.worker.state.settings.set('marketUrl', 'https://other.example');
+  e.worker.state.secrets.set('session.v1', previousSession);
+  e.worker.state.storage.set('resource-center.session-expired', { marketUrl: 'https://other.example' });
+  const restarted = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => restarted.dispose());
+  assert.deepEqual(await restarted.call('rc.session.getState'), { marketUrl: 'https://other.example', signedIn: false }); await settle();
+  assert.equal(restarted.state.storage.has('resource-center.session-expired'), false);
+  assert.equal(restarted.state.secrets.has('session.v1'), false);
+  assert.deepEqual(status(restarted), { id: 'update-reminder', visible: false });
+});
+
+test('目錄的相容模式 401 與帳號停用拒絕也保留需登入提醒，面板沿用各自原因', async t => {
+  for (const legacy of [true, false]) {
+    const e = await setup(t);
+    if (legacy) e.market.override('POST /api/auth/login', () => ({ status: 200,
+      body: { token: 'legacy-access', expiresAt: new Date(Date.now() + 3600000).toISOString() } }));
+    else e.market.override('POST /api/auth/refresh', () => ({ status: 401, body: { code: 'auth.account-unavailable' } }));
+    await e.signIn();
+    e.market.expireAccessTokens();
+    await assert.rejects(e.worker.call('rc.catalog.list'), { code: 'session_expired' }); await settle();
+    assert.equal(status(e.worker).text, '需登入'); assert.equal(status(e.worker).tone, 'danger');
+    assert.deepEqual(e.worker.state.storage.get('resource-center.session-expired'), { marketUrl: e.market.url });
+    assert.equal((await e.worker.call('rc.session.getState')).notice,
+      legacy ? '登入已過期，請重新登入' : '帳號目前無法使用，請聯絡管理員');
+  }
+});
+
+test('執行中變更市集網址會清除原工作階段或過期旗標並隱藏提醒', async t => {
+  for (const expired of [false, true]) {
+    const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+    await e.worker.call('rc.updates.checkNow');
+    if (expired) {
+      e.market.revokeAllSessions();
+      await assert.rejects(e.worker.call('rc.updates.checkNow'), { code: 'session_expired' }); await settle();
+    }
+    e.worker.state.settings.set('marketUrl', 'https://other.example');
+    assert.deepEqual(await e.worker.call('rc.session.getState'), { marketUrl: 'https://other.example', signedIn: false });
+    assert.equal(e.worker.state.storage.has('resource-center.session-expired'), false);
+    assert.equal(e.worker.state.secrets.has('session.v1'), false);
+    assert.deepEqual(status(e.worker), { id: 'update-reminder', visible: false });
+    assert.equal(e.timers.tasks.size, 0);
+  }
+});
+
+test('旗標寫入尚未完成也立即顯示需登入並停止排程，隨後登出不留下舊旗標', async t => {
+  const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+  await e.worker.call('rc.updates.checkNow');
+  let entered, release;
+  const started = new Promise(resolve => { entered = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  const set = e.worker.orca.storage.set;
+  e.worker.orca.storage.set = async (key, value) => {
+    if (key === 'resource-center.session-expired') { entered(); await gate; }
+    return set(key, value);
+  };
+  e.market.revokeAllSessions();
+  const check = e.worker.call('rc.updates.checkNow').catch(error => error);
+  await started;
+  let logout;
+  try {
+    assert.equal(status(e.worker).text, '需登入');
+    assert.equal(e.timers.tasks.size, 0);
+    logout = e.worker.call('rc.session.signOut');
+  } finally { release(); await check; await logout; }
+  assert.equal(e.worker.state.storage.has('resource-center.session-expired'), false);
+  assert.deepEqual(status(e.worker), { id: 'update-reminder', visible: false });
+});
+
 test('tooltip 依序保留完整版本列與更新指引，超長以剩餘數結尾且不超過 256 字', async t => {
   const e = await setup(t); await e.signIn();
   e.catalog.splice(0, e.catalog.length, ...Array.from({ length: 10 }, (_, i) => ({

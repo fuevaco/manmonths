@@ -18,6 +18,7 @@ import { clearSession, createRevoker } from './logout.mjs';
 
 export const SESSION_EXPIRED_NOTICE = '登入已過期，請重新登入';
 export const ACCOUNT_UNAVAILABLE_NOTICE = '帳號目前無法使用，請聯絡管理員';
+const expiredKey = 'resource-center.session-expired';
 
 export const noticeFor = (reason) =>
   reason === RejectionReason.accountUnavailable ? ACCOUNT_UNAVAILABLE_NOTICE : SESSION_EXPIRED_NOTICE;
@@ -40,7 +41,11 @@ export function createSessionService({
   let armed = null;
   /** 回到登入畫面的原因提示；登入時清除。 */
   let notice = null;
+  /** 只供狀態列使用，不改變登入畫面的提示。 */
+  let expiredMarketUrl = null;
+  let expiredWrites = Promise.resolve();
   let loaded = false;
+  let loadedUrl = null;
   /** 序列化會改變工作階段的操作，避免並行請求互相覆蓋。 */
   let chain = Promise.resolve();
   const serial = (fn) => {
@@ -59,20 +64,30 @@ export function createSessionService({
   }
 
   /** 工作階段結束（登出、失效、換市集）：通知持有「以該工作階段產生之資料」的一方丟棄，例如等待確認的部署計畫。 */
-  function stopActive() {
-    const ended = active !== null;
+  function stopActive(ended = active !== null) {
     armed = null;
     active?.manager.stop();
     active = null;
     if (ended) { try { onSessionEnded?.(); } catch { /* 附帶作業 */ } }
   }
 
+  function setExpired(marketUrl) {
+    expiredMarketUrl = marketUrl;
+    // 先更新記憶體，儲存依序完成；舊的失效寫入不得蓋過後來的登入或登出。
+    expiredWrites = expiredWrites.then(() => marketUrl
+      ? orca.storage.set(expiredKey, { marketUrl }) : orca.storage.delete(expiredKey))
+      .catch(() => orca.log('無法儲存登入過期提醒'));
+    return expiredWrites;
+  }
+
   async function onSessionInvalid(source, reason) {
-    if (armed !== source) return; // 舊工作階段或已處理過
+    if (!source || armed !== source) return; // 舊工作階段或已處理過
     armed = null;
     const current = active;
     notice = noticeFor(reason);
+    const saved = setExpired(current.marketUrl);
     await clearSession({ notice, current: current?.manager.current, marketUrl: current?.marketUrl, revoke, stopSession: stopActive, store });
+    await saved;
     orca.log(`工作階段失效：${reason}`);
   }
 
@@ -98,22 +113,31 @@ export function createSessionService({
     manager.start();
   }
 
-  /** 啟動後第一次：載入綁定目前網址的工作階段；網址已改變時撤銷並清除舊的。 */
+  /** 首次載入與網址變更時：恢復目前市集的過期提醒，撤銷並清除其他市集的工作階段。 */
   async function ensureLoaded() {
-    if (loaded) return;
     const url = await configuredUrl();
+    if (loaded && loadedUrl === url) return;
+    await expiredWrites;
+    const expired = await orca.storage.get(expiredKey);
+    expiredMarketUrl = expired?.marketUrl === url && url ? url : null;
+    if (expired && !expiredMarketUrl) await setExpired(null);
     const raw = await store.readRaw();
     if (raw && raw.marketUrl !== url) {
-      await clearSession({ notice: null, current: raw, marketUrl: raw.marketUrl, revoke, stopSession: stopActive, store });
+      await setExpired(null);
+      notice = null;
+      await clearSession({ notice: null, current: raw, marketUrl: raw.marketUrl, revoke, stopSession: () => stopActive(true), store });
       orca.log('市集網址已變更，已清除原市集的工作階段');
       loaded = true;
+      loadedUrl = url;
       return;
     }
+    if (loaded) { notice = null; stopActive(true); }
     const session = await store.load(url);
     if (session) activate(session);
     else if (raw) await store.clear(); // 已過期：清掉
     // 只有主機設定與秘密儲存都讀取成功才完成載入；啟動暫時失敗可由排程重試。
     loaded = true;
+    loadedUrl = url;
   }
 
   function view(marketUrl, extra = {}) {
@@ -122,6 +146,7 @@ export function createSessionService({
   }
 
   return {
+    get expired() { return expiredMarketUrl !== null; },
     async getState({ secretsProtection } = {}) {
       return serial(async () => {
         if (secretsProtection === 'unavailable') return view(await configuredUrl());
@@ -151,6 +176,8 @@ export function createSessionService({
         }
         await store.save(session);
         await orca.settings.set('marketUrl', url);
+        loadedUrl = url;
+        await setExpired(null);
         activate(session);
         orca.log('已登入市集');
         notifyConnected();
@@ -163,12 +190,13 @@ export function createSessionService({
         await ensureLoaded();
         const current = active ?? null;
         const raw = current ? null : await store.readRaw();
+        await setExpired(null);
         await clearSession({
           notice: null,
           current: current?.manager.current ?? raw,
           marketUrl: current?.marketUrl ?? raw?.marketUrl,
           revoke,
-          stopSession: stopActive,
+          stopSession: () => stopActive(true),
           store
         });
         notice = null;
