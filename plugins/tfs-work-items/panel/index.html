@@ -92,6 +92,11 @@
             <span>允許內網自簽 HTTPS 憑證</span>
           </label>
         </div>
+        <div class="field">
+          <label for="cfg-max-items">清單最多載入的工項數</label>
+          <input id="cfg-max-items" type="number" min="50" max="5000" step="50" placeholder="1000">
+          <div class="detail-hint">符合條件的工項超過這個數量時，只載入最近更新的這些筆（清單上方仍會顯示真實總數）。調高會讓載入變慢。範圍 50–5000，預設 1000。</div>
+        </div>
         <div class="form-actions" style="justify-content:flex-start;">
           <button id="btn-test-conn" class="btn" type="button">🔌 測試連線並載入專案</button>
         </div>

@@ -7,11 +7,11 @@ const closers = [];
 after(async () => { for (const c of closers) await c(); });
 
 // 最小的假 Orca，只提供 listWorkItems 會用到的設定與祕密
-async function boot(items) {
+async function boot(items, extraSettings = {}) {
   const tfs = await startMockTfs({ items });
   closers.push(tfs.close);
   const handlers = new Map();
-  const settings = { tfsUrl: tfs.url, project: '', apiVersion: '5.0', allowInsecureTls: false, authMode: 'pat', defaultAgent: 'claude' };
+  const settings = { tfsUrl: tfs.url, project: '', apiVersion: '5.0', allowInsecureTls: false, authMode: 'pat', defaultAgent: 'claude', ...extraSettings };
   activate({
     log() {},
     settings: { get: async (k) => (k ? settings[k] : { ...settings }), set: async (k, v) => { settings[k] = v; } },
@@ -19,7 +19,12 @@ async function boot(items) {
     host: { call: async () => ({}) },
     panels: { handle: (n, f) => handlers.set(n, f), post() {} }
   });
-  return { tfs, list: (input) => handlers.get('tfs.listWorkItems')(input || {}, {}) };
+  return {
+    tfs,
+    settings,
+    list: (input) => handlers.get('tfs.listWorkItems')(input || {}, {}),
+    call: (name, input) => handlers.get(name)(input || {}, {})
+  };
 }
 
 const openItems = (items) => items.filter((i) => i.state !== '已關閉');
@@ -120,4 +125,62 @@ test('#ID 直接查詢：只回傳那一筆，total 為 1；找不到時為 0 �
   assert.deepEqual(hit.items.map((i) => i.id), [items[5].id]);
   assert.equal(hit.truncated, false);
   await assert.rejects(list({ search: '#99999999' }), /TF401232|404/);
+});
+
+// ---- 「清單最多載入的工項數」設定 ----
+
+test('設定載入上限 300：只載入最近更新的 300 筆，但 total 仍是真實總數', async () => {
+  const items = makeItems({ perProject: { ProjA: 700 } });
+  const { tfs, list } = await boot(items, { maxLoadedItems: 300 });
+  const expected = tfs.items.filter((i) => i.state !== '已關閉');
+  const res = await list({ scope: 'all' });
+  assert.equal(res.total, expected.length);
+  assert.equal(res.items.length, 300);
+  assert.equal(res.loaded, 300);
+  assert.equal(res.limit, 300);
+  assert.equal(res.truncated, true);
+  const newest = expected.slice().sort((a, b) => (a.changed < b.changed ? 1 : -1)).slice(0, 300).map((i) => i.id);
+  assert.deepEqual(res.items.map((i) => i.id), newest);
+});
+
+test('調高上限到足以容納全部：不再被截斷', async () => {
+  const items = makeItems({ perProject: { ProjA: 1700 } });
+  const { tfs, list } = await boot(items, { maxLoadedItems: 3000 });
+  const expected = tfs.items.filter((i) => i.state !== '已關閉').length;
+  const res = await list({ scope: 'all' });
+  assert.equal(res.items.length, expected);
+  assert.equal(res.total, expected);
+  assert.equal(res.truncated, false);
+});
+
+test('沒設定時預設 1000；無效值（空字串、文字、null）也回到預設', async () => {
+  for (const v of [undefined, '', 'abc', null, NaN]) {
+    const { call } = await boot(makeItems(), { maxLoadedItems: v });
+    assert.equal((await call('tfs.getConfig')).maxLoadedItems, 1000, `輸入 ${String(v)}`);
+  }
+});
+
+test('超出範圍的值會夾回 50–5000（讀取與儲存都一樣）', async () => {
+  const cases = [[0, 50], [-5, 50], [10, 50], [49, 50], [50, 50], [4999, 4999], [5000, 5000], [99999, 5000], [300.9, 300], ['400', 400]];
+  for (const [input, want] of cases) {
+    const { call, settings } = await boot(makeItems(), { maxLoadedItems: input });
+    assert.equal((await call('tfs.getConfig')).maxLoadedItems, want, `讀取 ${input}`);
+    await call('tfs.saveConfig', { maxLoadedItems: input });
+    assert.equal(settings.maxLoadedItems, want, `儲存 ${input} 後寫入的值`);
+  }
+});
+
+test('面板存設定時，值會被寫入並立即生效', async () => {
+  const items = makeItems({ perProject: { ProjA: 700 } });
+  const { call, list } = await boot(items);
+  await call('tfs.saveConfig', { maxLoadedItems: 120 });
+  const res = await list({ scope: 'all' });
+  assert.equal(res.items.length, 120);
+  assert.equal(res.limit, 120);
+});
+
+test('儲存設定時沒帶 maxLoadedItems，不會改動既有的值', async () => {
+  const { call, settings } = await boot(makeItems(), { maxLoadedItems: 777 });
+  await call('tfs.saveConfig', { defaultAgent: 'codex' });
+  assert.equal(settings.maxLoadedItems, 777);
 });

@@ -62,6 +62,7 @@
   const btnClearPat = document.getElementById('btn-clear-pat');
   const cfgApiVersion = document.getElementById('cfg-api-version');
   const cfgInsecureTls = document.getElementById('cfg-insecure-tls');
+  const cfgMaxItems = document.getElementById('cfg-max-items');
   const cfgProject = document.getElementById('cfg-project');
   const projectComboList = document.getElementById('project-combo-list');
   const cfgProjectClear = document.getElementById('cfg-project-clear');
@@ -449,6 +450,7 @@
     if (settingsCombo) settingsCombo.setValue(cfg.project || '');
     cfgApiVersion.value = cfg.apiVersion || '5.0';
     cfgInsecureTls.checked = Boolean(cfg.allowInsecureTls);
+    cfgMaxItems.value = cfg.maxLoadedItems || 1000;
     cfgAgent.value = cfg.defaultAgent || 'claude';
     cfgPat.value = '';
     if (cfg.hasPat) {
@@ -563,7 +565,8 @@
         total: Number.isFinite(res.total) ? res.total : (res.items || []).length,
         loaded: Number.isFinite(res.loaded) ? res.loaded : (res.items || []).length,
         truncated: Boolean(res.truncated),
-        queryLimitReached: Boolean(res.queryLimitReached)
+        queryLimitReached: Boolean(res.queryLimitReached),
+        limit: Number.isFinite(res.limit) ? res.limit : null
       };
       if (res.projects) {
         populateProjectsUI(res.projects);
@@ -651,7 +654,8 @@
       div.className = 'list-summary truncated';
       div.textContent =
         `共 ${total}${listMeta.queryLimitReached ? '+' : ''} 筆符合條件，` +
-        `僅載入最近更新的 ${items.length} 筆。請用專案、狀態或關鍵字縮小範圍。`;
+        `僅載入最近更新的 ${items.length} 筆。請用專案、狀態或關鍵字縮小範圍，` +
+        `或到 ⚙️ 設定調高「清單最多載入的工項數」${listMeta.limit ? `（目前 ${listMeta.limit}）` : ''}。`;
     } else {
       div.className = 'list-summary';
       div.textContent = `共 ${items.length} 筆`;
@@ -945,6 +949,8 @@
           apiVersion: cfgApiVersion.value,
           allowInsecureTls: cfgInsecureTls.checked,
           defaultAgent: cfgAgent.value,
+          // 留空代表用預設值；超出 50–5000 的數字由 worker 夾回範圍
+          ...(cfgMaxItems.value.trim() === '' ? {} : { maxLoadedItems: Number(cfgMaxItems.value) }),
           authMode: cfgAuthMode.value,
           ...(cfgPat.value.trim() ? { pat: cfgPat.value.trim() } : {})
         });

@@ -176,6 +176,7 @@ async function loadConfig(orca) {
     allowInsecureTls: Boolean(all.allowInsecureTls),
     defaultAgent: String(all.defaultAgent || 'claude').trim() || 'claude',
     authMode: normalizeAuthMode(all.authMode),
+    maxLoadedItems: normalizeMaxLoaded(all.maxLoadedItems),
     pat: pat || ''
   };
 }
@@ -561,11 +562,21 @@ const WORK_ITEM_FIELDS = [
 // 工項查詢的數量上限：
 // - WIQL 只回傳 id，單一查詢最多 20000 筆（TFS / Azure DevOps 的限制），所以總數（total）是準確的
 // - 批次取得工項明細一次最多 200 筆，超過會被伺服器拒絕，所以要分批
-// - 面板最多載入 MAX_LOADED_ITEMS 筆明細（最近更新的優先），避免一次拉太多資料；超過時會標示被截斷
+// - 面板最多載入「設定的筆數」明細（最近更新的優先），避免一次拉太多資料；超過時會標示被截斷
+//   筆數可在設定調整（maxLoadedItems），預設 1000，限制在 50–5000
 const WIQL_MAX_IDS = 20000;
 const WORK_ITEMS_BATCH = 200;
-const MAX_LOADED_ITEMS = 1000;
+const MAX_LOADED_DEFAULT = 1000;
+const MAX_LOADED_MIN = 50;
+const MAX_LOADED_MAX = 5000;
 const DETAIL_CONCURRENCY = 3;
+
+// 設定值轉成合法的載入上限：不是數字就用預設值，超出範圍就夾回 50–5000
+function normalizeMaxLoaded(value) {
+  const n = Math.trunc(Number(value));
+  if (value === '' || value === null || value === undefined || !Number.isFinite(n)) return MAX_LOADED_DEFAULT;
+  return Math.min(MAX_LOADED_MAX, Math.max(MAX_LOADED_MIN, n));
+}
 
 async function mapLimit(items, limit, fn) {
   const results = new Array(items.length);
@@ -603,6 +614,7 @@ export default function activate(orca) {
       allowInsecureTls: cfg.allowInsecureTls,
       defaultAgent: cfg.defaultAgent,
       authMode: cfg.authMode,
+      maxLoadedItems: cfg.maxLoadedItems,
       hasPat: Boolean(cfg.pat)
     };
   });
@@ -625,6 +637,9 @@ export default function activate(orca) {
     }
     if (typeof input.authMode === 'string') {
       await orca.settings.set('authMode', normalizeAuthMode(input.authMode));
+    }
+    if (input.maxLoadedItems !== undefined) {
+      await orca.settings.set('maxLoadedItems', normalizeMaxLoaded(input.maxLoadedItems));
     }
     if (typeof input.pat === 'string' && input.pat.trim()) {
       await orca.secrets.set(SECRET_PAT_KEY, input.pat.trim());
@@ -771,7 +786,7 @@ export default function activate(orca) {
       return { items: [], projects, openStates, total: 0, loaded: 0, truncated: false };
     }
 
-    const loadIds = ids.slice(0, MAX_LOADED_ITEMS);
+    const loadIds = ids.slice(0, cfg.maxLoadedItems);
     const chunks = [];
     for (let i = 0; i < loadIds.length; i += WORK_ITEMS_BATCH) chunks.push(loadIds.slice(i, i + WORK_ITEMS_BATCH));
     const batches = await mapLimit(chunks, DETAIL_CONCURRENCY, (chunk) =>
@@ -792,6 +807,7 @@ export default function activate(orca) {
       openStates,
       total,
       loaded: ordered.length,
+      limit: cfg.maxLoadedItems,
       truncated: total > ordered.length || queryLimitReached,
       ...(queryLimitReached ? { queryLimitReached: true } : {})
     };
