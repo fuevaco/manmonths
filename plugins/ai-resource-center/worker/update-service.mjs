@@ -4,7 +4,9 @@ import { compareVersions, recommendedVersion } from './package-service.mjs';
 
 const storageKey = 'resource-center.update-notifications';
 const summaryKey = 'resource-center.update-summary';
+const statusBarItemId = 'update-reminder';
 const empty = () => ({ count: 0, packages: [], checkedAt: null });
+const oldestInstalledVersion = state => state.deployments.filter(d => d.updateVersion).map(d => d.version).sort(compareVersions)[0];
 function updateTooltip(value) {
   // Orca 會移除 tooltip 的換行，依規格以頓號維持資訊順序。
   const lines = [`資源中心：${value.count} 個資源包可更新`];
@@ -24,6 +26,7 @@ export function createUpdateService({ orca, session, installed, packages, prefer
   scheduler = { setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: id => clearTimeout(id) } }) {
   let summary = empty(), flight = null, timer = null, disposed = false, generation = 0, scheduleRevision = 0;
   let scheduledIdentity = null, scheduledMinutes = null, firstCheckPending = false;
+  let timerRevision = 0;
   let retryTimer = null, retryAttempt = 0;
   // 序列化摘要寫入與清除，避免登出後仍留下較舊檢查的快取。
   let cacheWrites = Promise.resolve();
@@ -34,33 +37,34 @@ export function createUpdateService({ orca, session, installed, packages, prefer
   }
   const safeCode = error => ['STORAGE_NOT_READY', 'SESSION_NOT_READY', 'API_NOT_READY', 'EACCES', 'EBUSY', 'ETIMEDOUT', 'ECONNRESET', 'signed_out', 'session_expired', 'market_unreachable'].includes(error?.code) ? error.code : 'unexpected_error';
   const log = () => orca.log('[updates] 無法檢查資源包更新');
-  async function updateStatus() {
+  async function updateStatusBar() {
     const value = currentSummary();
     const input = session.expired
-      ? { id: 'update-reminder', icon: 'puzzle', text: '需登入', tone: 'danger', visible: true,
+      ? { id: statusBarItemId, icon: 'puzzle', text: '需登入', tone: 'danger', visible: true,
         tooltip: '資源中心登入已過期，無法檢查更新。請到側欄「資源中心」分頁重新登入。' }
       : scheduledIdentity && scheduledMinutes && value.count
-      ? { id: 'update-reminder', icon: 'puzzle', text: String(value.count), tone: 'warning', visible: true,
+      ? { id: statusBarItemId, icon: 'puzzle', text: String(value.count), tone: 'warning', visible: true,
         tooltip: updateTooltip(value) }
-      : { id: 'update-reminder', visible: false };
+      : { id: statusBarItemId, visible: false };
     try { await orca.host.call('statusBar.update', input); }
     catch { orca.log('[updates] 無法更新資源中心狀態列'); }
   }
   function cancelRetry() { if (retryTimer !== null) scheduler.clearTimeout(retryTimer); retryTimer = null; }
-  function cancelTimer() { if (timer !== null) scheduler.clearTimeout(timer); timer = null; }
-  function stop() {
+  function cancelTimer() { timerRevision++; if (timer !== null) scheduler.clearTimeout(timer); timer = null; }
+  function stop({ preserveSummary = false } = {}) {
     generation++; scheduleRevision++; cancelTimer(); cancelRetry(); retryAttempt = 0; scheduledIdentity = null; scheduledMinutes = null; firstCheckPending = false; summary = empty();
-    if (!disposed) { void saveSummary(null); void updateStatus(); }
+    if (!disposed) { if (!preserveSummary) void saveSummary(null); void updateStatusBar(); }
   }
   function arm(minutes) {
+    if (firstCheckPending && timer !== null) return;
     cancelTimer();
     if (disposed || !minutes || !scheduledIdentity) return;
-    const revision = scheduleRevision;
+    const revision = timerRevision;
     timer = scheduler.setTimeout(async () => {
-      if (disposed || revision !== scheduleRevision) return;
+      if (disposed || revision !== timerRevision) return;
       timer = null;
       try { await checkNow(); } catch { log(); }
-      if (!disposed && revision === scheduleRevision) await reschedule();
+      if (!disposed && revision === timerRevision) await reschedule();
     }, firstCheckPending ? 30000 : minutes * 60000);
     timer?.unref?.();
   }
@@ -82,16 +86,16 @@ export function createUpdateService({ orca, session, installed, packages, prefer
         catch { orca.log('[updates] 無法讀取更新摘要'); }
         if (disposed || revision !== scheduleRevision) return;
         if (key && cached?.owner === key && Array.isArray(cached.summary?.packages)) summary = cached.summary;
+        else if (key && cached) void saveSummary(null);
       }
       // 排程剛啟用時先檢查一次；計時器建立失敗則保留首次檢查，交由既有重試恢復。
       if (!key || !saved.checkIntervalMinutes) firstCheckPending = false;
       else if (key !== scheduledIdentity || !scheduledMinutes) firstCheckPending = true;
-      else if (saved.checkIntervalMinutes !== scheduledMinutes) firstCheckPending = false;
       scheduledIdentity = key; scheduledMinutes = saved.checkIntervalMinutes;
       phase = '計時器建立';
       arm(saved.checkIntervalMinutes);
       retryAttempt = 0;
-      await updateStatus();
+      await updateStatusBar();
     } catch (error) {
       if (disposed || revision !== scheduleRevision) return;
       cancelTimer();
@@ -110,8 +114,9 @@ export function createUpdateService({ orca, session, installed, packages, prefer
     await reschedule();
     const identity = await session.identity();
     if (!identity || disposed) { summary = empty(); return summary; }
+    const owner = JSON.stringify(identity);
     const epoch = generation;
-    const stillCurrent = async () => !disposed && epoch === generation && JSON.stringify(await session.identity()) === JSON.stringify(identity);
+    const stillCurrent = async () => !disposed && epoch === generation && JSON.stringify(await session.identity()) === owner;
     const saved = await preferences.get();
     const client = await session.requireClient();
     const records = installed.receipts({ globalOnly: true });
@@ -125,16 +130,14 @@ export function createUpdateService({ orca, session, installed, packages, prefer
         const latest = recommendedVersion([{ version: p.latestReleaseVersion, channel: 'release' }, { version: p.latestPreviewVersion, channel: 'preview' }], saved.showPreview);
         const state = installed.project(p.packageKey, latest, records);
         if (state.installationStatus !== 'updateAvailable') continue;
-        const older = state.deployments.filter(d => d.updateVersion).map(d => d.version).sort(compareVersions);
-        found.set(p.packageKey, { packageKey: p.packageKey, name: p.name, installedVersion: older[0], updateVersion: latest });
+        found.set(p.packageKey, { packageKey: p.packageKey, name: p.name, installedVersion: oldestInstalledVersion(state), updateVersion: latest });
       }
     if (!await stillCurrent()) return summary;
     const items = [...found.values()];
     summary = { count: items.length, packages: items, checkedAt: new Date(Number(now())).toISOString() };
-    await updateStatus();
+    await updateStatusBar();
     if (!await stillCurrent()) return summary;
-    await saveSummary({ owner: JSON.stringify(identity), summary });
-    const owner = JSON.stringify(identity);
+    await saveSummary({ owner, summary });
     let stored;
     try { stored = await orca.storage.get(storageKey); }
     catch { orca.log('[updates] 無法讀取更新通知紀錄'); return summary; }
@@ -167,15 +170,14 @@ export function createUpdateService({ orca, session, installed, packages, prefer
     const packages = summary.packages.flatMap(p => {
       const state = installed.project(p.packageKey, p.updateVersion, records);
       if (state.installationStatus !== 'updateAvailable') return [];
-      const older = state.deployments.filter(d => d.updateVersion).map(d => d.version).sort(compareVersions);
-      return [{ ...p, installedVersion: older[0] }];
+      return [{ ...p, installedVersion: oldestInstalledVersion(state) }];
     });
     return structuredClone({ ...summary, count: packages.length, packages });
   }
   return { checkNow, summary: currentSummary, reschedule,
     async refreshInstalledState() {
       generation++; summary = currentSummary();
-      await updateStatus();
+      await updateStatusBar();
       if (scheduledIdentity) await saveSummary({ owner: scheduledIdentity, summary });
     },
     stop, dispose() { disposed = true; stop(); unsubscribe(); } };

@@ -29,11 +29,20 @@ export function startWorker({ state = createHostState(), deps, hostCall } = {}) 
   // 未指定家目錄的契約測試也不能掃描／清理真實外掛下載快取。
   const cacheDirectory = deps?.userHome ? null : mkdtempSync(path.join(tmpdir(), 'rc-worker-cache-'));
   const handlers = new Map();
+  const settingsListeners = new Set();
   const orca = {
     log: (msg) => state.logs.push(String(msg)),
     settings: {
       get: async (k) => (k ? state.settings.get(k) : Object.fromEntries(state.settings)),
-      set: async (k, v) => void state.settings.set(k, v)
+      set: async (k, v) => {
+        if (state.settings.get(k) === v) return;
+        state.settings.set(k, v);
+        for (const listener of settingsListeners) listener({ key: k });
+      },
+      onDidChange: listener => {
+        settingsListeners.add(listener);
+        return { dispose: () => settingsListeners.delete(listener) };
+      }
     },
     secrets: {
       get: async (k) => state.secrets.get(k) ?? null,
@@ -79,6 +88,9 @@ export function startWorker({ state = createHostState(), deps, hostCall } = {}) 
     if (cacheDirectory) rmSync(cacheDirectory, { recursive: true, force: true });
   } };
 }
+
+/** 最後一次送給 Orca 的狀態列內容。 */
+export const status = worker => worker.state.hostCalls.filter(c => c.method === 'statusBar.update').at(-1)?.input;
 
 /** 斷言字串集合中沒有出現任何秘密值。 */
 export function leakedSecrets(texts, secrets) {

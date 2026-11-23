@@ -5,13 +5,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { startWorker } from './harness.mjs';
+import { startWorker, status } from './harness.mjs';
 import { startFakeMarket } from './fake-market.mjs';
 import { zip } from './zip-fixture.mjs';
 import { memoryStore } from './fake-secret-store.mjs';
 
 const key = 'one-click';
-const status = worker => worker.state.hostCalls.filter(c => c.method === 'statusBar.update').at(-1)?.input;
 async function environment(t, { setup, hosts = ['codex'], type = 'skill', deps = {} } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rc-one-click-'));
   const userHome = path.join(dir, 'user'), lcaipackHome = path.join(dir, 'shared');
@@ -47,7 +46,7 @@ test('外掛內更新成功後立即重核收據，狀態列與面板摘要一�
 });
 
 for (const action of ['install', 'uninstall']) {
-  test(`外掛內 ${action} 成功後立即移除過時的狀態列更新數`, async t => {
+  test(`外掛內${action === 'install' ? '安裝' : '解除安裝'}成功後立即移除過時的狀態列更新數`, async t => {
     const e = await environment(t);
     await e.run({ action: 'install' }); e.recommend('2.0.0');
     await e.worker.call('rc.updates.checkNow');

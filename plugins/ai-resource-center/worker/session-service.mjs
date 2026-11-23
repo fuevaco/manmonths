@@ -30,7 +30,8 @@ export function createSessionService({
   transport = send,
   requestTimeoutMs = 10000,
   onConnected = null,
-  onSessionEnded = null
+  onSessionEnded = null,
+  onMarketChanged = null
 }) {
   const store = createSessionStore({ secrets: orca.secrets, now });
   const revoke = createRevoker({ transport, now });
@@ -45,7 +46,7 @@ export function createSessionService({
   let expiredMarketUrl = null;
   let expiredWrites = Promise.resolve();
   let loaded = false;
-  let loadedUrl = null;
+  let observedUrl = null;
   /** 序列化會改變工作階段的操作，避免並行請求互相覆蓋。 */
   let chain = Promise.resolve();
   const serial = (fn) => {
@@ -53,6 +54,17 @@ export function createSessionService({
     chain = run.catch(() => {});
     return run;
   };
+  const settingsSubscription = orca.settings.onDidChange(({ key }) => {
+    if (key !== 'marketUrl') return;
+    void serial(async () => {
+      const url = await configuredUrl();
+      if (url === observedUrl) return;
+      observedUrl = url;
+      const expiredSaved = setExpired(null);
+      onMarketChanged?.();
+      await expiredSaved;
+    }).catch(() => orca.log('無法更新市集登入過期提醒'));
+  });
 
   /** 成功連線後通知（補送安裝回報）；回報是附帶作業，任何錯誤都不得影響登入流程。 */
   function notifyConnected() {
@@ -64,11 +76,11 @@ export function createSessionService({
   }
 
   /** 工作階段結束（登出、失效、換市集）：通知持有「以該工作階段產生之資料」的一方丟棄，例如等待確認的部署計畫。 */
-  function stopActive(ended = active !== null) {
+  function stopActive(ended = active !== null, { expired = false } = {}) {
     armed = null;
     active?.manager.stop();
     active = null;
-    if (ended) { try { onSessionEnded?.(); } catch { /* 附帶作業 */ } }
+    if (ended) { try { onSessionEnded?.({ expired }); } catch { /* 附帶作業 */ } }
   }
 
   function setExpired(marketUrl) {
@@ -85,9 +97,10 @@ export function createSessionService({
     armed = null;
     const current = active;
     notice = noticeFor(reason);
-    const saved = setExpired(current.marketUrl);
-    await clearSession({ notice, current: current?.manager.current, marketUrl: current?.marketUrl, revoke, stopSession: stopActive, store });
-    await saved;
+    const expiredSaved = setExpired(current?.marketUrl);
+    await clearSession({ notice, current: current?.manager.current, marketUrl: current?.marketUrl, revoke,
+      stopSession: () => stopActive(true, { expired: true }), store });
+    await expiredSaved;
     orca.log(`工作階段失效：${reason}`);
   }
 
@@ -113,10 +126,11 @@ export function createSessionService({
     manager.start();
   }
 
-  /** 首次載入與網址變更時：恢復目前市集的過期提醒，撤銷並清除其他市集的工作階段。 */
+  /** 啟動後第一次：載入目前市集的工作階段與過期提醒，清除其他市集的儲存狀態。 */
   async function ensureLoaded() {
+    if (loaded) return;
     const url = await configuredUrl();
-    if (loaded && loadedUrl === url) return;
+    observedUrl = url;
     await expiredWrites;
     const expired = await orca.storage.get(expiredKey);
     expiredMarketUrl = expired?.marketUrl === url && url ? url : null;
@@ -124,20 +138,16 @@ export function createSessionService({
     const raw = await store.readRaw();
     if (raw && raw.marketUrl !== url) {
       await setExpired(null);
-      notice = null;
       await clearSession({ notice: null, current: raw, marketUrl: raw.marketUrl, revoke, stopSession: () => stopActive(true), store });
       orca.log('市集網址已變更，已清除原市集的工作階段');
       loaded = true;
-      loadedUrl = url;
       return;
     }
-    if (loaded) { notice = null; stopActive(true); }
     const session = await store.load(url);
     if (session) activate(session);
     else if (raw) await store.clear(); // 已過期：清掉
     // 只有主機設定與秘密儲存都讀取成功才完成載入；啟動暫時失敗可由排程重試。
     loaded = true;
-    loadedUrl = url;
   }
 
   function view(marketUrl, extra = {}) {
@@ -175,8 +185,8 @@ export function createSessionService({
           await clearSession({ notice: null, current: prev.manager.current, marketUrl: prev.marketUrl, revoke, stopSession: stopActive, store });
         }
         await store.save(session);
+        observedUrl = url;
         await orca.settings.set('marketUrl', url);
-        loadedUrl = url;
         await setExpired(null);
         activate(session);
         orca.log('已登入市集');
@@ -238,6 +248,7 @@ export function createSessionService({
     },
 
     dispose() {
+      settingsSubscription.dispose();
       stopActive();
     }
   };
