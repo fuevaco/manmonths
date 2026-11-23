@@ -17,7 +17,7 @@
 
 ## 安裝與第一次連線
 
-1. 開啟 Orca，前往「Settings」→「Plugins」→「Marketplace Sources」，按「Add Source」新增來源：`https://github.com/fuevaco/manmonths.git`，Ref 填 `main`。
+1. 開啟 Orca，前往「Settings」→「Plugins」→「Marketplace Sources」，按「Add Source」新增來源：`https://github.com/linkchain-corp/manmonths.git`，Ref 填 `main`。
 2. 選擇「AI 資源中心」按「Install」。外掛要求讀寫自己的設定（`settings:own`）、加密秘密（`secrets:own`）、儲存資料（`storage:own`），以及新增的 Orca 通知權限（`notifications:show`），用於新版提醒。
 3. 開啟右側欄的「資源中心」，輸入市集網址（例如 `https://market.example.com`）、帳號與密碼，按「登入」。首次網址欄位留空。
 4. 登入成功後才儲存網址與工作階段；密碼不會被儲存。重開 Orca 會續用工作階段，失效時提示重新登入。
