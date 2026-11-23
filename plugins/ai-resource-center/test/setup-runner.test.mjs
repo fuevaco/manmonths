@@ -147,6 +147,18 @@ test('exit code 0 是唯一的成功判定；stderr 不代表失敗、stdout 不
   assert.ok(failed.log().includes('exitCode=3'));
 });
 
+test('設定失敗摘要顯示已遮罩的 [FAIL] 訊息，即使輸出沒有結尾換行', async t => {
+  const f = fixture(t);
+  const masker = createSecretMasker();
+  masker.register(CANARY);
+  const script = f.writeScript(pick(
+    `[Console]::Out.Write('[FAIL] 請升級 Node.js ${CANARY}')\nexit 5\n`,
+    `printf '%s' '[FAIL] 請升級 Node.js ${CANARY}'\nexit 5\n`));
+  const { result } = await f.run(f.command(script), { masker });
+  assert.equal(result.exitCode, 5);
+  assert.equal(result.failureSummary, `請升級 Node.js ${Placeholder}`);
+});
+
 test('失敗後在同一個 operation 與同一份 log 重試：整支腳本重跑、log 多一段 session（SetupRetrySessionTests）', async t => {
   const f = fixture(t);
   const marker = path.join(f.context.runtimeRoot, 'runs.txt');
