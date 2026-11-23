@@ -29,6 +29,9 @@
   "pluginApi": 1,
   "main": "worker/index.mjs",
   "contributes": {
+    "statusBarItems": [
+      { "id": "update-reminder", "text": "", "icon": "puzzle" }
+    ],
     "panels": [
       {
         "id": "ai-resource-center",

@@ -101,7 +101,7 @@ export default function activate(orca, deps = {}) {
   router.handle('rc.install.run', async input => {
     await migration;
     const result = await installation.run(input);
-    if (result.succeeded?.length) updates.refreshInstalledState();
+    if (result.succeeded?.length) await updates.refreshInstalledState();
     return result;
   });
   router.handle('rc.install.cancel', input => installation.cancel(input));

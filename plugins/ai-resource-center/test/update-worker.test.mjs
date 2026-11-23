@@ -7,6 +7,8 @@ import { startWorker } from './harness.mjs';
 import { startFakeMarket } from './fake-market.mjs';
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
+const notifications = worker => worker.state.hostCalls.filter(c => c.method === 'notifications.show');
+const status = worker => worker.state.hostCalls.filter(c => c.method === 'statusBar.update').at(-1)?.input;
 function scheduler() {
   let seq = 0;
   const tasks = new Map();
@@ -30,6 +32,126 @@ async function setup(t, options = {}) {
   return { dir, home, deps, worker, market, catalog, timers, receipt, save, signIn };
 }
 
+test('檢查完成在狀態列顯示更新數與定案版本提示，歸零時隱藏', async t => {
+  const e = await setup(t); await e.signIn();
+  e.catalog.push({ packageKey: 'other', name: '其他', type: 'skill', latestReleaseVersion: '2.0.0' });
+  await e.save([e.receipt(), e.receipt({ packageKey: 'other' })]);
+  await e.worker.call('rc.updates.checkNow');
+  assert.deepEqual(status(e.worker), { id: 'update-reminder', text: '2', tone: 'warning', visible: true,
+    tooltip: '資源中心：2 個資源包可更新、・測試資源 1.0.0 → 1.1.0、・其他 1.0.0 → 2.0.0、請到側欄「資源中心」分頁更新' });
+  await e.save([]);
+  await e.worker.call('rc.updates.checkNow');
+  assert.equal(status(e.worker).visible, false);
+});
+
+test('未登入先隱藏；關閉間隔、重新啟用、登出與登入立即重算狀態列', async t => {
+  const e = await setup(t); await settle();
+  assert.deepEqual(status(e.worker), { id: 'update-reminder', visible: false });
+  await e.signIn(); await e.save([e.receipt()]);
+  await e.worker.call('rc.updates.checkNow');
+  await e.worker.call('rc.preferences.set', { checkIntervalMinutes: 0 }); await settle();
+  assert.equal(status(e.worker).visible, false);
+  await e.worker.call('rc.updates.checkNow');
+  assert.equal(status(e.worker).visible, false, '關閉時手動檢查也不顯示數字');
+  await e.worker.call('rc.preferences.set', { checkIntervalMinutes: 60 }); await settle();
+  assert.equal(status(e.worker).text, '1'); assert.equal(status(e.worker).visible, true);
+  await e.worker.call('rc.session.signOut');
+  assert.equal(status(e.worker).visible, false);
+  await e.signIn();
+  assert.equal(status(e.worker).visible, false, '新工作階段不沿用登出前摘要');
+});
+
+test('tooltip 依序保留完整版本列與更新指引，超長以剩餘數結尾且不超過 256 字', async t => {
+  const e = await setup(t); await e.signIn();
+  e.catalog.splice(0, e.catalog.length, ...Array.from({ length: 10 }, (_, i) => ({
+    packageKey: `pack-${i}`, name: `資源包${i}${'長'.repeat(30)}`, type: 'skill', latestReleaseVersion: '2.0.0'
+  })));
+  await e.save(e.catalog.map(p => e.receipt({ packageKey: p.packageKey })));
+  await e.worker.call('rc.updates.checkNow');
+  const tooltip = status(e.worker).tooltip;
+  assert.ok(tooltip.length <= 256);
+  assert.equal(tooltip, ['資源中心：10 個資源包可更新',
+    ...[0, 1, 2, 3].map(i => `・資源包${i}${'長'.repeat(30)} 1.0.0 → 2.0.0`),
+    '請到側欄「資源中心」分頁更新', '…另外 6 個'].join('、'));
+  e.catalog[0].name = '長'.repeat(300);
+  await e.worker.call('rc.updates.checkNow');
+  assert.equal(status(e.worker).tooltip, '資源中心：10 個資源包可更新、請到側欄「資源中心」分頁更新、…另外 10 個');
+});
+
+test('共用 host state 重開後恢復摘要與狀態列，啟動時仍依收據重核且不連線', async t => {
+  const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+  await e.worker.call('rc.updates.checkNow');
+  const previous = status(e.worker);
+  e.worker.dispose();
+  const before = e.market.requests.length;
+  const restarted = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => restarted.dispose());
+  await restarted.call('rc.session.getState'); await settle();
+  assert.deepEqual(status(restarted), previous);
+  assert.equal((await restarted.call('rc.updates.summary')).count, 1);
+  assert.equal(e.market.requests.length, before);
+  restarted.dispose(); await e.save([]);
+  const removed = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => removed.dispose());
+  await removed.call('rc.session.getState'); await settle();
+  assert.equal(status(removed).visible, false);
+  assert.equal((await removed.call('rc.updates.summary')).count, 0);
+});
+
+test('收據重核後 tooltip 與摘要使用仍可更新目標的最舊版本', async t => {
+  const e = await setup(t); await e.signIn();
+  await e.save([e.receipt({ packageVersion: '0.1.0' }), e.receipt({ packageVersion: '0.5.0', canonicalRoot: path.join(e.dir, '.codex-other') })]);
+  await e.worker.call('rc.updates.checkNow');
+  await e.save([e.receipt({ packageVersion: '0.5.0', canonicalRoot: path.join(e.dir, '.codex-other') })]);
+  await e.worker.call('rc.preferences.set', { checkIntervalMinutes: 60 }); await settle();
+  assert.match(status(e.worker).tooltip, /0\.5\.0 → 1\.1\.0/);
+  assert.equal((await e.worker.call('rc.updates.summary')).packages[0].installedVersion, '0.5.0');
+});
+
+for (const action of ['signOut', 'changeMarket']) {
+  test(`${action} 後重開不恢復原工作階段的更新數`, async t => {
+    const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+    await e.worker.call('rc.updates.checkNow');
+    if (action === 'signOut') await e.worker.call('rc.session.signOut');
+    else e.worker.state.settings.set('marketUrl', 'https://market.example');
+    e.worker.dispose();
+    const restarted = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => restarted.dispose());
+    await restarted.call('rc.session.getState'); await settle();
+    assert.equal(status(restarted).visible, false);
+    assert.equal((await restarted.call('rc.updates.summary')).count, 0);
+  });
+}
+
+test('市集暫時失敗保留上次狀態列與摘要，恢復後再顯示新版', async t => {
+  const e = await setup(t); await e.signIn(); await e.save([e.receipt()]);
+  const first = await e.worker.call('rc.updates.checkNow');
+  const previous = status(e.worker);
+  e.market.override('GET /api/market/packages', () => ({ status: 503, body: {} }));
+  await assert.rejects(e.worker.call('rc.updates.checkNow'));
+  assert.deepEqual(status(e.worker), previous);
+  assert.deepEqual(await e.worker.call('rc.updates.summary'), first);
+  await e.timers.tick();
+  assert.deepEqual(status(e.worker), previous);
+  e.market.override('GET /api/market/packages', () => ({ status: 200, body: { data: [
+    { ...e.catalog[0], latestReleaseVersion: '2.0.0' }
+  ], meta: { total: 1 } } }));
+  await e.timers.tick();
+  assert.match(status(e.worker).tooltip, /1\.0\.0 → 2\.0\.0/);
+});
+
+test('狀態列主機呼叫失敗每次只記錄一行安全 log，通知與摘要照常', async t => {
+  const e = await setup(t, { hostCall: async method => {
+    if (method === 'statusBar.update') throw new Error('alice https://market.example/ token=secret\nunsafe');
+  } });
+  await e.signIn(); await e.save([e.receipt()]);
+  const before = e.worker.state.logs.length;
+  const calls = e.worker.state.hostCalls.filter(c => c.method === 'statusBar.update').length;
+  const summary = await e.worker.call('rc.updates.checkNow');
+  assert.equal(summary.count, 1);
+  assert.deepEqual(await e.worker.call('rc.updates.summary'), summary);
+  assert.equal(notifications(e.worker).length, 1);
+  const failures = e.worker.state.hostCalls.filter(c => c.method === 'statusBar.update').length - calls;
+  assert.deepEqual(e.worker.state.logs.slice(before), Array(failures).fill('[updates] 無法更新資源中心狀態列'));
+});
+
 test('只比對全域舊目標；合併通知、去重、摘要持續存在，更新版本才再次通知', async t => {
   const e = await setup(t); await e.signIn();
   e.catalog.push({ packageKey: 'other', name: '其他', type: 'skill', latestReleaseVersion: '2.0.0' });
@@ -38,14 +160,14 @@ test('只比對全域舊目標；合併通知、去重、摘要持續存在，�
   const first = await e.worker.call('rc.updates.checkNow');
   assert.equal(first.count, 2); assert.ok(Date.parse(first.checkedAt));
   assert.deepEqual(first.packages[0], { packageKey: 'demo', name: '測試資源', installedVersion: '1.0.0', updateVersion: '1.1.0' });
-  assert.deepEqual(e.worker.state.hostCalls, [{ method: 'notifications.show', input: { title: '資源中心', body: '有 2 個資源包可更新' } }]);
+  assert.deepEqual(notifications(e.worker), [{ method: 'notifications.show', input: { title: '資源中心', body: '有 2 個資源包可更新' } }]);
   assert.deepEqual(await e.worker.call('rc.updates.summary'), first);
   await e.worker.call('rc.updates.checkNow');
-  assert.equal(e.worker.state.hostCalls.length, 1);
+  assert.equal(notifications(e.worker).length, 1);
   e.catalog[0].latestReleaseVersion = '1.2.0';
   await e.worker.call('rc.updates.checkNow');
-  assert.equal(e.worker.state.hostCalls.length, 2);
-  assert.match(e.worker.state.hostCalls[1].input.body, /測試資源.*1\.2\.0/);
+  assert.equal(notifications(e.worker).length, 2);
+  assert.match(notifications(e.worker)[1].input.body, /測試資源.*1\.2\.0/);
   assert.equal(await readFile(path.join(e.home, 'receipts.json'), 'utf8'), before, '檢查與通知不套用新版、不改收據');
   await e.save([e.receipt({ packageVersion: '1.2.0' }), e.receipt({ packageKey: 'other', packageVersion: '2.0.0' })]);
   assert.equal((await e.worker.call('rc.updates.checkNow')).count, 0);
@@ -58,13 +180,13 @@ test('重開 worker 沿用外掛通知清單；本機來源、新版已安裝、
   e.worker.dispose();
   const restarted = startWorker({ state: e.worker.state, deps: e.deps }); t.after(() => restarted.dispose());
   await restarted.call('rc.updates.checkNow');
-  assert.equal(e.worker.state.hostCalls.length, 1);
+  assert.equal(notifications(e.worker).length, 1);
   for (const receipts of [[], [e.receipt({ source: 'local' })], [e.receipt({ packageVersion: '3.0.0' })],
     [e.receipt({ packageKey: 'removed' })], [e.receipt({ packageVersion: '1.1.0' })]]) {
     await e.save(receipts);
     assert.equal((await restarted.call('rc.updates.checkNow')).count, 0);
   }
-  assert.equal(e.worker.state.hostCalls.length, 1);
+  assert.equal(notifications(e.worker).length, 1);
 });
 
 test('排程採預設 15 分鐘、所有間隔可重排，關閉與登出停止；未登入手動檢查不連線', async t => {
@@ -97,7 +219,7 @@ test('排程與同時手動檢查共用一次目錄請求，通知失敗只記�
   const results = await Promise.all([e.worker.call('rc.updates.checkNow'), e.worker.call('rc.updates.checkNow'), e.timers.tick()]);
   assert.equal(results[0].count, 1); assert.deepEqual(results[0], results[1]);
   assert.equal(e.market.requests.filter(r => r.route === '/api/market/packages').length - before, 1);
-  assert.equal(e.worker.state.hostCalls.length, 1);
+  assert.equal(notifications(e.worker).length, 1);
   assert.ok(e.worker.state.logs.some(l => l.includes('無法顯示資源包更新通知')));
 });
 
@@ -140,7 +262,7 @@ test('檢查期間登出後，不顯示過時通知也不重新啟動排程', as
   await started;
   await e.worker.call('rc.session.signOut');
   release(); await check;
-  assert.equal(e.worker.state.hostCalls.length, 0);
+  assert.equal(notifications(e.worker).length, 0);
   assert.equal(e.timers.tasks.size, 0);
   assert.equal((await e.worker.call('rc.updates.summary')).count, 0);
 });

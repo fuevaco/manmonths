@@ -52,7 +52,7 @@ export function startWorker({ state = createHostState(), deps, hostCall } = {}) 
       call: async (method, input) => {
         state.hostCalls.push({ method, input: input === undefined ? undefined : structuredClone(input) });
         if (hostCall) return hostCall(method, input);
-        if (method === 'notifications.show') return;
+        if (method === 'notifications.show' || method === 'statusBar.update') return;
         throw new Error(`unexpected host call ${method}`);
       }
     },
