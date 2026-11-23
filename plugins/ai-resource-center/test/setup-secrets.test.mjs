@@ -1,5 +1,5 @@
-// 秘密參數（對照 LcAiPack.Tests SetupSecretTests；Core Mcp/McpSecrets.cs、Setup/SetupSecrets.cs）。
-// 秘密依 LC-AI-Pack 的既有識別存進作業系統安全儲存區：Windows Credential Manager（Generic credential，
+// 秘密參數（對照 SetupSecretTests；Core Mcp/McpSecrets.cs、Setup/SetupSecrets.cs）。
+// 秘密依既有識別存進作業系統安全儲存區：Windows Credential Manager（Generic credential，
 // target name = key），macOS Keychain（service com.linkchain.lcaipack，account = key）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,8 +11,8 @@ import { memoryStore } from './fake-secret-store.mjs';
 
 const winRules = createPathRules({ platform: 'win32', resolveLinks: false });
 
-test('秘密識別與 LC-AI-Pack 相同：package、參數、scope 與正規化根目錄雜湊，不含原始路徑與版本', () => {
-  // 期望值由 LcAiPack.Core SetupSecretReference.For(...).Key 實際產生。
+test('秘密識別與既有格式相同：package、參數、scope 與正規化根目錄雜湊，不含原始路徑與版本', () => {
+  // 期望值由 SetupSecretReference.For(...).Key 實際產生。
   const ref = setupSecretReference({ packageKey: 'orca-rc-demo-mcp-params', parameterId: 'demo-api-key', scope: 'global', canonicalRoot: 'C:\\Users\\Demo\\' }, winRules);
   assert.equal(ref.key, 'lcaipack:setup:orca-rc-demo-mcp-params:demo-api-key:global:dda80ed47911b77077f5d544');
   assert.equal(ref.key.includes('Demo'), false);
@@ -68,7 +68,7 @@ test('Windows 透過 PowerShell 呼叫 Credential Manager，秘密只經 stdin �
     assert.ok(c.args.includes('-EncodedCommand'));
     assert.equal(c.args.join(' ').includes('canary'), false);
     const script = Buffer.from(c.args[c.args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
-    // 與 LC-AI-Pack WindowsCredentialSecretStore 相同的 Generic credential 形狀。
+    // 與 WindowsCredentialSecretStore 相同的 Generic credential 形狀。
     for (const fragment of ['CredWrite', 'CredRead', 'CredDelete', 'Type = 1', 'Persist = 2', '"LC-AI-Pack"', '"lcaipack"', 'Encoding.UTF8']) assert.ok(script.includes(fragment), fragment);
   }
   const set = calls.find(c => c.input.startsWith('set'));
@@ -86,7 +86,7 @@ test('macOS 讀取秘密值不修剪：只去掉 security 附加的單一結尾�
   assert.equal(createMacKeychainStore({ run: () => ({ status: 44, stdout: '' }) }).get('k'), null);
 });
 
-test('macOS 透過 security 存取 Keychain：service 與 account 沿用 LC-AI-Pack，寫入秘密只經 stdin', () => {
+test('macOS 透過 security 存取 Keychain：service 與 account 沿用既有值，寫入秘密只經 stdin', () => {
   const calls = [];
   const keychain = new Map([['k1', 'stored-value']]);
   const store = createMacKeychainStore({ run: (file, args, input) => {
@@ -96,7 +96,7 @@ test('macOS 透過 security 存取 Keychain：service 與 account 沿用 LC-AI-P
   } });
   assert.equal(KeychainService, 'com.linkchain.lcaipack');
   assert.deepEqual(store.existsMany(['k1', 'k2']), [true, false]);
-  // 存在性查詢不帶 -w：只看 exit code，秘密值不會被讀出（LC-AI-Pack 沒有較省的路徑，這裡刻意更保守）。
+  // 存在性查詢不帶 -w：只看 exit code，秘密值不會被讀出（原實作沒有較省的路徑，這裡刻意更保守）。
   assert.deepEqual(calls[0], { file: 'security', args: ['find-generic-password', '-a', 'k1', '-s', KeychainService], input: undefined });
   assert.equal(calls.slice(0, 2).some(c => c.args.includes('-w')), false);
   calls.length = 0;
@@ -113,7 +113,7 @@ test('macOS 透過 security 存取 Keychain：service 與 account 沿用 LC-AI-P
 });
 
 test('不支援的平台沒有明文替代儲存', () => {
-  assert.throws(() => createDefaultSecretStore({ platform: 'linux' }), /Windows Credential Manager 與 macOS Keychain/);
+  assert.throws(() => createDefaultSecretStore({ platform: 'freebsd' }), /Windows Credential Manager 與 macOS Keychain/);
 });
 
 test('Windows 實機：Credential Manager 寫入、讀回、刪除合成秘密', { skip: process.platform !== 'win32' }, () => {

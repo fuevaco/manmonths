@@ -33,19 +33,23 @@ const DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
  * @param {string|URL} req.url
  * @param {Record<string,string>} [req.headers]
  * @param {unknown} [req.json]      JSON 本文
+ * @param {Buffer} [req.body]       二進位本文；Content-Type 可由 headers 指定
  * @param {number} [req.timeoutMs]
  * @param {AbortSignal} [req.signal]
  * @returns {Promise<{status: number, headers: object, text: string}>}
  */
-export function send({ method, url, headers = {}, json, timeoutMs = 10000, signal, maxBytes = DEFAULT_MAX_BYTES, responseType }) {
+export function send({ method, url, headers = {}, json, body: rawBody, timeoutMs = 10000, signal, maxBytes = DEFAULT_MAX_BYTES, responseType }) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const lib = u.protocol === 'https:' ? https : http;
-    const body = json === undefined ? null : Buffer.from(JSON.stringify(json), 'utf8');
+    const body = rawBody ?? (json === undefined ? null : Buffer.from(JSON.stringify(json), 'utf8'));
     let settled = false;
+    const abort = () => fail(new HttpError('cancelled', '已取消'));
+    const cleanup = () => signal?.removeEventListener('abort', abort);
     const fail = (err) => {
       if (settled) return;
       settled = true;
+      cleanup();
       req.destroy();
       reject(err);
     };
@@ -56,7 +60,7 @@ export function send({ method, url, headers = {}, json, timeoutMs = 10000, signa
         headers: {
           Accept: 'application/json',
           'User-Agent': 'orca-ai-resource-center/1',
-          ...(body ? { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': body.length } : {}),
+          ...(body ? { 'Content-Type': rawBody ? 'application/octet-stream' : 'application/json; charset=utf-8', 'Content-Length': body.length } : {}),
           ...headers
         }
       },
@@ -71,6 +75,7 @@ export function send({ method, url, headers = {}, json, timeoutMs = 10000, signa
         res.on('end', () => {
           if (settled) return;
           settled = true;
+          cleanup();
           const bytes = Buffer.concat(chunks);
           resolve({ status: res.statusCode || 0, headers: res.headers, bytes,
             text: responseType === 'bytes' && res.statusCode >= 200 && res.statusCode < 300 ? '' : bytes.toString('utf8') });
@@ -91,7 +96,7 @@ export function send({ method, url, headers = {}, json, timeoutMs = 10000, signa
     });
     if (signal) {
       if (signal.aborted) return fail(new HttpError('cancelled', '已取消'));
-      signal.addEventListener('abort', () => fail(new HttpError('cancelled', '已取消')), { once: true });
+      signal.addEventListener('abort', abort, { once: true });
     }
     if (body) req.write(body);
     req.end();

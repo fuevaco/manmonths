@@ -1,5 +1,5 @@
 // 含設定命令的組合包（工項 10）：從面板實際使用的 worker 請求契約進入，以真實子行程執行設定命令
-// （對照 LcAiPack.Tests CliSetupEndToEndTests、SetupPerOsPackageTests、SetupSecretDeliveryTests、SetupCancellationTests 的端到端部分）。
+// （對照 CliSetupEndToEndTests、SetupPerOsPackageTests、SetupSecretDeliveryTests、SetupCancellationTests 的端到端部分）。
 // Windows 以 PowerShell、macOS 以 bash；腳本只在臨時目錄寫入無害的證據檔。
 import test from 'node:test';
 import assert from 'node:assert/strict';

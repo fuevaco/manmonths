@@ -1,4 +1,4 @@
-// 資源包大小防護（zip bomb）。LC-AI-Pack 只限制壓縮後 100 MB（市集 Market:MaxPackageSizeMB），沒有解壓上限；
+// 資源包大小防護（zip bomb）。原本只限制壓縮後 100 MB（市集 Market:MaxPackageSizeMB），沒有解壓上限；
 // 資源中心在記憶體解壓，因此另外限制項目數、單檔與總解壓大小，且解壓前先看宣告大小並限制輸出長度。
 import test from 'node:test';
 import assert from 'node:assert/strict';

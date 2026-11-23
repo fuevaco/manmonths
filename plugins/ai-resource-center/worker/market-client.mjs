@@ -1,4 +1,4 @@
-// 帶登入工作階段的市集請求（對照 LC-AI-Pack GUI AuthenticatingHandler）。後續工項的目錄、詳情、下載都經過這裡。
+// 帶登入工作階段的市集請求（對照 AuthenticatingHandler）。後續工項的目錄、詳情、下載都經過這裡。
 //
 // - 只有與市集同源（scheme／host／port）的請求才帶 token 並走 401 流程；其他請求原樣送出。
 // - 每次送出前即時讀取目前 access token。
@@ -34,12 +34,12 @@ export function createMarketClient({ manager, marketUrl, transport = send, timeo
   const withToken = (req, token) => ({ ...req, headers: { ...(req.headers || {}), Authorization: `Bearer ${token}` } });
 
   /**
-   * @param {object} req  { method, path（相對於市集根網址）或 url, json?, timeoutMs?, signal? }
+   * @param {object} req  { method, path（相對於市集根網址）或 url, json?, body?: Buffer, headers?, timeoutMs?, signal? }
    * @returns {Promise<{status, headers, text}>}  傳輸失敗時擲 HttpError
    */
   async function request(req) {
     const url = req.url ?? apiUrl(marketUrl, req.path);
-    const base = { method: req.method ?? 'GET', url, json: req.json, headers: req.headers, timeoutMs: req.timeoutMs ?? timeoutMs, signal: req.signal,
+    const base = { method: req.method ?? 'GET', url, json: req.json, ...(req.body !== undefined ? { body: req.body } : {}), headers: req.headers, timeoutMs: req.timeoutMs ?? timeoutMs, signal: req.signal,
       ...(req.maxBytes !== undefined ? { maxBytes: req.maxBytes } : {}), ...(req.responseType ? { responseType: req.responseType } : {}) };
     if (!sameOrigin(url, marketUrl)) {
       const { Authorization, ...headers } = base.headers || {};

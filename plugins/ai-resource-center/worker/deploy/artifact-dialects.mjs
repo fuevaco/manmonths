@@ -1,4 +1,4 @@
-// 對照 LC-AI-Pack ArtifactDialects：Markdown 直通使用 UTF-8 without BOM、LF 與單一結尾換行。
+// 對照 ArtifactDialects：Markdown 直通使用 UTF-8 without BOM、LF 與單一結尾換行。
 export const utf8Lf = text => Buffer.from(text.replace(/^\uFEFF+/, '').replaceAll('\r\n', '\n').replaceAll('\r', '\n').replace(/\n+$/, '') + '\n');
 
 import { splitFrontmatter } from './canonical-package.mjs';

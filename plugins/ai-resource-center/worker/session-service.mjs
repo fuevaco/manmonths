@@ -1,10 +1,10 @@
-// 登入工作階段的應用層流程（對照 LC-AI-Pack GUI App 的登入／登出接線、LoginViewModel 與 SessionRejectionGate）。
+// 登入工作階段的應用層流程（對照 App 的登入／登出接線、LoginViewModel 與 SessionRejectionGate）。
 //
 // - 首次使用時市集網址為空（ADR 0001）；登入成功後才儲存網址。
 // - 工作階段存在外掛秘密儲存並綁定市集網址；設定中的網址改變時不沿用，並以舊網址撤銷舊工作階段。
 // - 工作階段失效（續期被拒、相容模式 401）只處理一次：清除工作階段並在登入畫面顯示原因；不撤銷。
-// - 手動登出：撤銷（不等待）→ 停止續期 → 清除儲存。不碰 LC-AI-Pack 的登入狀態。
-// - 登入成功即保留工作階段，不做權限探測（與 LC-AI-Pack 一致）；沒有權限（403）等到實際的市集請求失敗時才顯示，不登出。
+// - 手動登出：撤銷（不等待）→ 停止續期 → 清除儲存。不碰其他用戶端的登入狀態。
+// - 登入成功即保留工作階段，不做權限探測（與既有行為一致）；沒有權限（403）等到實際的市集請求失敗時才顯示，不登出。
 // - 後續工項透過 requireClient() 取得帶工作階段的市集用戶端。
 
 import { badParams, ErrorCode, RcError } from './contract.mjs';
@@ -122,12 +122,13 @@ export function createSessionService({
   }
 
   return {
-    async getState() {
+    async getState({ secretsProtection } = {}) {
       return serial(async () => {
+        if (secretsProtection === 'unavailable') return view(await configuredUrl());
         await ensureLoaded();
         const url = await configuredUrl();
         if (!active) return view(url);
-        // 不做權限探測（對照 LC-AI-Pack）：工作階段是否有效、帳號有無權限，等實際的市集請求才知道。
+        // 不做權限探測（對照既有行為）：工作階段是否有效、帳號有無權限，等實際的市集請求才知道。
         // 補送待送的安裝回報（附帶作業，不影響狀態回應）。
         notifyConnected();
         return view(url);

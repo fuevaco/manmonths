@@ -1,5 +1,5 @@
-// Host Profiles（對照 LcAiPack.Core Deployment/HostProfiles.cs）：client 內建、版本化的路由表。
-// 修改任何 template 都必須同步 LC-AI-Pack、提升 profile 版本，並更新 golden 測試的 matrix digest。
+// Host Profiles（對照 Deployment/HostProfiles.cs）：client 內建、版本化的路由表。
+// 修改任何 template 都必須同步其他用戶端、提升 profile 版本，並更新 golden 測試的 matrix digest。
 // 路由表完整保留，讓既有收據都能被辨識；安裝入口另依已實作的 driver 篩選能力。
 import { ofText, ordinal } from './digest.mjs';
 
@@ -8,7 +8,7 @@ export const SurfaceIds = Object.freeze({
   codexCli: 'codex-cli', claudeCodeCli: 'claude-code-cli', claudeDesktop: 'claude-desktop', copilotCli: 'copilot-cli', vsCode: 'vscode'
 });
 export const Scope = Object.freeze({ project: 'project', global: 'global' });
-/** canonical kind；陣列順序等於 LC-AI-Pack enum 順序（排序與 digest 用）。 */
+/** canonical kind；陣列順序等於既有 enum 順序（排序與 digest 用）。 */
 export const Kinds = Object.freeze(['skill', 'agent', 'mcp', 'prompt', 'command']);
 export const MutationKind = Object.freeze({ writeFile: 'WriteFile', syncTree: 'SyncTree', patchConfig: 'PatchConfig' });
 export const Severity = Object.freeze({ warning: 'Warning', blocking: 'Blocking' });

@@ -1,4 +1,4 @@
-// LC-AI-Pack RemovalIntent：全部全域根、BackupAndRemove、保留 setup 與秘密（不 purge）。
+// RemovalIntent：全部全域根、BackupAndRemove、保留 setup 與秘密（不 purge）。
 import { displayPath } from './display-path.mjs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,7 +8,7 @@ import { createPathRules } from './deploy/canonical-root.mjs';
 import { ReceiptStore, targetKeyOf } from './deploy/receipts.mjs';
 import { tryAcquireTargetLock } from './deploy/target-lock.mjs';
 import { executeRemovalTarget } from './deploy/apply-executor.mjs';
-import { resolveWindowsOrcaAppData } from './deploy/orca-claude-mcp-cleanup.mjs';
+import { resolveOrcaAppData } from './deploy/orca-claude-mcp-cleanup.mjs';
 import { blocking, ProblemCodes } from './deploy/problems.mjs';
 import { createOperationStore } from './setup/operations.mjs';
 import { openOperationLog } from './setup/operation-log.mjs';
@@ -67,7 +67,7 @@ export function createRemovalService({ installed, userHome = os.homedir(), lcaip
               detached.push({ ...summary, keptPaths });
               result = { status: 'Succeeded', backupPaths: [], problems: [] };
             } else result = lock ? executeRemovalTarget({ target, receiptStore: ReceiptStore.forGlobal({ home, userProfile: userHome, rules }) }, packageKey,
-              { home, userHome, windowsOrcaAppDataDirectory: resolveWindowsOrcaAppData(platform, env, userHome) }, rules)
+              { home, userHome, orcaAppDataDirectory: resolveOrcaAppData(platform, env, userHome) }, rules)
               : { status: 'Failed', backupPaths: [], problems: [blocking(ProblemCodes.lockUnavailable, '無法取得部署目標鎖定', '另一個程序正在操作這個位置，請稍後重試')] };
           } catch (error) {
             result = { status: 'Failed', backupPaths: [], problems: [blocking(ProblemCodes.applyFailed, '解除安裝失敗', error.message)] };

@@ -1,4 +1,4 @@
-// 設定命令的實際執行（對照 LcAiPack.Tests SetupCommandRunnerTests、SetupCommandOutputTests、SetupCancellationTests、
+// 設定命令的實際執行（對照 SetupCommandRunnerTests、SetupCommandOutputTests、SetupCancellationTests、
 // SetupSecretDeliveryTests 的真實子行程部分、SetupRetrySessionTests 的實際重試、SetupPerOsPackageTests 的夾具執行）。
 // 這是平台唯一允許啟動 publisher script 的入口，所以全部用「真實子行程」驗證：Windows 以 PowerShell、macOS 以 bash。
 import test from 'node:test';

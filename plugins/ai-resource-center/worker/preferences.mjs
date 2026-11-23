@@ -3,6 +3,7 @@ import { badParams } from './contract.mjs';
 const key = 'resource-center.preferences';
 export const defaultDirection = field => ['installCount', 'uploadedAt'].includes(field) ? 'desc' : 'asc';
 const validators = {
+  lastUploadFolder: v => typeof v === 'string' && v.length <= 4096 && !v.includes('\0'),
   sortField: v => ['installCount', 'name', 'owner', 'uploadedAt'].includes(v),
   sortDirection: v => ['asc', 'desc'].includes(v),
   showPreview: v => typeof v === 'boolean',
@@ -20,6 +21,7 @@ export function createPreferences(router, storage) {
     const saved = await storage.get(key);
     const result = { sortField: 'installCount', sortDirection: 'desc', showPreview: false, checkIntervalMinutes: 15 };
     for (const k of Object.keys(result)) if (validators[k](saved?.[k])) result[k] = saved[k];
+    for (const k of ['lastUploadFolder']) if (validators[k](saved?.[k])) result[k] = saved[k];
     if (!validators.sortDirection(saved?.sortDirection)) result.sortDirection = defaultDirection(result.sortField);
     return result;
   }

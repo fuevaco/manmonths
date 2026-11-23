@@ -113,6 +113,7 @@
   /** ←：閱讀模式先回到明細頁（還原捲動位置），否則回到清單。 */
   RC.goBack = function goBack() {
     if (readerMode) return setReader(false);
+    if (RC.isShown('developer')) return RC.leaveDeveloper();
     return RC.backToList();
   };
 

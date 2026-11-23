@@ -1,5 +1,5 @@
 // operation 紀錄、單一 log、秘密遮罩、秘密交付框架與執行 context
-// （對照 LcAiPack.Tests SetupOperationTests、SetupOperationLogTests、SetupSecretChannelTests、SetupExecutionContextTests、
+// （對照 SetupOperationTests、SetupOperationLogTests、SetupSecretChannelTests、SetupExecutionContextTests、
 // SetupSecretDeliveryTests 的靜態部分、SetupCommandOutputTests 的 log 部分）。
 import test from 'node:test';
 import assert from 'node:assert/strict';

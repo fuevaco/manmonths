@@ -1,4 +1,4 @@
-// 與 LC-AI-Pack 的 CodexSkillMigration 共用收據、備份路徑與操作紀錄。
+// 與 CodexSkillMigration 共用收據、備份路徑與操作紀錄。
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';

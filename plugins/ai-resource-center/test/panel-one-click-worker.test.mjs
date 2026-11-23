@@ -91,7 +91,7 @@ test('一鍵安裝：按卡片「安裝」直接部署到所有相容的全域�
   assert.equal((await e.detail()).deployments.length, 2);
 });
 
-test('缺少必要參數：確認層以表單收集（秘密為 password），儲存後安裝；值與 LC-AI-Pack 共用且秘密不外洩', async t => {
+test('缺少必要參數：確認層以表單收集（秘密為 password），儲存後安裝；值與其他用戶端共用且秘密不外洩', async t => {
   const CANARY = 'canary-one-click-panel-secret';
   const e = await environment(t, { setup: { parameters: [
     { parameterId: 'endpoint', label: '服務網址', type: 'string', required: true },
@@ -272,7 +272,7 @@ test('補裝：新增根目錄後顯示「N 個新位置」與「補裝」，只
   assert.equal((await e.detail()).deployments.length, 3);
 });
 
-test('設定參數：明細修改後「儲存並重新套用」，LC-AI-Pack 共用設定讀到新值，秘密只顯示已設定', async t => {
+test('設定參數：明細修改後「儲存並重新套用」，共用設定讀到新值，秘密只顯示已設定', async t => {
   const CANARY = 'canary-reapply-secret';
   const e = await environment(t, { setup: { parameters: [{ parameterId: 'endpoint', label: '服務網址', type: 'string', default: 'before' },
     { parameterId: 'token', label: 'API 金鑰', type: 'secret', secretUsage: 'setup-time', required: false }] } });

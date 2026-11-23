@@ -1,4 +1,4 @@
-// 已驗證的 canonical 資源包（對照 LcAiPack.Core Deployment/CanonicalPackage.cs、
+// 已驗證的 canonical 資源包（對照 Deployment/CanonicalPackage.cs、
 // Contract/FrontmatterParser.cs、SkillFrontmatterContract.cs）。讀取階段完全不寫入部署目標。
 import { ofBytes, ordinal } from './digest.mjs';
 import { ErrorCode } from '../contract.mjs';

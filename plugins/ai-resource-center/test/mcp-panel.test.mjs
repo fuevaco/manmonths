@@ -13,7 +13,7 @@ import { ofBytes } from '../worker/deploy/digest.mjs';
 const CODEX_CONFIG = ['# keep', 'model = "user"', '[mcp_servers.other]', 'command = "user"', ''].join('\r\n');
 
 // 同一案例串起真正 rc.install.run（一鍵安裝／更新）、面板卡片與明細、設定與收據：MCP 資源包含 Claude Desktop。
-test('panel one-click installs then updates direct MCP across Codex, Claude Code and Claude Desktop global surfaces', async t => {
+test('panel one-click installs then updates direct MCP across Codex, Claude Code and Claude Desktop global surfaces', { skip: process.platform !== 'win32' && '使用 Windows 的 Claude Desktop 安裝樹（AppData、Packages/Claude_*）；Linux 沒有 Claude Desktop（ADR-0005）' }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-panel-08-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const userHome = path.join(dir, 'user'), lcaipackHome = path.join(dir, 'lcaipack');
   const codex = path.join(userHome, '.codex'), claude = path.join(userHome, '.claude');
@@ -72,7 +72,7 @@ test('panel one-click installs then updates direct MCP across Codex, Claude Code
 
 
 
-test('Claude Desktop offers the MCP portion of a bundle and omits file-only packages and project scope', async t => {
+test('Claude Desktop offers the MCP portion of a bundle and omits file-only packages and project scope', { skip: process.platform !== 'win32' && '使用 Windows 的 Claude Desktop 安裝樹（AppData、Packages/Claude_*）；Linux 沒有 Claude Desktop（ADR-0005）' }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-bundle-08-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const userHome = path.join(dir, 'home'), lcaipackHome = path.join(dir, 'state');
   const roaming = path.join(userHome, 'roaming'), local = path.join(userHome, 'local');

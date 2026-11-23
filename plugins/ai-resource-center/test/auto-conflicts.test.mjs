@@ -1,7 +1,7 @@
 // 工項 11：安裝與更新自動處理可解決的衝突（ADR 0002）。
 // 從面板使用的 worker 請求契約進入：本機修改與未受管同名內容先備份再套用，不需要使用者額外勾選；
 // 他包擁有、備份失敗與設定檔無法安全變更時該目標受阻或復原。備份命名、阻擋條件與回復行為對照
-// LC-AI-Pack（McpLocalModificationTests、RollbackCharacterisationTests、PlanProblemAttributionTests）。
+// （McpLocalModificationTests、RollbackCharacterisationTests、PlanProblemAttributionTests）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

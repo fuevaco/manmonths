@@ -1,4 +1,4 @@
-// 工項 15：只重試失敗目標的 worker 契約（對照 LC-AI-Pack RetryFailedTargetsAsync 與 GuiPlanSharingTests）。
+// 工項 15：只重試失敗目標的 worker 契約（對照 RetryFailedTargetsAsync 與 GuiPlanSharingTests）。
 // 面板重試＝只把失敗目標重新規劃再確認：已成功目標的檔案與收據不變，安裝回報只含重試成功的目標，且是新的 operation。
 import test from 'node:test';
 import assert from 'node:assert/strict';

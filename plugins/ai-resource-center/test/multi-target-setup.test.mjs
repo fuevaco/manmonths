@@ -7,11 +7,14 @@ import path from 'node:path';
 import { setupMulti, sha } from './multi-env.mjs';
 import { zip } from './zip-fixture.mjs';
 
+// 設定命令依執行平台選 runner：Windows 用 PowerShell；其他平台用 bash（Linux 不允許 PowerShell，ADR-0005）。
+const host = process.platform === 'win32' ? { runner: 'powershell', script: 'setup/prepare.ps1', operatingSystem: 'windows' }
+  : { runner: 'bash', script: 'setup/prepare.sh', operatingSystem: process.platform === 'darwin' ? 'macos' : 'linux' };
 const fakeRunners = { resolve: runner => ({ runner, executable: `/fake/${runner}`, leadingArguments: [] }) };
 const bundle = (version) => zip({ 'lcpack.json': JSON.stringify({ packageFormatVersion: 1, key: 'bundle-s', name: 'Bundle S', type: 'bundle', version, description: 'Synthetic',
   contents: [{ id: 'demo-skill', kind: 'skill', path: 'resources/skills/demo-skill' }],
-  setup: { parameters: [], commands: [{ commandId: 'prepare', name: '準備環境', runner: 'powershell', script: 'setup/prepare.ps1', arguments: [], timeoutMinutes: 1 }] } }),
-  'README.md': '# 合成', 'resources/skills/demo-skill/SKILL.md': '---\nname: demo-skill\ndescription: Synthetic skill\n---\nBundle', 'setup/prepare.ps1': 'exit 0\n' });
+  setup: { parameters: [], commands: [{ commandId: 'prepare', name: '準備環境', runner: host.runner, script: host.script, arguments: [], timeoutMinutes: 1 }] } }),
+  'README.md': '# 合成', 'resources/skills/demo-skill/SKILL.md': '---\nname: demo-skill\ndescription: Synthetic skill\n---\nBundle', [host.script]: 'exit 0\n' });
 
 async function environment(t, { fail }) {
   const calls = [];
@@ -23,7 +26,7 @@ async function environment(t, { fail }) {
       : { commandId: request.command.commandId, outcome: 'Completed', exitCode: 0, durationMs: 1, failureSummary: null, succeeded: true };
   } };
   const e = await setupMulti(t, { packages: { 'pkg-a': ['1.0.0'], 'bundle-s': { '1.0.0': bundle('1.0.0') } },
-    workerDeps: { commandExecutor, runners: fakeRunners, setupEnvironment: { operatingSystem: 'windows', architecture: 'x64' }, platform: 'win32' } });
+    workerDeps: { commandExecutor, runners: fakeRunners, setupEnvironment: { operatingSystem: host.operatingSystem, architecture: 'x64' }, platform: process.platform } });
   assert.equal((await e.seed('pkg-a', [e.roots.claudeWork])).ok, true);
   return { ...e, calls };
 }

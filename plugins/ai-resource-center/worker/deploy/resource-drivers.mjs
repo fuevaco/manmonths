@@ -14,7 +14,7 @@ import { resolveClaudeUserConfigDirectory } from './claude-code-roots.mjs';
 
 export const PlannedChange = Object.freeze({ create: 'Create', replace: 'Replace', merge: 'Merge', noOp: 'NoOp' });
 const backupExplanation = kind => kind === 'skill'
-  ? '已授權備份後覆蓋。技能資料夾會先備份至 LC-AI-Pack 資料目錄下的 backups。'
+  ? '已授權備份後覆蓋。技能資料夾會先備份至共用資料目錄下的 backups。'
   : '已授權備份後覆蓋。原檔案會先備份至原位置旁，檔名加上 .bak-lcaipack-<時間戳>。';
 
 /** 同一 target 內穩定且可排序的 mutation id。 */
@@ -60,7 +60,7 @@ export function evaluateConflict(content, ctx, destination, before, ownership, p
   }
   if (before.state === PathState.missing) return false;
   if (!ownership.isManaged) {
-    const p = blocking(ProblemCodes.unmanagedCollision, `目的地已存在但沒有 LC-AI-Pack 管理紀錄：${destination}`,
+    const p = blocking(ProblemCodes.unmanagedCollision, `目的地已存在但沒有部署管理紀錄：${destination}`,
       '為避免覆蓋使用者自有內容，預設阻擋。重新以「備份後覆蓋」規劃後才會揭露備份並可 Apply。',
       { host: ctx.host, scope: ctx.scope, contentId: content.id, path: destination, existingOwner: ownership,
         resolutions: ['以 BackupAndReplace 重新 Plan', '先手動移除或改名既有內容'] });

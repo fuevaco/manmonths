@@ -11,10 +11,12 @@ import { INSTALL_REPORTS_KEY } from '../worker/install-reports.mjs';
 const until = async (check, ms = 2000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await check()) return true; await delay(10); } return false; };
 const stalePlan = { code: 'plan_stale' };
 
+// 設定命令只是讓計畫需要確認；runner 依平台選擇（Linux 不允許 PowerShell，ADR-0005）。
+const [runner, script] = process.platform === 'win32' ? ['powershell', 'setup/init.ps1'] : ['bash', 'setup/init.sh'];
 async function planned(t) {
-  const bytes=zip({'lcpack.json':JSON.stringify({packageFormatVersion:1,key:'pkg-a',name:'Demo',type:'bundle',version:'1.0.0',description:'Synthetic',contents:[{id:'demo-skill',kind:'skill',path:'resources/skill'}],setup:{commands:[{commandId:'init',name:'準備',runner:'powershell',script:'setup/init.ps1'}]}}),
-    'README.md':'# Demo','resources/skill/SKILL.md':'---\nname: demo-skill\ndescription: Synthetic\n---\nHello','setup/init.ps1':'exit 0'});
-  const e=await setupMulti(t,{packages:{'pkg-a':{'1.0.0':bytes}},workerDeps:{runners:{resolve:runner=>({runner,executable:'/fake/powershell',leadingArguments:[]})},commandExecutor:{run:async()=>({succeeded:true,outcome:'Completed',exitCode:0})}}});
+  const bytes=zip({'lcpack.json':JSON.stringify({packageFormatVersion:1,key:'pkg-a',name:'Demo',type:'bundle',version:'1.0.0',description:'Synthetic',contents:[{id:'demo-skill',kind:'skill',path:'resources/skill'}],setup:{commands:[{commandId:'init',name:'準備',runner,script}]}}),
+    'README.md':'# Demo','resources/skill/SKILL.md':'---\nname: demo-skill\ndescription: Synthetic\n---\nHello',[script]:'exit 0'});
+  const e=await setupMulti(t,{packages:{'pkg-a':{'1.0.0':bytes}},workerDeps:{runners:{resolve:runner=>({runner,executable:`/fake/${runner}`,leadingArguments:[]})},commandExecutor:{run:async()=>({succeeded:true,outcome:'Completed',exitCode:0})}}});
   const summary=await e.run();assert.equal(summary.needsConfirmation,true);
   return {e,summary};
 }

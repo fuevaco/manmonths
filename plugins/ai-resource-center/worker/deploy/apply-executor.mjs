@@ -57,7 +57,7 @@ function syncTree(tx, mutation, artifact, stamp, backups, removed, options) {
 }
 
 /**
- * 收據是磁碟上的可竄改檔案，其路徑不能直接當作刪除對象（LC-AI-Pack 沒有這層檢查；資源中心額外加上）：
+ * 收據是磁碟上的可竄改檔案，其路徑不能直接當作刪除對象（原實作沒有這層檢查；資源中心額外加上）：
  * 檔案與目錄只能在目標的 canonical root 內；設定檔節點另可在 Claude Code 的使用者設定目錄（家目錄的 .claude.json）。
  */
 function assertOwnedPathContained(receipt, target, userHome, rules) {

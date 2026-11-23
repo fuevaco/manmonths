@@ -9,13 +9,15 @@ import { send } from '../worker/http.mjs';
 import { zip } from './zip-fixture.mjs';
 import { createHash } from 'node:crypto';
 
+// Linux 沒有 Claude Desktop（ADR-0005）；需要 Desktop 的情境在 Linux 改以同為 POSIX 路徑的 macOS 驗證。
+const desktopPlatform = { platform: process.platform === 'linux' ? 'darwin' : process.platform };
 const summary = (packageKey = 'demo', extra = {}) => ({ packageKey, name: packageKey, type: 'skill', latestReleaseVersion: '1.0.0', ...extra });
 async function fixture(t, packages = [summary()], deps = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rc-refresh-'));
   const home = path.join(dir, 'state'), userHome = path.join(dir, 'user');
   fs.mkdirSync(home); fs.mkdirSync(userHome);
   const market = await startFakeMarket({ packages });
-  const worker = startWorker({ deps: { lcaipackHome: home, userHome, env: {}, platform: 'win32', ...deps } });
+  const worker = startWorker({ deps: { lcaipackHome: home, userHome, env: {}, platform: process.platform, ...deps } });
   t.after(async () => { worker.dispose(); await market.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   await worker.call('rc.session.signIn', { marketUrl: market.url, username: 'alice', password: 'pw-alice' });
   const save = receipts => fs.writeFileSync(path.join(home, 'receipts.json'), JSON.stringify({ receiptFormatVersion: 1, receipts }));
@@ -88,7 +90,7 @@ test('清單與明細區分較新版、下架、已是最新；任一舊目標�
 });
 
 test('清單提供卡片欄位、相容工具與全域部署旗標，版本詳情失敗退回本機工具', async t => {
-  const e = await fixture(t, [summary('demo', { ownerAdAccount: 'alice', installCount: 12, category: 'Workflow', lastUploadedAt: '2026-11-20T08:00:00+08:00', recommendedVersionHasFullGuide: true }), summary('mcp', { type: 'mcp' }), summary('fallback')]);
+  const e = await fixture(t, [summary('demo', { ownerAdAccount: 'alice', installCount: 12, category: 'Workflow', lastUploadedAt: '2026-11-20T08:00:00+08:00', recommendedVersionHasFullGuide: true }), summary('mcp', { type: 'mcp' }), summary('fallback')], desktopPlatform);
   e.details('demo', [{ version: '1.0.0', channel: 'release', isEnabled: true, hosts: ['codex', 'claude-code'] }]);
   e.details('mcp', [{ version: '1.0.0', channel: 'release', isEnabled: true, hosts: ['claude-code'] }]);
   fs.mkdirSync(path.join(e.userHome, '.codex')); fs.writeFileSync(path.join(e.userHome, '.codex/config.toml'), '');
@@ -126,7 +128,7 @@ test('相容性詳情依 packageKey@version 快取，所有同時清單共用最
   await e.worker.call('rc.catalog.list'); assert.equal(requests, 10);
 });
 
-test('用戶端版本只回傳 Orca 外掛版本，不查詢 LC-AI-Pack 發行資料', async t => {
+test('用戶端版本只回傳 Orca 外掛版本，不查詢其他用戶端的發行資料', async t => {
   const e = await fixture(t);
   const result = await e.worker.call('rc.client.getVersions');
   assert.deepEqual(Object.keys(result), ['orca']);
@@ -137,7 +139,7 @@ test('用戶端版本只回傳 Orca 外掛版本，不查詢 LC-AI-Pack 發行�
 test('收據格式版本不支援時提供可辨識錯誤與友善提示，損壞錯誤維持原樣', async t => {
   const e = await fixture(t);
   e.details();
-  const message = '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛';
+  const message = '共用資料由較新版本寫入，請更新 Orca 外掛';
   fs.writeFileSync(path.join(e.home, 'receipts.json'), JSON.stringify({ receiptFormatVersion: 99 }));
   assert.deepEqual((await e.worker.call('rc.catalog.list')).installedError, { code: 'sharedDataTooNew', message });
   assert.deepEqual((await e.worker.call('rc.package.getDetails', { packageKey: 'demo' })).installedError, { code: 'sharedDataTooNew', message });
@@ -162,7 +164,7 @@ test('setup 值與完成狀態的格式版本不支援時轉成友善錯誤，�
   for (const name of ['setup.json', 'setup-commands.json']) {
     const file = path.join(e.home, name);
     fs.writeFileSync(file, JSON.stringify({ setupFormatVersion: 99 }));
-    await assert.rejects(e.worker.call('rc.install.run', input), { code: 'sharedDataTooNew', message: '共用資料由較新的 LC-AI-Pack 寫入，請更新 Orca 外掛' });
+    await assert.rejects(e.worker.call('rc.install.run', input), { code: 'sharedDataTooNew', message: '共用資料由較新版本寫入，請更新 Orca 外掛' });
     assert.ok(e.worker.state.logs.some(l => l.includes('99') && l.includes(name)));
     fs.writeFileSync(file, '{broken');
     await assert.rejects(e.worker.call('rc.install.run', input), { code: 'setup_invalid' });
@@ -171,7 +173,7 @@ test('setup 值與完成狀態的格式版本不支援時轉成友善錯誤，�
 });
 
 test('bundle 工具摘要僅在驗證過的確切 ZIP 含 MCP 時列入 Claude Desktop', async t => {
-  const e = await fixture(t, [summary('with-mcp', { type: 'bundle' }), summary('without-mcp', { type: 'bundle' })]);
+  const e = await fixture(t, [summary('with-mcp', { type: 'bundle' }), summary('without-mcp', { type: 'bundle' })], desktopPlatform);
   for (const key of ['with-mcp', 'without-mcp']) {
     const contents = [{ id: 'hello', kind: 'skill', path: 'resources/skills/hello' }];
     if (key === 'with-mcp') contents.push({ id: 'echo', name: 'Echo', kind: 'mcp', definition: { transport: 'stdio', command: 'echo', args: ['hello'] } });

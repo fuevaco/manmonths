@@ -1,4 +1,4 @@
-// 對照 LC-AI-Pack SessionManagerTests：single-flight 續期、結果分類、立即重試、退避、排程、補續與停止。
+// 對照 SessionManagerTests：single-flight 續期、結果分類、立即重試、退避、排程、補續與停止。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSessionManager, REFRESH_INTERVAL_MS, IMMEDIATE_RETRY_DELAY_MS, TRANSIENT_BACKOFF_MS } from '../worker/session-manager.mjs';

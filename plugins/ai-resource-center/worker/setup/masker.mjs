@@ -1,4 +1,4 @@
-// Core 層集中的秘密遮罩（對照 LcAiPack.Core Setup/SetupSecretMasker.cs）。
+// Core 層集中的秘密遮罩（對照 Setup/SetupSecretMasker.cs）。
 // 兩層防護：已知值（含其 base64 形式，因為秘密以 base64 交付給腳本、腳本可能原樣回吐）逐字取代；
 // 常見鍵值樣式（token=、pat:、password=…）涵蓋平台不知道的第三方秘密。刻意不設最短長度門檻：吵雜遠優於外洩。
 export const Placeholder = '<redacted>';

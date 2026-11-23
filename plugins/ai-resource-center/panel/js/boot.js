@@ -13,14 +13,20 @@
     // 頂部列與齒輪選單
     $('login-form').addEventListener('submit', RC.signIn);
     $('btn-logout').addEventListener('click', RC.signOut);
+    $('btn-my-packages').addEventListener('click', RC.openDeveloper);
     $('btn-refresh').addEventListener('click', RC.refresh);
     RC.closeMenu();
     $('btn-settings').addEventListener('click', RC.toggleMenu);
     document.addEventListener('click', RC.closeMenuOnOutsideClick);
-    // Esc 依序關閉：齒輪選單 → 確認層 → 閱讀模式
+    document.addEventListener('click', RC.closePopoverOnOutsideClick);
+    // Esc 依序關閉：浮動選單與齒輪選單 → 通用 sheet → 確認層 → 閱讀模式
     document.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Escape') return;
-      if (RC.menuOpen()) RC.closeMenu(); else if (RC.confirmOpen()) RC.cancelConfirm(); else if (RC.readerOpen()) RC.setReader(false);
+      if (RC.popoverOpen()) RC.closePopover();
+      else if (RC.menuOpen()) RC.closeMenu();
+      else if (RC.sheetOpen()) RC.cancelSheet();
+      else if (RC.confirmOpen()) RC.cancelConfirm();
+      else if (RC.readerOpen()) RC.setReader(false);
     });
 
     // 明細頁與使用說明
@@ -39,6 +45,14 @@
     $('confirm-primary').addEventListener('click', RC.confirmPrimary);
     $('confirm-cancel').addEventListener('click', RC.cancelConfirm);
     $('toast').addEventListener('click', RC.hideToast);
+
+    // 通用 sheet 與我的資源包
+    $('sheet-primary').addEventListener('click', RC.sheetPrimary);
+    $('sheet-cancel').addEventListener('click', RC.cancelSheet);
+    $('sheet-body').addEventListener('input', RC.sheetInput);
+    $('developer-retry').addEventListener('click', () => RC.loadDeveloper());
+    $('btn-dev-upload').addEventListener('click', () => RC.openUploadSheet());
+    $('btn-dev-install').addEventListener('click', () => RC.openInstallFromFolder());
 
     // 查詢列
     $('catalog-form').addEventListener('submit', (ev) => ev.preventDefault());

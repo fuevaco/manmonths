@@ -1,4 +1,4 @@
-// 部署問題碼（對照 LcAiPack.Contract ProblemCodes；字串值必須一致）。
+// 部署問題碼（對照 ProblemCodes；字串值必須一致）。
 export const ProblemCodes = Object.freeze({
   invalidPackage: 'deployment.invalid-package',
   unsupportedContentKind: 'deployment.unsupported-content-kind',
@@ -22,6 +22,7 @@ export const ProblemCodes = Object.freeze({
   setupIntentMismatch: 'deployment.setup-intent-mismatch',
   setupCancelled: 'deployment.setup-cancelled',
   secretUnresolved: 'deployment.secret-unresolved',
+  mcpLauncherUnavailable: 'deployment.mcp-launcher-unavailable',
   consentRequired: 'deployment.consent-required',
   sourceChanged: 'deployment.source-changed',
   planStale: 'deployment.plan-stale',

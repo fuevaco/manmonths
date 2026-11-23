@@ -1,5 +1,5 @@
 // 受管 MCP 的 setup 接縫（對照 Deployment/SetupRenderContexts.cs、Setup/ManagedMcpLaunch.cs、McpNodeRenderer.BuildLaunchDescriptor）。
-// 只有 definition.parameters 指向 runtime 秘密的 MCP 需要受管 launcher：Host 設定只寫 launcher 路徑與非秘密身分，
+// 只有 definition.parameters 指向 runtime 秘密的 MCP 需要受管 launcher：Host 設定只寫 node、外掛自帶 launcher 腳本路徑與非秘密身分，
 // 啟動描述寫在 {setupRoot}/mcp/{contentId}.json，只儲存秘密身分、不儲存秘密值。
 import os from 'node:os';
 import path from 'node:path';
@@ -10,12 +10,23 @@ import { writeJsonValue } from './values.mjs';
 export const LauncherVerb = 'mcp-launch';
 export const LaunchFormatVersion = 1;
 
-/** 沒有 setup 的資源包回傳 null；規劃與套用必須用同一個建構點。 */
-export function buildSetupRenderContext(pkg, setupPlan, canonicalRoot, launcherPath) {
+/** launcherPath 是腳本絕對路徑或延遲解析函式；沒有 setup 回傳 null，規劃與套用共用此建構點。 */
+export function buildSetupRenderContext(pkg, setupPlan, launcherPath) {
   if (!setupPlan?.hasSetup) return null;
-  return Object.freeze({ packageKey: pkg.identity.key, packageVersion: pkg.identity.version, scope: setupPlan.scope, canonicalRoot,
-    setupRoot: setupPlan.setupRoot, launcherPath: launcherPath ?? null,
-    runtimeSecretParameterIds: new Set(setupPlan.parameters.filter(p => p.isSecret && p.secretUsage === 'runtime').map(p => p.parameterId)) });
+  const runtimeSecretParameterIds = new Set(setupPlan.parameters.filter(p => p.isSecret && p.secretUsage === 'runtime').map(p => p.parameterId));
+  let launcherUnavailableReason;
+  if (typeof launcherPath === 'function') {
+    try {
+      launcherPath = pkg.contents.some(content => runtimeSecretIds(content.definition, { runtimeSecretParameterIds }).length)
+        ? launcherPath() : null;
+    } catch (error) {
+      if (error.code !== 'mcp_launcher_unavailable') throw error;
+      launcherPath = null;
+      launcherUnavailableReason = error.message;
+    }
+  }
+  return Object.freeze({ packageKey: pkg.identity.key, packageVersion: pkg.identity.version, scope: setupPlan.scope, canonicalRoot: setupPlan.canonicalRoot,
+    ...(launcherUnavailableReason ? { launcherUnavailableReason } : {}), setupRoot: setupPlan.setupRoot, launcherPath: launcherPath ?? null, runtimeSecretParameterIds });
 }
 
 export function runtimeSecretIds(definition, setup) {
