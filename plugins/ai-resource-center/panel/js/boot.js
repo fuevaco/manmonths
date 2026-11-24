@@ -30,7 +30,9 @@
     });
 
     // 明細頁與使用說明
-    $('btn-back').addEventListener('click', RC.goBack);
+    $('btn-back').addEventListener('click', () => RC.aiBack?.() || RC.goBack());
+    RC.bindAi();
+    RC.bindAiChat();
     $('btn-reader').addEventListener('click', RC.toggleReader);
     $('details-readme').addEventListener('click', RC.activateReadmeLink);
     $('details-readme').addEventListener('keydown', RC.onReadmeKeydown);

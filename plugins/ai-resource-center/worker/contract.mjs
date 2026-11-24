@@ -81,7 +81,7 @@ export function createRouter(orca) {
       methods.add(method);
       orca.panels.handle(method, async (input = {}, ctx) => {
         try {
-          return await fn(input ?? {}, ctx);
+          return toJsonValue(await fn(input ?? {}, ctx));
         } catch (e) {
           if (e?.unsupportedFormatVersion) {
             orca.log(`[${method}] sharedDataTooNew ${e.message}`);
@@ -97,4 +97,12 @@ export function createRouter(orca) {
       });
     }
   };
+}
+
+/**
+ * Orca 只接受合法 JSON 的回應：物件或陣列內出現 undefined 時整個請求失敗（answered with a non-JSON value）。
+ * 回應前以 JSON 轉換去掉 undefined 欄位（陣列中的 undefined 變成 null）；沒有回應時維持 undefined。
+ */
+export function toJsonValue(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }

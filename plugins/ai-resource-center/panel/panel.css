@@ -399,3 +399,63 @@ details.notice[open] > summary { margin-bottom: 4px; }
   .panel-box { padding: 8px; }
   .kv { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* AI 助手：定案草圖的角落狀態燈、端點單選列與行內編輯表單。 */
+#btn-ai { position: relative; }
+#btn-ai, #btn-ai-clear, #btn-ai-settings { width: 30px; height: 30px; }
+.ai-dot { position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--bg); background: var(--muted); }
+.ai-dot.ok, .ai-inline-dot.ok { background: var(--ok); }
+.ai-dot.error, .ai-inline-dot.error { background: var(--bad); }
+#ai-header-model { font-size: 12px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-ai-settings { padding: 10px 12px; display: block; }
+.ai-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.ai-switch input { position: absolute; opacity: 0; width: 32px; height: 18px; }
+.ai-toggle { position: relative; width: 32px; height: 18px; border-radius: 9px; background: var(--muted); }
+.ai-toggle::after { content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+.ai-switch input:checked + .ai-toggle { background: var(--accent); }
+.ai-switch input:checked + .ai-toggle::after { left: auto; right: 2px; }
+.ai-switch input:focus-visible + .ai-toggle { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ai-section { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 14px 0 6px; }
+.ai-endpoint { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; margin-bottom: 6px; background: var(--card-bg); }
+.ai-endpoint.selected { border-color: var(--accent); }
+.ai-endpoint input { margin: 0; accent-color: var(--accent); flex: none; width: 12px; height: 12px; }
+.ai-endpoint-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ai-endpoint-status { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; flex: none; }
+.ai-endpoint-status.error { color: var(--bad); }
+.ai-inline-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); order: -1; }
+.ai-endpoint-model { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30%; }
+.ai-small-button { padding: 0; color: var(--muted); border: 0; background: transparent; cursor: pointer; font: inherit; }
+.ai-row-button { padding: 2px 10px; font-size: 12px; flex: none; }
+.ai-editor { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 10px; }
+.ai-editor .field { margin-bottom: 9px; }
+.ai-editor .field label { font-size: 12px; font-weight: 400; color: var(--muted); margin-bottom: 3px; }
+.ai-editor input, .ai-editor select { padding: 6px 9px; }
+.ai-editor select { width: 100%; }
+.ai-hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
+.ai-pat-box { display: flex; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); }
+.ai-pat-box input { border: 0; background: transparent; flex: 1; min-width: 0; }
+.ai-pat-box button { border: 0; background: transparent; color: var(--fg); cursor: pointer; padding: 0 9px; }
+.ai-test-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-size: 12px; }
+.ai-ok { color: var(--ok); }
+.ai-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+/* AI 助手對話（定案畫面）：訊息區捲動，輸入列固定底部。 */
+.ai-chat { display:flex; flex-direction:column; padding:0; overflow:hidden; }
+.ai-chat-scroll { flex:1; min-height:0; overflow:auto; padding:12px; }
+.ai-chat-intro { background:rgba(47,129,247,.14); border-radius:8px 8px 0 0; padding:10px 12px 0; line-height:1.55; }
+.ai-chat-chips { display:flex; flex-wrap:wrap; gap:6px; padding:8px 12px 10px; background:rgba(47,129,247,.14); border-radius:0 0 8px 8px; }
+.ai-chat-chip { border:1px solid var(--border); border-radius:14px; padding:3px 10px; font-size:12px; background:var(--bg); color:var(--fg); cursor:pointer; }
+.ai-chat-messages { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+.ai-chat-me { align-self:flex-end; background:var(--accent); color:#fff; border-radius:12px 12px 2px 12px; padding:7px 11px; max-width:80%; white-space:pre-wrap; overflow-wrap:anywhere; }
+.ai-chat-answer { align-self:flex-start; max-width:92%; line-height:1.6; overflow-wrap:anywhere; }
+.ai-chat-context { font-size:11.5px; margin-top:10px; }
+.ai-package-card { border:1px solid var(--border); background:var(--card-bg); border-radius:8px; padding:8px 10px; margin-top:8px; min-width:0; }
+.ai-package-row { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:2px; }
+.ai-package-row b { min-width:0; }
+.ai-package-row .muted { font-size:12px; flex-shrink:0; }
+.ai-package-description { font-size:12px; margin:3px 0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ai-chat-input { display:flex; gap:8px; align-items:flex-end; border-top:1px solid var(--border); padding:10px 12px; }
+.ai-chat-input textarea { flex:1; min-width:0; min-height:36px; max-height:140px; resize:none; overflow-y:hidden; border:1px solid var(--border); border-radius:6px; padding:8px 10px; background:var(--input-bg); color:var(--fg); font:inherit; }
+.ai-chat-input button { width:36px; height:36px; padding:0; flex-shrink:0; }
+
+.ai-chat-history-divider { align-self:stretch; text-align:center; font-size:11.5px; margin:10px 0; }

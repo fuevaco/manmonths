@@ -50,7 +50,9 @@
   // ---------- 與 worker 溝通（請求契約見 worker/contract.mjs） ----------
   RC.call = function call(method, input, timeoutMs) {
     if (!window.orca?.plugin) return Promise.reject(new Error('Orca Plugin Bridge 尚未就緒'));
-    return window.orca.plugin.request(method, input, timeoutMs ? { timeoutMs } : undefined);
+    // Orca 只接受合法 JSON 的請求輸入：值為 undefined 的欄位會被拒絕（input: Invalid input），送出前去掉。
+    const body = input === undefined ? undefined : JSON.parse(JSON.stringify(input));
+    return window.orca.plugin.request(method, body, timeoutMs ? { timeoutMs } : undefined);
   };
 
   // 這些錯誤代碼代表工作階段已失效，面板回到登入畫面並顯示原因
@@ -94,7 +96,7 @@
 
   // ---------- 畫面 ----------
   RC.DEVELOPER_TITLE = '我的資源包';
-  const VIEWS = ['loading', 'login', 'main', 'details', 'developer'];
+  const VIEWS = ['loading', 'login', 'main', 'details', 'developer', 'ai-settings', 'ai-chat'];
   RC.isShown = (view) => !RC.$(`view-${view}`).classList.contains('hidden');
 
   RC.showView = function showView(name) {
@@ -116,6 +118,7 @@
       RC.$('btn-back').setAttribute('title', '返回清單');
     }
     if (!signedInView) RC.closeMenu();
+    RC.aiViewChanged?.(name);
   };
 
   RC.setHeaderTitle = function setHeaderTitle(name) {

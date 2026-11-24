@@ -6,7 +6,7 @@ import https from 'node:https';
 
 export class HttpError extends Error {
   /**
-   * @param {'not_sent'|'timeout'|'network'|'cancelled'|'too_large'} kind
+   * @param {'not_sent'|'timeout'|'network'|'cancelled'|'too_large'|'chunk'} kind
    * @param {string} message  只含來源與錯誤代碼，不含任何請求內容
    * @param {{notSent?: boolean, tls?: boolean, code?: string}} [extra]
    */
@@ -38,7 +38,7 @@ const DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
  * @param {AbortSignal} [req.signal]
  * @returns {Promise<{status: number, headers: object, text: string}>}
  */
-export function send({ method, url, headers = {}, json, body: rawBody, timeoutMs = 10000, signal, maxBytes = DEFAULT_MAX_BYTES, responseType }) {
+export function send({ method, url, headers = {}, json, body: rawBody, timeoutMs = 10000, signal, maxBytes = DEFAULT_MAX_BYTES, responseType, onChunk }) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const lib = u.protocol === 'https:' ? https : http;
@@ -70,7 +70,9 @@ export function send({ method, url, headers = {}, json, body: rawBody, timeoutMs
         res.on('data', (c) => {
           size += c.length;
           if (size > maxBytes) return fail(new HttpError('too_large', `回應超過 ${maxBytes} 位元組：${u.origin}`));
-          chunks.push(c);
+          if (onChunk && res.statusCode >= 200 && res.statusCode < 300) {
+            try { onChunk(c); } catch { return fail(new HttpError('chunk', '回應區塊處理失敗')); }
+          } else chunks.push(c);
         });
         res.on('end', () => {
           if (settled) return;
