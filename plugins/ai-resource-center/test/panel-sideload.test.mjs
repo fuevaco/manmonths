@@ -195,11 +195,11 @@ test('部分位置受阻：列出受阻位置並說明其餘仍會安裝；全�
   assert.match(text(section), /1 個位置無法安裝/);
   assert.match(text(findByData(section, 'role', 'blocked-target')), /Claude Code.*\/home\/a\/\.claude.*缺少 libsecret/);
   assert.match(text(findByData(section, 'role', 'deployable')), /其餘 1 個位置仍會安裝/);
-  assert.equal(env.panel.get('sheet-primary').textContent, '安裝');
+  assert.equal(env.panel.get('sheet-primary').textContent, '安裝到其餘 1 個位置');
 
   const all = await start({ handlers: { 'rc.dev.install.prepare': () => prepared({ needsConfirmation: false, allBlocked: true, reasons: ['blockedTargets'], planId: null, tools: [] }, { deployableCount: 0, blockedTargets: [{ ...codexTarget, reason: '沒有可用的工具' }] }) } });
   await precheck(all);
-  assert.match(text(findByData(all.panel.get('sheet-body'), 'section', 'blockedTargets')), /所有位置都無法處理/);
+  assert.match(text(findByData(all.panel.get('sheet-body'), 'section', 'blockedTargets')), /1 個位置無法安裝/);
   assert.equal(all.panel.get('sheet-primary').classList.contains('hidden'), true);
   assert.equal(all.panel.get('sheet-cancel').textContent, '關閉');
   await all.panel.get('sheet-cancel').fire('click');

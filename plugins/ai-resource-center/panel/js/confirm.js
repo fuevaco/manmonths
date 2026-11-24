@@ -17,12 +17,14 @@
 
   const commandLine = (c, joiner = ' ') => `${c.runner}${joiner}${c.script}${c.arguments?.length ? ` ${c.arguments.join(' ')}` : ''}`;
   const commandKey = (list) => JSON.stringify((list || []).map(c => [c.commandId, c.willExecute === true, c.runner, c.script]));
-  const blockedKey = (list) => JSON.stringify((list || []).map(b => [b.targetId, b.reason]));
+  const conflictKey = ({ contentId, ownerPackageKey, ownerContentId }) => JSON.stringify([contentId, ownerPackageKey, ownerContentId]);
+  const blockedKey = (list) => JSON.stringify((list || []).map(b => [b.targetId, b.reason, b.otherReason, b.conflicts?.map(conflictKey).sort()]));
   /** 儲存參數必然改變計畫；若重新規劃後只剩剛才已確認過的同一批命令與受阻目標，不再重複詢問。 */
   const sameApproval = (before, after) => after?.needsConfirmation === true && !(after.reasons || []).includes('missingParameters')
     && (after.reasons || []).every(r => (before.reasons || []).includes(r))
     && commandKey(before.plan?.setupCommands) === commandKey(after.plan?.setupCommands)
-    && blockedKey(before.plan?.blockedTargets) === blockedKey(after.plan?.blockedTargets);
+    && blockedKey(before.plan?.blockedTargets) === blockedKey(after.plan?.blockedTargets)
+    && (!after.plan?.blockedTargets?.length || before.plan?.deployableCount === after.plan.deployableCount);
   const runTimeout = (plan) => RC.RUN_TIMEOUT_MS + (plan?.setupCommands || []).filter(c => c.willExecute).reduce((sum, c) => sum + (c.timeoutMinutes || 0), 0) * 60000;
 
   // ---------- 內容 ----------
@@ -49,12 +51,42 @@
   /** 受阻目標清單（例外確認層與從資料夾安裝的 sheet 共用）。 */
   function blockedSection(plan, label, allBlocked) {
     const blocked = plan.blockedTargets || [];
+    const groups = new Map(), other = [];
+    for (const target of blocked) {
+      for (const conflict of target.conflicts || []) {
+        const key = conflictKey(conflict);
+        if (!groups.has(key)) groups.set(key, { ...conflict, targets: new Map() });
+        groups.get(key).targets.set(target.targetId, target);
+      }
+      if (!target.conflicts?.length) other.push(target);
+      else if (target.otherReason) other.push({ ...target, reason: target.otherReason });
+    }
+    const count = new Set(blocked.map(t => t.targetId)).size;
+    const tools = new Set(blocked.map(RC.toolLabel));
+    const tool = groups.size && tools.size === 1 ? `${[...tools][0]} · ` : '';
     const rest = Number.isFinite(plan.deployableCount) ? plan.deployableCount : 0;
-    return confirmSection('blockedTargets', allBlocked ? '所有位置都無法處理' : `${blocked.length} 個位置無法${label}`,
-      el('ul', { className: 'location-list' }, ...blocked.map(t => RC.targetRow(t, 'blocked-target', '此位置受阻'))),
+    return confirmSection('blockedTargets', `${tool}${count} 個位置無法${label}`,
+      ...[...groups.values()].map(group => conflictGroup(group, tools.size > 1)),
+      other.length ? el('ul', { className: 'location-list' }, ...other.map(t => RC.targetRow(t, 'blocked-target', '此位置受阻'))) : null,
       !allBlocked && rest > 0 ? el('div', { 'data-role': 'deployable', textContent: `其餘 ${rest} 個位置仍會${label}。` }) : null);
   }
 
+  function conflictGroup({ contentId, ownerPackageKey, ownerContentId, targets }, showTools) {
+    const code = value => el('code', { className: 'mono', textContent: value });
+    const span = value => el('span', { textContent: value });
+    const differentOwnerId = ownerContentId && contentId !== ownerContentId;
+    return el('div', { className: 'confirm-conflict', 'data-role': 'content-conflict', 'data-content-id': contentId },
+      el('strong', {}, span('內容 ID '), code(contentId), span(' 衝突')),
+      el('div', {}, span('資源包 '), code(ownerPackageKey), span(differentOwnerId ? ' 的內容 ' : ' 已安裝相同 ID 的內容。'),
+        differentOwnerId ? code(ownerContentId) : null, differentOwnerId ? span(' 已占用安裝路徑。') : null),
+      el('ul', { className: 'location-list', 'aria-label': '受影響的位置' }, ...[...targets.values()].map(t =>
+        el('li', { 'data-role': 'blocked-target', 'data-target-id': t.targetId },
+          showTools ? el('span', { textContent: `${RC.toolLabel(t)} · ` }) : null,
+          el('code', { className: 'location-path mono', textContent: t.rootPath || RC.toolLabel(t) })))));
+  }
+
+  RC.installConfirmLabel = plan => plan?.blockedTargets?.length && plan.deployableCount > 0
+    ? `安裝到其餘 ${plan.deployableCount} 個位置` : '安裝';
   RC.commandSection = commandSection;
   RC.blockedSection = blockedSection;
   /** 儲存參數後重新規劃，若只剩剛才已確認過的同一批命令與受阻目標則不再詢問（確認層與 sheet 共用）。 */
@@ -128,7 +160,8 @@
     $('confirm-primary').classList.toggle('btn-primary', !danger);
     $('confirm-primary').classList.toggle('btn-danger', danger);
     $('confirm-primary').classList.toggle('hidden', allBlocked);
-    $('confirm-primary').textContent = st.busy ? spec.running : spec.label;
+    $('confirm-primary').textContent = st.busy ? spec.running
+      : st.action === 'install' ? RC.installConfirmLabel(st.response.plan) : spec.label;
     $('confirm-primary').disabled = st.busy;
     // 確認後正在執行時，這顆按鈕改為取消進行中的安裝（儲存參數階段仍不可取消）
     const cancellable = st.busy && st.running === true;

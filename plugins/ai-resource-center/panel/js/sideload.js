@@ -242,7 +242,7 @@
         ...params.map(p => RC.paramField(p, ctx.inputs)),
         !allBlocked && plan.setupCommands?.length ? RC.commandSection(plan.setupCommands, { heading: '安裝時會執行', joiner: ' · ' }) : null,
         plan.blockedTargets?.length ? RC.blockedSection(plan, '安裝', allBlocked) : null
-      ], allBlocked ? { primary: false, cancelLabel: '關閉' } : { label: '安裝' });
+      ], allBlocked ? { primary: false, cancelLabel: '關閉' } : { label: RC.installConfirmLabel(plan) });
       options.busyLabel = '安裝中…';
     }
 

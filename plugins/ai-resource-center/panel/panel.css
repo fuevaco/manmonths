@@ -368,6 +368,8 @@ select option, select optgroup { background-color: var(--select-bg); color: var(
 .confirm-section { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .confirm-heading { font-weight: 600; }
 .confirm-item { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; min-width: 0; }
+.confirm-conflict { padding: 8px 10px; border: 1px solid var(--border); border-inline-start: 3px solid var(--bad); border-radius: 6px; }
+.confirm-conflict .location-list { gap: 2px; margin-top: 4px; }
 .confirm-actions { flex: none; display: flex; flex-wrap: wrap; gap: 6px; }
 .confirm-actions .btn { flex: 1 1 80px; }
 

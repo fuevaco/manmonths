@@ -124,7 +124,7 @@ test('受阻目標：確認層列出友善名稱、根目錄與原因及其餘�
   assert.match(text(row), /目的地已由資源包 other 管理/);
   assert.equal(findByData(row, 'tool').getAttribute('data-tool'), 'claude-code');
   assert.match(text(body), /其餘 1 個位置仍會安裝/);
-  assert.equal(text(panel.get('confirm-primary')), '安裝');
+  assert.equal(text(panel.get('confirm-primary')), '安裝到其餘 1 個位置');
   assert.equal(text(panel.get('confirm-cancel')), '取消');
   assert.match(text(panel.get('confirm-title')), /資源 demo/);
   await action(card(), 'install').fire('click');
