@@ -14,8 +14,12 @@
         <button id="btn-back" type="button" class="btn btn-icon hidden" title="返回清單" aria-label="返回清單" data-action="back"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
         <span id="status-dot" class="status-dot" title="市集連線狀態"></span>
         <span id="header-title">資源中心</span>
+        <span id="ai-header-model" class="muted hidden"></span>
       </div>
       <div class="header-actions">
+        <button id="btn-ai" type="button" class="btn btn-icon hidden" title="AI 助手" aria-label="AI 助手"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9 16h6"/></svg><span id="ai-status-dot" class="ai-dot"></span></button>
+        <button id="btn-ai-clear" type="button" class="btn btn-icon hidden" title="清除對話" aria-label="清除對話"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+        <button id="btn-ai-settings" type="button" class="btn btn-icon hidden" title="AI 設定" aria-label="AI 設定"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg></button>
         <button id="btn-refresh" type="button" class="btn btn-icon hidden" title="重新整理" aria-label="重新整理"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><polyline points="20 4 20 9 15 9"/></svg></button>
         <button id="btn-settings" type="button" class="btn btn-icon hidden" title="設定" aria-label="設定" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       </div>
@@ -136,6 +140,34 @@
       </section>
     </section>
 
+    <section id="view-ai-settings" class="content hidden" aria-label="AI 助手設定">
+      <label class="ai-switch"><input id="ai-enabled" type="checkbox" role="switch"><span class="ai-toggle" aria-hidden="true"></span>啟用 AI 助手</label>
+      <div class="ai-section">AI 端點<button id="ai-add" type="button" class="btn">＋ 新增</button></div>
+      <div id="ai-endpoints"></div>
+      <form id="ai-editor" class="ai-editor hidden" novalidate>
+        <div class="field"><label for="ai-name">名稱</label><input id="ai-name" type="text" autocomplete="off"></div>
+        <div class="field"><label for="ai-url">Base URL</label><input id="ai-url" type="url" spellcheck="false" autocomplete="off"><div id="ai-url-hint" class="ai-hint"></div><div id="ai-url-error" class="error hidden" role="alert"></div></div>
+        <div class="field"><label for="ai-pat">PAT（可選）</label><div class="ai-pat-box"><input id="ai-pat" type="password" placeholder="未填" autocomplete="off"><button id="ai-pat-eye" type="button" aria-label="顯示 PAT">👁</button></div></div>
+        <div class="ai-test-row"><button id="ai-test" type="button" class="btn">測試連線</button><span id="ai-test-result" role="status"></span></div>
+        <div class="field"><label for="ai-model">模型</label><select id="ai-model"></select></div>
+        <div id="ai-save-error" class="error hidden" role="alert"></div>
+        <div class="ai-foot"><button id="ai-cancel" type="button" class="btn">取消</button><button id="ai-save" type="submit" class="btn btn-primary">儲存</button></div>
+      </form>
+    </section>
+    <section id="view-ai-chat" class="content ai-chat hidden" aria-label="AI 助手">
+      <div id="ai-chat-scroll" class="ai-chat-scroll">
+        <div id="ai-chat-intro" class="ai-chat-intro"></div>
+        <div id="ai-chat-chips" class="ai-chat-chips"></div>
+        <div id="ai-chat-messages" class="ai-chat-messages" aria-live="polite"></div>
+        <div id="ai-chat-phase" class="muted"></div>
+        <div id="ai-chat-unavailable" class="muted hidden"></div>
+      </div>
+      <form id="ai-chat-form" class="ai-chat-input">
+        <textarea id="ai-chat-question" rows="1" placeholder="描述你想完成的工作…" aria-label="描述你想完成的工作"></textarea>
+        <button id="ai-chat-send" type="submit" class="btn btn-primary" aria-label="送出" title="送出">→</button>
+      </form>
+    </section>
+
     <!-- 一鍵操作的結果短提示 -->
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
@@ -185,6 +217,8 @@
   <script src="js/sideload.js"></script>
   <script src="js/updates.js"></script>
   <script src="js/session.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/ai-chat.js"></script>
   <script src="js/boot.js"></script>
 </body>
 </html>

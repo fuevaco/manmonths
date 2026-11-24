@@ -30,6 +30,10 @@ import { migrateCodexSkills } from './deploy/codex-skill-migration.mjs';
 import { resolveLcAiPackHome } from './paths.mjs';
 import { findMcpLauncher, refreshMcpLauncher } from './setup/find-mcp-launcher.mjs';
 import { registerSideloadHandlers } from './handlers/sideload.mjs';
+import { createAiEndpointService } from './ai-endpoint-service.mjs';
+import { createAiCatalog } from './ai-catalog.mjs';
+import { createAiChat } from './ai-chat.mjs';
+import { registerAiHandlers } from './handlers/ai.mjs';
 
 /**
  * @param {object} orca  Orca 主機 API
@@ -48,10 +52,15 @@ export default function activate(orca, deps = {}) {
   let updates = null;
   let guides = null;
   let uploads = null;
+  let ai = null;
+  let aiCatalog = null;
+  let aiChat = null;
   const session = createSessionService({ orca, ...deps,
-    onConnected: () => { reporting?.flush(); void updates?.reschedule(); },
-    onMarketChanged: () => { updates?.stop(); void updates?.reschedule(); },
-    onSessionEnded: ({ expired }) => { deploy?.discardPending(); installation?.discardPending(); updates?.stop({ preserveSummary: expired }); guides?.stop(); void uploads?.clear().catch(() => orca.log('[upload] cleanup_failed')); } });
+    onConnected: () => { reporting?.flush(); void updates?.reschedule(); void ai?.reschedule().catch(() => orca.log('[ai] check_failed')); },
+    onMarketChanged: () => { aiChat?.clear(); aiCatalog?.clear(); updates?.stop(); void updates?.reschedule(); ai?.stop(); },
+    onSessionEnded: ({ expired }) => { aiChat?.clear(); aiCatalog?.clear(); ai?.stop(); deploy?.discardPending(); installation?.discardPending(); updates?.stop({ preserveSummary: expired }); guides?.stop(); void uploads?.clear().catch(() => orca.log('[upload] cleanup_failed')); } });
+  ai = createAiEndpointService({ orca, session, timeoutMs: deps.aiRequestTimeoutMs, now: deps.now, scheduler: deps.aiScheduler });
+  void ai.reschedule().catch(() => orca.log('[ai] check_failed'));
   reporting = createInstallReporting({ storage: orca.storage, session, clientVersion: deps.clientVersion ?? pluginVersion(), now: deps.now });
 
   registerSessionHandlers(router, { session, host: orca.host });
@@ -61,6 +70,9 @@ export default function activate(orca, deps = {}) {
   registerUploadHandlers(router, { uploads });
   const installed = createInstalledService({ ...deps, log: message => orca.log(message) });
   const packages = createPackageService(session, installed);
+  aiCatalog = createAiCatalog({ session, preferences, packages });
+  aiChat = createAiChat({ session, endpoints: ai, catalog: aiCatalog, orca, timeoutMs: deps.aiChatTimeoutMs });
+  registerAiHandlers(router, { endpoints: ai, catalog: aiCatalog, chat: aiChat });
   registerPackageHandlers(router, { packages, preferences, getParameters: input => installation.setup(input), enrich: async (detail, input) =>
     (await enrich(await session.requireClient(), [{ ...detail, latestVisibleVersion: detail.selectedVersion }], input.previewMode ?? (await preferences.get()).showPreview))[0] });
   registerClientHandlers(router, { session, packages, installed });
@@ -115,6 +127,7 @@ export default function activate(orca, deps = {}) {
 
   return {
     session,
-    dispose: () => { guides.dispose(); updates.dispose(); session.dispose(); return uploads.clear().catch(() => orca.log('[upload] cleanup_failed')); }
+    aiCatalog,
+    dispose: () => { aiChat.clear(); ai.dispose(); aiCatalog.clear(); guides.dispose(); updates.dispose(); session.dispose(); return uploads.clear().catch(() => orca.log('[upload] cleanup_failed')); }
   };
 }

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const dataAttribute = (name) => `data-${name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)}`;
 
 export class Element {
-  value = ''; textContent = ''; children = []; disabled = false; scrollTop = 0; scrolledIntoView = 0;
+  value = ''; textContent = ''; children = []; disabled = false; scrollTop = 0; scrolledIntoView = 0; scrollHeight = 0; style = {};
   listeners = new Map(); classes = new Set(); attributes = new Map();
   dataset = new Proxy({}, {
     get: (_, name) => typeof name === 'string' ? this.attributes.get(dataAttribute(name)) : undefined,

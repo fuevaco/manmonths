@@ -7,6 +7,8 @@
   const { $, el, call, state } = RC;
 
   let listScroll = 0; // 進入明細前清單的捲動位置，返回時還原
+  let returnView = 'main';
+  RC.detailsReturnView = () => returnView;
 
   /** 明細用的資源包資料：清單帶入的欄位為底，worker 明細優先；已安裝狀態只看全域部署，讀不到時不沿用清單的舊狀態。 */
   RC.detailView = function detailView() {
@@ -66,6 +68,7 @@
   /** 開啟明細：一律取市集推薦版本；seed 是清單上的該資源包。 */
   RC.openDetails = async function openDetails(packageKey, version, seed) {
     const request = ++state.detailsRequest;
+    if (!RC.isShown('details')) returnView = RC.isShown('ai-chat') ? 'ai-chat' : 'main';
     if (RC.isShown('main')) listScroll = $('view-main').scrollTop;
     if (seed) state.detailSeed = seed;
     else if (state.detailSeed?.packageKey !== packageKey) state.detailSeed = null;
@@ -133,7 +136,8 @@
 
   RC.backToList = function backToList() {
     RC.leaveDetails();
-    RC.showView('main');
+    RC.showView(returnView);
+    if (returnView === 'ai-chat') return;
     $('view-main').scrollTop = listScroll;
     return RC.loadCatalog({ keepList: true });
   };

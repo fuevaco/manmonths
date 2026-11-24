@@ -20,6 +20,7 @@
   const strokeIcon = (shapes, size = 14) => svg({ width: String(size), height: String(size), fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, shapes);
 
   RC.ICONS = {
+    send: () => strokeIcon([['path', { d: 'M5 12h14M13 6l6 6-6 6' }]], 16),
     spinner: () => svg({ width: '16', height: '16', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', class: 'spin' }, [['path', { d: 'M21 12a9 9 0 1 1-6.2-8.55' }]]),
     globe: () => strokeIcon([['circle', { cx: '12', cy: '12', r: '10' }], ['line', { x1: '2', y1: '12', x2: '22', y2: '12' }], ['path', { d: 'M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z' }]], 16),
     owner: () => strokeIcon([['path', { d: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' }], ['circle', { cx: '12', cy: '7', r: '4' }]], 12),

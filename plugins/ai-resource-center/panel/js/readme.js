@@ -105,7 +105,7 @@
     const label = readerMode ? '結束放大閱讀' : '放大閱讀';
     $('btn-reader').setAttribute('aria-label', label);
     $('btn-reader').setAttribute('title', label);
-    const back = readerMode ? '返回明細' : '返回清單';
+    const back = readerMode ? '返回明細' : RC.detailsReturnView() === 'ai-chat' ? '返回對話' : '返回清單';
     $('btn-back').setAttribute('aria-label', back);
     $('btn-back').setAttribute('title', back);
   }

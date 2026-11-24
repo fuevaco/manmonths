@@ -152,7 +152,7 @@ test('設定失敗摘要顯示已遮罩的 [FAIL] 訊息，即使輸出沒有結
   const masker = createSecretMasker();
   masker.register(CANARY);
   const script = f.writeScript(pick(
-    `[Console]::Out.Write('[FAIL] 請升級 Node.js ${CANARY}')\nexit 5\n`,
+    `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n[Console]::Out.Write('[FAIL] 請升級 Node.js ${CANARY}')\nexit 5\n`,
     `printf '%s' '[FAIL] 請升級 Node.js ${CANARY}'\nexit 5\n`));
   const { result } = await f.run(f.command(script), { masker });
   assert.equal(result.exitCode, 5);

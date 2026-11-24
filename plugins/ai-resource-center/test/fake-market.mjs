@@ -96,7 +96,7 @@ export async function startFakeMarket(opts = {}) {
   const server = http.createServer((req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
-    req.on('end', () => {
+    req.on('end', async () => {
       const bytes = Buffer.concat(chunks);
       const raw = bytes.toString('utf8');
       const file = multipartFile(bytes, req.headers['content-type']);
@@ -108,7 +108,7 @@ export async function startFakeMarket(opts = {}) {
 
       const override = route && overrides.get(`${req.method} ${route}`);
       if (override) {
-        const r = override(req, body);
+        const r = await override(req, body);
         if (r) {
           if (r.disconnect) {
             res.writeHead(200, { 'content-length': 1000 });

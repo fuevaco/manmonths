@@ -162,13 +162,16 @@
       el('span', { className: 'badge b-dev', 'data-role': 'dev-badge', textContent: '開發中' }), el('span', { textContent: ` ${p.devVersion}${pending > 0 ? ` · ${pending} 個新位置` : ''}` }));
   }
 
+  /** 目錄、明細與 AI 推薦卡片共用的安裝狀態文字。 */
+  RC.installStatusText = p => RC.installState(p).dev ? devStatusText(p) : el('span', { className: 'card-status-text', 'data-role': 'status-text', 'data-kind': RC.installState(p).kind, textContent: installText(p), ...(statusHint(p) ? { title: statusHint(p) } : {}) });
+
   /** 一行式安裝狀態：工具圖示＋狀態文字＋失敗與略過提示，右側為安裝／更新／補裝按鈕；卡片與明細頁共用。 */
   function statusRow(p, { showText = true } = {}) {
     const tools = (p.tools || []).length ? el('span', { className: 'card-tools' }, ...p.tools.map(t => RC.toolIcon({ ...t, label: RC.toolLabel(t) }))) : null;
     if (!tools && !showText) return null;
     return el('div', { className: 'card-status', 'data-role': 'status-row' },
       tools,
-      showText ? (RC.installState(p).dev ? devStatusText(p) : el('span', { className: 'card-status-text', 'data-role': 'status-text', 'data-kind': RC.installState(p).kind, textContent: installText(p), ...(statusHint(p) ? { title: statusHint(p) } : {}) })) : null,
+      showText ? RC.installStatusText(p) : null,
       RC.failureBadge(p),
       RC.skippedBadge(p),
       el('span', { className: 'card-actions', 'data-slot': 'card-actions' }, ...(showText ? [RC.actionButton(p)].flat() : [])));

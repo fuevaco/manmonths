@@ -75,6 +75,9 @@ export function startWorker({ state = createHostState(), deps, hostCall } = {}) 
     if (!fn) throw new Error(`沒有註冊的請求：${method}`);
     try {
       const result = await fn(input, { panel: { id: 'ai-resource-center' } });
+      // 與 Orca 相同：回應必須是合法 JSON，物件或陣列內出現 undefined 會被拒絕（answered with a non-JSON value）
+      const nonJson = findNonJson(result);
+      if (nonJson) throw new Error(`${method} answered with a non-JSON value（${nonJson}）`);
       state.transcript.push(JSON.stringify(result ?? null));
       return result;
     } catch (e) {
@@ -96,4 +99,18 @@ export const status = worker => worker.state.hostCalls.filter(c => c.method === 
 export function leakedSecrets(texts, secrets) {
   const hay = texts.join('\n');
   return secrets.filter((s) => s && hay.includes(s));
+}
+
+/** 回傳第一個不是合法 JSON 的位置（例如 `updates[0].reference`）；整體為 undefined（沒有回應）視為合法。 */
+export function findNonJson(value, at = '') {
+  if (value === undefined) return at || null;
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? null : at || '(root)';
+  if (typeof value !== 'object') return at || '(root)';
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) { const hit = findNonJson(value[i], `${at}[${i}]`); if (hit) return hit; }
+    return null;
+  }
+  for (const [key, item] of Object.entries(value)) { const hit = findNonJson(item, at ? `${at}.${key}` : key); if (hit) return hit; }
+  return null;
 }
