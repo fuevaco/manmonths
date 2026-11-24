@@ -58,3 +58,18 @@ function message(p) {
 export function describeInstallProblems(problems) {
   return { reason: [...new Set(problems.map(message).filter(Boolean))].join('；') || '此位置未完成部署', detail: problems };
 }
+
+export function describeBlockedTarget(problems) {
+  const conflicts = [], remaining = [];
+  for (const problem of problems) {
+    const { ownerPackageKey, ownerContentId } = problem.existingOwner ?? {};
+    if (problem.code === 'deployment.ownership-collision' && problem.contentId && ownerPackageKey) {
+      conflicts.push({ contentId: problem.contentId, ownerPackageKey, ownerContentId });
+    } else {
+      remaining.push(problem);
+    }
+  }
+  const summary = describeInstallProblems(problems);
+  if (!conflicts.length) return summary;
+  return { ...summary, conflicts, otherReason: remaining.length ? describeInstallProblems(remaining).reason : null };
+}

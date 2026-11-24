@@ -1,5 +1,5 @@
 // 一鍵操作只選擇目標與整理結果；部署規則仍由既有 deploy service 負責。
-import { describeInstallProblems } from './install-problems.mjs';
+import { describeBlockedTarget, describeInstallProblems } from './install-problems.mjs';
 import { randomUUID } from 'node:crypto';
 import { compareVersions, packageInput } from './package-service.mjs';
 import { badParams, RcError, ErrorCode } from './contract.mjs';
@@ -181,11 +181,11 @@ export function createInstallService({ packages, session, preferences, installed
       missingParameters.push(...parameters(g.plan.setup).filter(p => p.required && p.needsInput));
       setupCommands.push(...(g.plan.setup?.commands ?? []));
       for (const t of g.plan.targets.filter(t => !t.canApply)) {
-        blocked.push({ ...targetSummary(g.selected.find(s => s.id === t.id)), ...describeInstallProblems(t.problems.filter(p => p.severity === 'Blocking')) });
+        blocked.push({ ...targetSummary(g.selected.find(s => s.id === t.id)), ...describeBlockedTarget(t.problems.filter(p => p.severity === 'Blocking')) });
       }
       const globalProblems = g.plan.problems.filter(p => p.severity === 'Blocking' && p.code !== 'deployment.setup-parameter-missing');
       if (globalProblems.length) {
-        for (const t of g.selected.filter(t => !blocked.some(b => b.targetId === t.id))) blocked.push({ ...targetSummary(t), ...describeInstallProblems(globalProblems) });
+        for (const t of g.selected.filter(t => !blocked.some(b => b.targetId === t.id))) blocked.push({ ...targetSummary(t), ...describeBlockedTarget(globalProblems) });
         deployableCount -= g.plan.deployableCount;
       }
     }

@@ -20,7 +20,7 @@ async function until(check, message = '等待逾時') {
   assert.fail(message);
 }
 
-async function environment(t, { setup, hosts = ['codex'], type = 'skill', deps = {}, roots = ['.codex'] } = {}) {
+async function environment(t, { setup, hosts = ['codex'], type = 'skill', deps = {}, roots = ['.codex'], skillIds = ['hello'] } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rc-panel-one-click-'));
   const userHome = path.join(dir, 'user'), lcaipackHome = path.join(dir, 'shared');
   function root(name) {
@@ -31,8 +31,9 @@ async function environment(t, { setup, hosts = ['codex'], type = 'skill', deps =
   let recommended = '1.0.0';
   const versions = ['1.0.0', '2.0.0'].map(version => {
     const bytes = zip({ 'lcpack.json': JSON.stringify({ packageFormatVersion: 1, key, name: '一鍵合成包', type, version, description: 'Synthetic',
-      contents: [{ id: 'hello', kind: 'skill', path: 'resources/hello' }], ...(setup ? { setup } : {}) }),
-    'README.md': '# Hello', 'resources/hello/SKILL.md': `---\nname: hello\ndescription: Synthetic\n---\nVersion ${version}`, 'setup/init.ps1': 'exit 0' });
+      contents: skillIds.map(id => ({ id, kind: 'skill', path: `resources/${id}` })), ...(setup ? { setup } : {}) }),
+    'README.md': '# Hello', ...Object.fromEntries(skillIds.map(id => [`resources/${id}/SKILL.md`, `---\nname: ${id}\ndescription: Synthetic\n---\nVersion ${version}`])),
+    'setup/init.ps1': 'exit 0' });
     return { version, bytes, sha256: createHash('sha256').update(bytes).digest('hex'), hosts, isEnabled: true, channel: 'release' };
   });
   const market = await startFakeMarket();
@@ -158,7 +159,7 @@ test('部分受阻：確認一次後可部署的部署目標完成，受阻的�
   await until(() => e.layerOpen(), '沒有確認層');
   const body = e.panel.get('confirm-body');
   const blocked = findByData(body, 'role', 'blocked-target');
-  assert.match(text(blocked), /Claude Code/);
+  assert.match(text(body), /Claude Code · 1 個位置無法安裝/);
   assert.ok(text(blocked).includes(path.join(e.userHome, '.claude')));
   assert.match(text(body), /其餘 1 個位置仍會安裝/);
   await e.click(e.panel.get('confirm-primary'));
@@ -188,6 +189,37 @@ test('部分受阻：確認一次後可部署的部署目標完成，受阻的�
   await until(() => e.toast().includes('補裝'), '補裝沒有結果');
   assert.equal(e.receipts().filter(r => r.packageKey === key).length, 2);
   await until(() => !findByData(e.card(), 'role', 'skipped'), '略過提示未清除');
+});
+
+test('多個內容 ID 衝突按資源包彙整，同一受阻位置在總數只計一次', async t => {
+  const roots = ['.claude', '.claude-work', '.claude-other', '.claude-free'];
+  const e = await environment(t, { hosts: ['claude-code'], roots, skillIds: ['prototype', 'task-review'] });
+  await e.worker.call('rc.install.run', { packageKey: key, action: 'install' });
+  const ledger = JSON.parse(fs.readFileSync(e.receiptFile, 'utf8'));
+  const owners = new Map([
+    ['prototype', { packageKey: 'prototype-kit', roots: roots.slice(0, 2) }],
+    ['task-review', { packageKey: 'review-kit', roots: roots.slice(1, 3) }]
+  ]);
+  ledger.receipts = ledger.receipts.filter(r => owners.get(r.contentId).roots.includes(path.basename(r.canonicalRoot)));
+  for (const receipt of ledger.receipts) receipt.packageKey = owners.get(receipt.contentId).packageKey;
+  fs.writeFileSync(e.receiptFile, JSON.stringify(ledger));
+  await e.openPanel();
+  await e.click(action(e.card(), 'install'));
+  await until(() => e.layerOpen(), '沒有確認層');
+  const body = e.panel.get('confirm-body');
+  assert.match(text(body), /Claude Code · 3 個位置無法安裝/);
+  const groups = findAllByData(body, 'role', 'content-conflict');
+  assert.equal(groups.length, 2);
+  for (const [id, owner] of owners) {
+    const group = groups.find(n => n.getAttribute('data-content-id') === id);
+    assert.match(text(group), new RegExp(`內容 ID ${id} 衝突.*${owner.packageKey}`));
+    const paths = findAllByData(group, 'role', 'blocked-target').map(row => path.basename(text(row)));
+    assert.deepEqual(paths.sort(), [...owner.roots].sort());
+  }
+  assert.equal(text(e.panel.get('confirm-primary')), '安裝到其餘 1 個位置');
+  await e.click(e.panel.get('confirm-primary'));
+  await until(() => e.toast(), '沒有結果提示');
+  assert.equal(e.toast(), '已安裝到 1 個位置，略過 3 個位置');
 });
 
 test('全部受阻：確認層只顯示原因與「關閉」，不套用', async t => {
