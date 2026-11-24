@@ -108,6 +108,95 @@
       ]
     },
     {
+      "id": "manmonths.office-preview",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/linkchain-corp/manmonths.git",
+        "ref": "main",
+        "path": "plugins/office-preview"
+      },
+      "description": "人月維護的 Office 文件預覽：在 Orca 內直接開啟 Word（.docx / .doc）、Excel（.xlsx / .xls / .ods 等）與 PowerPoint（.pptx）。完全離線、唯讀預覽，不會改動原檔。",
+      "categories": [
+        "tools"
+      ],
+      "releases": [
+        {
+          "version": "1.0.0",
+          "commit": "4c7d8dfe9bd7e0ecfaa8d1ef5b2280cc25f845e1",
+          "contentHash": "ec2bdb2bed1903cb333181e3a7640ad372d3352961e8a7d6c1f418040009b70d",
+          "execution": "sandboxed-ui",
+          "minimumOrca": "1.4.248",
+          "name": "Office 文件預覽",
+          "types": [
+            "editor"
+          ],
+          "contributes": [
+            {
+              "kind": "customEditors",
+              "name": "Word 預覽",
+              "detail": ".docx, .docm, .dotx, .doc"
+            },
+            {
+              "kind": "customEditors",
+              "name": "Excel 預覽",
+              "detail": ".xlsx, .xlsm, .xlsb, .xls, .ods"
+            },
+            {
+              "kind": "customEditors",
+              "name": "PowerPoint 預覽",
+              "detail": ".pptx, .ppsx, .pptm"
+            }
+          ],
+          "images": {
+            "icon": {
+              "path": "plugins/office-preview/assets/icon.png",
+              "alt": "Office 文件預覽 icon",
+              "sha256": "d6156fe48a35afe29b62b0f988611f1da8bdea2a5f8089891676a49bf0b53f97",
+              "width": 256,
+              "height": 256
+            },
+            "cover": {
+              "path": "plugins/office-preview/assets/cover.png",
+              "alt": "Office 文件預覽：在 Orca 裡直接預覽 Word、Excel 與 PowerPoint，離線、唯讀、不需任何權限",
+              "sha256": "07a521baf41f4f0c1036904da7c04b725b01f71108aedcb78599655a476ba817",
+              "width": 1600,
+              "height": 1000
+            },
+            "screenshots": [
+              {
+                "path": "plugins/office-preview/assets/screenshots/01-word.png",
+                "alt": "Word 預覽：.docx 文件的頁首、標題、清單、表格與圖片，可縮放並符合視窗寬度",
+                "sha256": "3cb8d7d8216689eb4d03366b39ee79ee955434c4ecee05b3f8fbbee0711dca88",
+                "width": 1600,
+                "height": 1000
+              },
+              {
+                "path": "plugins/office-preview/assets/screenshots/02-excel.png",
+                "alt": "Excel 預覽：保留底色、數字與日期格式的試算表，上方有公式列，下方可切換工作表",
+                "sha256": "9e2b37be775a99e90e89421fc3a50ef031efe35ba8c39412a24791f5fa0a3d81",
+                "width": 1600,
+                "height": 1000
+              },
+              {
+                "path": "plugins/office-preview/assets/screenshots/03-powerpoint.png",
+                "alt": "PowerPoint 預覽：投影片中的表格與長條圖，工具列可翻頁並切換單頁或連續檢視",
+                "sha256": "7bd418c905e495a7b7bc6ae123130a9b0340064f2f8bb6c331eefecacb79ffe5",
+                "width": 1600,
+                "height": 1000
+              },
+              {
+                "path": "plugins/office-preview/assets/screenshots/04-legacy-doc.png",
+                "alt": "舊版 .doc 預覽：只顯示純文字與簡易表格，並提示可另存為 .docx 檢視完整版面",
+                "sha256": "9785f3eedec5b706b6b19f6a0e77a7b2d28c28c6c3c81b4996604e33a2a0850f",
+                "width": 1600,
+                "height": 1000
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "manmonths.tfs-work-items",
       "source": {
         "kind": "git",

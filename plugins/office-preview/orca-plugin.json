@@ -1,0 +1,77 @@
+{
+  "manifestVersion": 2,
+  "execution": "sandboxed-ui",
+  "id": "office-preview",
+  "publisher": "manmonths",
+  "name": "Office 文件預覽",
+  "version": "1.0.0",
+  "description": "人月維護的 Office 文件預覽：在 Orca 內直接開啟 Word（.docx / .doc）、Excel（.xlsx / .xls / .ods 等）與 PowerPoint（.pptx）。完全離線、唯讀預覽，不會改動原檔。",
+  "icon": "assets/icon.png",
+  "cover": {
+    "path": "assets/cover.png",
+    "alt": "Office 文件預覽：在 Orca 裡直接預覽 Word、Excel 與 PowerPoint，離線、唯讀、不需任何權限"
+  },
+  "screenshots": [
+    {
+      "path": "assets/screenshots/01-word.png",
+      "alt": "Word 預覽：.docx 文件的頁首、標題、清單、表格與圖片，可縮放並符合視窗寬度",
+      "caption": "Word：版面還原"
+    },
+    {
+      "path": "assets/screenshots/02-excel.png",
+      "alt": "Excel 預覽：保留底色、數字與日期格式的試算表，上方有公式列，下方可切換工作表",
+      "caption": "Excel：格線、公式列與工作表分頁"
+    },
+    {
+      "path": "assets/screenshots/03-powerpoint.png",
+      "alt": "PowerPoint 預覽：投影片中的表格與長條圖，工具列可翻頁並切換單頁或連續檢視",
+      "caption": "PowerPoint：單頁與連續檢視"
+    },
+    {
+      "path": "assets/screenshots/04-legacy-doc.png",
+      "alt": "舊版 .doc 預覽：只顯示純文字與簡易表格，並提示可另存為 .docx 檢視完整版面",
+      "caption": "舊版 .doc：純文字預覽"
+    }
+  ],
+  "author": {
+    "name": "人月",
+    "url": "https://github.com/fuevaco"
+  },
+  "repository": "https://github.com/linkchain-corp/manmonths",
+  "engines": {
+    "orca": ">=1.4.248"
+  },
+  "pluginApi": 1,
+  "contributes": {
+    "customEditors": [
+      {
+        "id": "word-preview",
+        "title": "Word 預覽",
+        "extensions": [".docx", ".docm", ".dotx", ".doc"],
+        "entry": "editor/word.html",
+        "priority": "default",
+        "contentKind": "bytes",
+        "frame": "isolated"
+      },
+      {
+        "id": "excel-preview",
+        "title": "Excel 預覽",
+        "extensions": [".xlsx", ".xlsm", ".xlsb", ".xls", ".ods"],
+        "entry": "editor/excel.html",
+        "priority": "default",
+        "contentKind": "bytes",
+        "frame": "isolated"
+      },
+      {
+        "id": "ppt-preview",
+        "title": "PowerPoint 預覽",
+        "extensions": [".pptx", ".ppsx", ".pptm"],
+        "entry": "editor/ppt.html",
+        "priority": "default",
+        "contentKind": "bytes",
+        "frame": "isolated"
+      }
+    ]
+  },
+  "capabilities": []
+}

@@ -1,0 +1,212 @@
+/* Office 文件預覽：三個編輯器共用的外框樣式。
+   顏色全部取自 Orca 提供的 --orca-* 變數（深淺主題切換時 Orca 會原地更新），
+   後面的備援值只在脫離 Orca、用瀏覽器直接開 html 除錯時使用。 */
+
+:root {
+  --bg: var(--orca-background, #1e1e1e);
+  --fg: var(--orca-foreground, #d4d4d4);
+  --card: var(--orca-card, #252526);
+  --muted: var(--orca-muted, #2d2d30);
+  --muted-fg: var(--orca-muted-foreground, #9d9d9d);
+  --border: var(--orca-border, #3c3c3c);
+  --primary: var(--orca-primary, #4f8cff);
+  --primary-fg: var(--orca-primary-foreground, #ffffff);
+  --accent: var(--orca-accent, #37373d);
+  --accent-fg: var(--orca-accent-foreground, #ffffff);
+  --destructive: var(--orca-destructive, #f14c4c);
+  --radius: var(--orca-radius, 6px);
+  --font: var(--orca-font-sans, system-ui, 'Segoe UI', 'Microsoft JhengHei', 'Noto Sans TC', sans-serif);
+  --mono: var(--orca-font-mono, ui-monospace, 'Cascadia Mono', Consolas, monospace);
+  color-scheme: dark;
+}
+
+html[data-scheme='light'] {
+  --bg: var(--orca-background, #ffffff);
+  --fg: var(--orca-foreground, #1f2328);
+  --card: var(--orca-card, #f6f8fa);
+  --muted: var(--orca-muted, #eef1f4);
+  --muted-fg: var(--orca-muted-foreground, #656d76);
+  --border: var(--orca-border, #d0d7de);
+  --accent: var(--orca-accent, #e6ebf1);
+  --accent-fg: var(--orca-accent-foreground, #1f2328);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.5 var(--font);
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 4px 10px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.info {
+  color: var(--muted-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-fg);
+}
+
+.value {
+  min-width: 48px;
+  text-align: center;
+  color: var(--muted-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.notice {
+  flex: none;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--primary) 14%, var(--bg));
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+}
+
+.content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.overlay {
+  position: absolute;
+  inset: 38px 0 0 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: var(--bg);
+  text-align: center;
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.overlay.error .overlay-title {
+  color: var(--destructive);
+}
+
+.overlay-text {
+  max-width: 560px;
+  color: var(--muted-fg);
+  word-break: break-word;
+}
+
+.spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-fg) 45%, transparent);
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-corner,
+::-webkit-scrollbar-track {
+  background: transparent;
+}

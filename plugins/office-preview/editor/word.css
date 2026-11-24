@@ -1,0 +1,65 @@
+/* Word 預覽：紙張永遠是白底黑字（不跟著深色主題反轉，否則文件原本的配色會失真）。 */
+
+#pages {
+  min-width: min-content;
+}
+
+.docx-wrapper {
+  background: transparent !important;
+  padding: 24px 0 4px !important;
+  /* 文件沒指定（或本機沒有）的字型，改用一般的中英文字型，而不是 Orca 介面字型 */
+  font-family: 'Segoe UI', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', system-ui, sans-serif;
+}
+
+.docx-wrapper > section.docx {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35) !important;
+  margin-bottom: 22px !important;
+}
+
+html[data-scheme='light'] .docx-wrapper > section.docx {
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.18) !important;
+}
+
+/* 舊版 .doc 的純文字紙張 */
+.legacy-paper {
+  width: 794px;
+  max-width: calc(100% - 48px);
+  margin: 24px auto;
+  padding: 56px 64px;
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+  font: 15px/1.8 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.legacy-paper p {
+  margin: 0;
+  white-space: pre-wrap;
+  min-height: 1.8em;
+}
+
+.legacy-paper p.blank {
+  min-height: 0.9em;
+}
+
+.legacy-paper hr {
+  margin: 28px -64px;
+  border: 0;
+  border-top: 1px dashed #b0b0b0;
+}
+
+.legacy-paper table {
+  width: 100%;
+  margin: 10px 0;
+  border-collapse: collapse;
+}
+
+.legacy-paper td {
+  padding: 4px 8px;
+  border: 1px solid #9a9a9a;
+  vertical-align: top;
+  white-space: pre-wrap;
+}

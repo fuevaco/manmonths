@@ -1,0 +1,21 @@
+{
+  "name": "office-preview",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Orca Office 文件預覽外掛的建置與測試設定（執行時不需要 node_modules，建置結果已放在 editor/dist）。",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "dependencies": {
+    "@e965/xlsx": "0.20.3",
+    "cfb": "1.2.2",
+    "docx-preview": "0.4.1",
+    "jszip": "3.10.2",
+    "pptx-preview": "1.0.7"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

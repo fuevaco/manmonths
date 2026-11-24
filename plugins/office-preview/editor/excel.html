@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excel 預覽</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="excel.css">
+</head>
+<body>
+  <div id="app">
+    <header class="toolbar">
+      <div class="group">
+        <span class="badge">Excel</span>
+        <span id="info" class="info"></span>
+      </div>
+      <div class="group formula">
+        <span id="namebox" class="namebox" title="目前選取的儲存格">A1</span>
+        <span class="fx">fx</span>
+        <span id="fx" class="fxtext" title="儲存格內容（公式或值）"></span>
+      </div>
+    </header>
+    <div id="notice" class="notice" hidden></div>
+    <main id="content" class="content grid-host">
+      <div id="viewport" class="viewport" tabindex="0">
+        <div class="sticky"><div id="frame" class="frame"></div></div>
+        <div id="spacer"></div>
+      </div>
+    </main>
+    <footer class="footer">
+      <div id="tabs" class="tabs" role="tablist"></div>
+      <div id="status" class="status"></div>
+    </footer>
+    <div id="overlay" class="overlay" hidden></div>
+  </div>
+  <script src="dist/excel.js"></script>
+</body>
+</html>

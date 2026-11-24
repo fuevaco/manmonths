@@ -1,0 +1,26 @@
+/* PowerPoint 預覽：投影片永遠維持原本的配色，外框才跟著 Orca 主題。 */
+
+.content {
+  background: color-mix(in srgb, var(--muted) 70%, var(--bg));
+}
+
+#stage {
+  min-width: min-content;
+  padding: 24px 0 14px;
+}
+
+/* pptx-preview 預設把外框塗成黑色，改成透明讓背景跟主題走 */
+.pptx-preview-wrapper {
+  background: transparent !important;
+  /* 簡報沒指定（或本機沒有）的字型，改用一般的中英文無襯線字型，而不是 Orca 介面字型 */
+  font-family: 'Segoe UI', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', system-ui, sans-serif;
+}
+
+.pptx-preview-slide-wrapper {
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+  margin-bottom: 18px !important;
+}
+
+html[data-scheme='light'] .pptx-preview-slide-wrapper {
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.2);
+}

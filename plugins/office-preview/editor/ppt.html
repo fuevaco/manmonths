@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PowerPoint 預覽</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="ppt.css">
+</head>
+<body>
+  <div id="app">
+    <header class="toolbar">
+      <div class="group">
+        <span class="badge">PowerPoint</span>
+        <span id="info" class="info"></span>
+      </div>
+      <div class="group">
+        <button id="btn-prev" class="btn" title="上一張 (← / PageUp)" disabled>◀</button>
+        <span id="slide-counter" class="value" style="min-width: 72px"></span>
+        <button id="btn-next" class="btn" title="下一張 (→ / PageDown / 空白鍵)" disabled>▶</button>
+        <span class="sep"></span>
+        <button id="btn-single" class="btn active" title="一次顯示一張投影片">單頁</button>
+        <button id="btn-list" class="btn" title="連續向下捲動顯示所有投影片">連續</button>
+        <span class="sep"></span>
+        <button id="btn-zoom-out" class="btn" title="縮小 (Ctrl + -)">−</button>
+        <button id="btn-zoom-reset" class="btn value" style="min-width: 56px" title="恢復 100% (Ctrl + 0)">100%</button>
+        <button id="btn-zoom-in" class="btn" title="放大 (Ctrl + +)">＋</button>
+        <button id="btn-fit" class="btn active" title="符合視窗">符合視窗</button>
+      </div>
+    </header>
+    <div id="notice" class="notice" hidden></div>
+    <main id="content" class="content">
+      <div id="stage"></div>
+    </main>
+    <div id="overlay" class="overlay" hidden></div>
+  </div>
+  <script src="dist/ppt.js"></script>
+</body>
+</html>
