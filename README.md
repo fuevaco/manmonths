@@ -27,6 +27,7 @@
 | **`manmonths.marp-mermaid-preview`** | [`plugins/marp-mermaid-preview`](./plugins/marp-mermaid-preview) | `editor` | Markdown Marp 簡報與 Mermaid 圖表增強預覽自訂編輯器 |
 | **`manmonths.tfs-work-items`** | [`plugins/tfs-work-items`](./plugins/tfs-work-items) | `panel` / `worker` | Azure DevOps / 地端 TFS 工項互動面板（支援 Task / Bug 查詢、新增、狀態篩選與派工） |
 | **`manmonths.ai-resource-center`** | [`plugins/ai-resource-center`](./plugins/ai-resource-center) | `panel` / `worker` | AI 資源中心面板：連到你有權使用的資源市集，在 Orca 內獨立登入，瀏覽 Skills、Agents、MCP 與組合包，一鍵安裝、更新與補裝到相容 AI 工具的全域位置，並提供新版提醒 |
+| **`manmonths.office-preview`** | [`plugins/office-preview`](./plugins/office-preview) | `editor` | Office 文件預覽：Word（`.docx` / `.doc`）、Excel（`.xlsx` / `.xls` / `.ods` 等）、PowerPoint（`.pptx`）離線唯讀預覽，不需任何權限（`.doc` 僅顯示純文字） |
 
 ---
 

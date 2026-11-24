@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word 預覽</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="word.css">
+  <style id="docx-style"></style>
+</head>
+<body>
+  <div id="app">
+    <header class="toolbar">
+      <div class="group">
+        <span class="badge">Word</span>
+        <span id="info" class="info"></span>
+      </div>
+      <div class="group">
+        <span id="pages-count" class="value" title="頁數"></span>
+        <span class="sep"></span>
+        <button id="btn-zoom-out" class="btn" title="縮小 (Ctrl + -)">−</button>
+        <button id="btn-zoom-reset" class="btn value" style="min-width: 56px" title="恢復 100% (Ctrl + 0)">100%</button>
+        <button id="btn-zoom-in" class="btn" title="放大 (Ctrl + +)">＋</button>
+        <button id="btn-fit" class="btn active" title="符合視窗寬度">符合寬度</button>
+      </div>
+    </header>
+    <div id="notice" class="notice" hidden></div>
+    <main id="content" class="content">
+      <div id="pages"></div>
+    </main>
+    <div id="overlay" class="overlay" hidden></div>
+  </div>
+  <script src="dist/word.js"></script>
+</body>
+</html>
