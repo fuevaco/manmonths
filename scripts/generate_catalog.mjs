@@ -100,6 +100,14 @@ function getGitHeadCommit() {
   }
 }
 
+function getPluginLastCommit(relPath) {
+  try {
+    const sha = execSync(`git log -1 --format=%H HEAD -- ${relPath}`, { cwd: ROOT_DIR, encoding: 'utf8' }).trim();
+    if (/^[0-9a-f]{40}$/.test(sha)) return sha;
+  } catch {}
+  return getGitHeadCommit();
+}
+
 function deriveCatalogTypes(manifest) {
   const types = new Set();
   const c = manifest.contributes || {};
@@ -154,6 +162,40 @@ function deriveContributionSummary(manifest) {
     }
   }
   return items;
+}
+
+function deriveCapabilities(manifest) {
+  const caps = [];
+  for (const item of manifest.capabilities || []) {
+    if (item && typeof item.kind === 'string' && !caps.includes(item.kind)) {
+      caps.push(item.kind);
+    }
+  }
+  return caps;
+}
+
+function deriveFileTypes(manifest) {
+  const c = manifest.contributes || {};
+  const fileTypes = [];
+  const editorFileTypes = [];
+  const norm = (ext) => (typeof ext === 'string' ? ext.replace(/^\./, '').toLowerCase() : '');
+  const valid = (ext) => /^[a-z0-9][a-z0-9+_-]{0,15}$/.test(ext);
+  for (const s of c.syntaxes || []) {
+    for (const raw of s.extensions || []) {
+      const ext = norm(raw);
+      if (valid(ext) && !fileTypes.includes(ext)) fileTypes.push(ext);
+    }
+  }
+  for (const ed of c.customEditors || []) {
+    for (const raw of ed.extensions || []) {
+      const ext = norm(raw);
+      if (valid(ext)) {
+        if (!fileTypes.includes(ext)) fileTypes.push(ext);
+        if (!editorFileTypes.includes(ext)) editorFileTypes.push(ext);
+      }
+    }
+  }
+  return { fileTypes, editorFileTypes };
 }
 
 function getImageDimensions(buf, filePath) {
@@ -275,7 +317,6 @@ function deriveIconCatalogEntry(manifest, pluginFolder, relPath) {
 }
 
 export function generateCatalog() {
-  const commit = getGitHeadCommit();
   if (!existsSync(PLUGINS_DIR)) {
     console.error('Plugins directory not found:', PLUGINS_DIR);
     return;
@@ -304,6 +345,8 @@ export function generateCatalog() {
     const treeHash = hashPluginTree(pluginFolder);
     const types = deriveCatalogTypes(manifest);
     const summary = deriveContributionSummary(manifest);
+    const capabilities = deriveCapabilities(manifest);
+    const { fileTypes, editorFileTypes } = deriveFileTypes(manifest);
     const iconEntry = deriveIconCatalogEntry(manifest, pluginFolder, relPath);
     const images = {
       ...(iconEntry ? { icon: iconEntry } : {}),
@@ -313,9 +356,9 @@ export function generateCatalog() {
     const publisher = manifest.publisher || 'manmonths';
     const qualifiedId = `${publisher}.${manifest.id}`;
 
-    // Look up previous release commit if contentHash didn't change
-    // （--repin：不沿用舊 commit，全部改指向目前 HEAD；內容沒變時 hash 也不會變）
-    let releaseCommit = commit;
+    // 預設釘選在「最後一次修改該外掛目錄」的 commit；若 contentHash 沒變且未帶 --repin，沿用既有記錄的 commit。
+    const pluginCommit = getPluginLastCommit(relPath);
+    let releaseCommit = pluginCommit;
     if (!process.argv.includes('--repin') && existingCatalog?.plugins) {
       const prev = existingCatalog.plugins.find((p) => p.id === qualifiedId);
       if (prev?.releases?.[0] && prev.releases[0].contentHash === treeHash.hash) {
@@ -343,6 +386,9 @@ export function generateCatalog() {
           ...(manifest.name ? { name: manifest.name } : {}),
           ...(types.length > 0 ? { types } : { types: ['interface-language'] }),
           ...(summary.length > 0 ? { contributes: summary } : {}),
+          ...(capabilities.length > 0 ? { capabilities } : {}),
+          ...(fileTypes.length > 0 ? { fileTypes } : {}),
+          ...(editorFileTypes.length > 0 ? { editorFileTypes } : {}),
           ...(Object.keys(images).length ? { images } : {})
         }
       ]
