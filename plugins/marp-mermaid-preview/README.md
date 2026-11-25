@@ -41,7 +41,7 @@
 2. 確認已加入來源：
    - **URL**: `https://github.com/linkchain-corp/manmonths.git`
    - **Ref / Branch**: `main`
-3. 在插件列表中找到 **Markdown Marp & Mermaid 預覽**（`manmonths.marp-mermaid-preview`），點選 **Install** 安裝並啟用。
+3. 在插件列表中找到 **Markdown Marp & Mermaid 預覽**（`linkchain-corp.marp-mermaid-preview`），點選 **Install** 安裝並啟用。
 
 ### 方式二：本機開發與測試模式 (Local Development)
 1. 開啟 Orca，前往 **Settings → Plugins → Local Development**。

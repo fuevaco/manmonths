@@ -170,7 +170,7 @@ test('版本一致：manifest 是唯一版本來源，收據與安裝回報的 c
   let catalog = null;
   try { catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8')); } catch { /* 外掛單獨安裝時沒有 Catalog，略過這一段 */ }
   if (!catalog) return;
-  const entry = catalog.plugins.find((p) => p.id === `${manifest.publisher}.${manifest.id}`);
+  const entry = catalog.plugins.find((p) => p.source?.path === 'plugins/ai-resource-center');
   if (!entry) return; // 尚未登錄的提交（先提交外掛、再更新 Catalog）
   assert.equal(entry.releases[0].version, manifest.version);
   assert.equal(entry.source.path, 'plugins/ai-resource-center');
