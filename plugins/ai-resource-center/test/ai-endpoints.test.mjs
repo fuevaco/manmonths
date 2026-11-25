@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { startWorker, createHostState, leakedSecrets } from './harness.mjs';
+import { startWorker, createHostState, createFakeSpawner, leakedSecrets } from './harness.mjs';
 import { startFakeMarket } from './fake-market.mjs';
 import { startPanel, findByData, textOf } from './panel-harness.mjs';
 
 async function fixture(t, deps = {}) {
   const market = await startFakeMarket();
   const state = createHostState();
-  const worker = startWorker({ state, deps });
+  const spawn = (...args) => createFakeSpawner([{ error: 'ENOENT' }])(...args);
+  const worker = startWorker({ state, deps: { spawn, ...deps } });
   t.after(() => worker.dispose());
   t.after(() => market.close());
   await worker.call('rc.session.signIn', { marketUrl: market.url, username: 'alice', password: 'pw-alice' });
@@ -311,4 +312,39 @@ test('有多個模型但尚未選用時，儲存端點顯示異常而不誤報�
   const saved = await worker.call('rc.ai.settings.save', { endpoint: { name: '服務', baseUrl: ai.url, model: '' } });
   assert.equal(saved.endpoints[0].status.state, 'error');
   assert.match(saved.endpoints[0].status.reason, /模型/);
+});
+
+test('舊版端點讀成 OpenAI 相容，切換為本機 AI 工具後清除舊 PAT', async t => {
+  const spawn = createFakeSpawner([
+    { lines: ['{"ok":true,"result":{"claude":{"accounts":[]}}}'] },
+    { lines: ['2.1.331 (Claude Code)'] },
+    { lines: ['{"loggedIn":true}'] }
+  ]);
+  const ai = await endpoint(t);
+  const worker = await fixture(t);
+  const { state } = worker;
+  const id = 'legacy-endpoint';
+  const secretKey = 'resource-center.ai-pat.' + id;
+  state.storage.set('resource-center.ai-settings', {
+    enabled: true, activeEndpointId: null, endpoints: [{ id, name: '舊端點', baseUrl: ai.url + '/v1', model: 'sample-model' }]
+  });
+  state.secrets.set(secretKey, 'synthetic-legacy-pat');
+  const reopened = startWorker({ state, deps: { spawn } });
+  t.after(() => reopened.dispose());
+  const before = (await reopened.call('rc.ai.settings.get')).endpoints[0];
+  assert.equal(before.type, 'openai');
+  assert.equal(before.hasPat, true);
+  assert.equal(Object.hasOwn(state.storage.get('resource-center.ai-settings').endpoints[0], 'type'), false);
+  const converted = (await reopened.call('rc.ai.settings.save', {
+    endpoint: { id, type: 'local-tool', name: '新端點', platform: 'claude-code', model: '' }
+  })).endpoints[0];
+  assert.equal(converted.type, 'local-tool');
+  assert.equal(converted.id, id);
+  assert.equal(converted.hasPat, false);
+  assert.equal(state.secrets.has(secretKey), false);
+  const reverted = (await reopened.call('rc.ai.settings.save', {
+    endpoint: { id, type: 'openai', name: '再切回', baseUrl: ai.url, model: 'sample-model' }
+  })).endpoints[0];
+  assert.equal(reverted.hasPat, false);
+  assert.equal(ai.requests.at(-1).authorization, undefined);
 });

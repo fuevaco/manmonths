@@ -5,6 +5,8 @@ export function registerAiHandlers(router, { endpoints, catalog, chat }) {
   router.handle('rc.ai.settings.get', () => endpoints.get());
   router.handle('rc.ai.settings.save', input => endpoints.save(input));
   router.handle('rc.ai.endpoints.test', input => endpoints.test(input));
+  router.handle('rc.ai.localTools.detect', () => endpoints.detect());
+  router.handle('rc.ai.localTools.models', input => endpoints.models(input));
   router.handle('rc.ai.status.get', () => endpoints.status());
   router.handle('rc.ai.status.check', () => endpoints.check());
   router.handle('rc.ai.catalog.get', async (input = {}) => {

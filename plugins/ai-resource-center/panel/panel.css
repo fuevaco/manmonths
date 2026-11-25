@@ -403,6 +403,9 @@ details.notice[open] > summary { margin-bottom: 4px; }
 /* AI 助手：定案草圖的角落狀態燈、端點單選列與行內編輯表單。 */
 #btn-ai { position: relative; }
 #btn-ai, #btn-ai-clear, #btn-ai-settings { width: 30px; height: 30px; }
+.ai-status-tooltip { display: none; position: absolute; z-index: 5; top: calc(100% + 4px); right: 10px; max-width: min(270px, calc(100% - 20px)); padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); box-shadow: 0 4px 12px #0008; font-size: 11.5px; line-height: 1.55; overflow-wrap: anywhere; pointer-events: none; }
+#btn-ai:hover + .ai-status-tooltip, #btn-ai:focus-visible + .ai-status-tooltip { display: block; }
+.ai-tooltip-error { color: var(--bad); }
 .ai-dot { position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--bg); background: var(--muted); }
 .ai-dot.ok, .ai-inline-dot.ok { background: var(--ok); }
 .ai-dot.error, .ai-inline-dot.error { background: var(--bad); }
@@ -416,12 +419,15 @@ details.notice[open] > summary { margin-bottom: 4px; }
 .ai-switch input:checked + .ai-toggle::after { left: auto; right: 2px; }
 .ai-switch input:focus-visible + .ai-toggle { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ai-section { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 14px 0 6px; }
-.ai-endpoint { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; margin-bottom: 6px; background: var(--card-bg); }
+.ai-endpoint { border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; margin-bottom: 6px; background: var(--card-bg); }
+.ai-endpoint-row { display: flex; align-items: center; gap: 8px; }
+.ai-endpoint-source { margin: 4px 0 0 20px; font-size: 11.5px; overflow-wrap: anywhere; }
 .ai-endpoint.selected { border-color: var(--accent); }
 .ai-endpoint input { margin: 0; accent-color: var(--accent); flex: none; width: 12px; height: 12px; }
 .ai-endpoint-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .ai-endpoint-status { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; flex: none; }
 .ai-endpoint-status.error { color: var(--bad); }
+.ai-endpoint-status.local.error { padding: 0; background: transparent; }
 .ai-inline-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); order: -1; }
 .ai-endpoint-model { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30%; }
 .ai-small-button { padding: 0; color: var(--muted); border: 0; background: transparent; cursor: pointer; font: inherit; }
@@ -429,6 +435,20 @@ details.notice[open] > summary { margin-bottom: 4px; }
 .ai-editor { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 10px; }
 .ai-editor .field { margin-bottom: 9px; }
 .ai-editor .field label { font-size: 12px; font-weight: 400; color: var(--muted); margin-bottom: 3px; }
+.ai-field-label { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+.ai-type-switch { display: flex; }
+.ai-type-switch .btn { flex: 1; border-radius: 0; }
+.ai-type-switch .btn:first-child { border-radius: 6px 0 0 6px; }
+.ai-type-switch .btn:last-child { border-radius: 0 6px 6px 0; }
+.ai-type-switch .btn + .btn { border-left: 0; }
+.ai-editor .field .ai-platform-option { display: flex; align-items: flex-start; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; color: var(--fg); line-height: 1.45; }
+.ai-editor .field .ai-platform-option.selected { border-color: var(--accent); }
+.ai-platform-option.disabled { opacity: 0.45; }
+.ai-editor .ai-platform-option input { width: 12px; height: 12px; padding: 0; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
+.ai-platform-option .ai-hint::before { content: ''; display: block; }
+.ai-warning { color: var(--warn); font-size: 11.5px; }
+.ai-custom-model { margin-top: 3px; }
+.ai-local-notice { margin-bottom: 10px; line-height: 1.55; }
 .ai-editor input, .ai-editor select { padding: 6px 9px; }
 .ai-editor select { width: 100%; }
 .ai-hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }

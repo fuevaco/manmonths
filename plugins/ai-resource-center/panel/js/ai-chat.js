@@ -4,7 +4,10 @@
   const RC = window.RcPanel;
   const { $, el, call } = RC;
   let revision = 0, viewRevision = 0, timer = null, polling = false, sending = false, available = true, opened = false, incremental = false;
+  const setupMessage = '請到 AI 助手設定啟用端點並選擇模型';
+  let unavailableMessage = setupMessage;
   let state = { messages: [], running: false }, ready = Promise.resolve();
+  let endpoint = null, configuredModel = '';
   let packages = new Map();
   let detailScroll = null;
   // 輸入框隨內容長高（Shift+Enter 換行），最高 INPUT_MAX_HEIGHT，超過改為捲動。
@@ -27,7 +30,18 @@
       el('div', { className: 'ai-package-description muted', textContent: p.description || '' }),
       el('div', { className: 'ai-package-row' }, RC.installStatusText(p), view));
   }
+  function renderTitle() {
+    const actualModel = endpoint?.type === 'local-tool' && state.messages.findLast(message => message.reference?.answerModel)?.reference.answerModel;
+    const model = actualModel || configuredModel;
+    RC.setText('ai-header-model', model ? '· ' + model : '');
+  }
+  // 本機 AI 工具選「預設」時也不留白，顯示「預設（名稱）」。
+  RC.setAiChatModel = function (model, platform, defaultModel) {
+    configuredModel = model || (platform ? RC.defaultModelLabel(platform, defaultModel) : '');
+    renderTitle();
+  };
   function render() {
+    renderTitle();
     const scroll = $('ai-chat-scroll').scrollTop;
     $('ai-chat-messages').replaceChildren(...state.messages.flatMap((message, index) => {
       const node = el('div', { className: message.role === 'user' ? 'ai-chat-me' : 'ai-chat-answer markdown' });
@@ -37,8 +51,13 @@
         for (const key of message.packageKeys || []) { const p = packages.get(key); if (p) node.append(packageCard(p)); }
         if (message.reference) {
           const ref = message.reference;
+          const context = ref.fallback ? `ⓘ 從 ${ref.packageCount} 個資源包的說明中回答` : `ⓘ 從 ${ref.packageCount} 個資源包中挑出 ${ref.keys.length} 個參考`;
+          const { selectModel, answerModel } = ref;
+          const models = (!selectModel || !answerModel || selectModel === answerModel)
+            ? [(answerModel || selectModel) && '模型 ' + (answerModel || selectModel)]
+            : [selectModel && '挑選 ' + selectModel, answerModel && '回答 ' + answerModel];
           node.append(el('div', { className: 'ai-chat-context muted',
-            textContent: ref.fallback ? `ⓘ 從 ${ref.packageCount} 個資源包的說明中回答` : `ⓘ 從 ${ref.packageCount} 個資源包中挑出 ${ref.keys.length} 個參考`,
+            textContent: [context, ...models.filter(Boolean), ref.appServerFallback && '這次以相容模式回答，沒有逐字顯示'].filter(Boolean).join(' · '),
             ...(!ref.fallback && ref.names.length ? { title: `本輪參考：${ref.names.join('、')}` } : {}) }));
         }
         if (message.error) node.append(el('div', { className: 'error', textContent: message.error }));
@@ -52,7 +71,7 @@
     $('ai-chat-send').setAttribute('title', state.running ? '停止' : '送出');
     $('ai-chat-send').disabled = sending || (!available && !state.running);
     $('ai-chat-question').disabled = !available;
-    RC.setText('ai-chat-unavailable', available ? '' : '請到 AI 助手設定啟用端點並選擇模型');
+    RC.setText('ai-chat-unavailable', available ? '' : unavailableMessage);
     for (const chip of $('ai-chat-chips').children) chip.disabled = sending || state.running || !available;
     $('ai-chat-scroll').scrollTop = RC.isShown('ai-chat') && detailScroll === null ? $('ai-chat-scroll').scrollHeight : scroll;
   }
@@ -62,7 +81,12 @@
     polling = true;
     const expected = revision;
     try {
-      const result = await call('rc.ai.chat.poll', incremental ? { streamId: state.streamId, offsets: state.messages.map(m => m.text.length) } : {});
+      const params = incremental && state.streamId ? { streamId: state.streamId, offsets: state.messages.map(m => m.text.length) } : {};
+      const result = await call('rc.ai.chat.poll', params).catch(error => {
+        // 切換使用中的端點會清除 worker 對話，改讀新對話的完整快照。
+        if (params.streamId && error.code === 'invalid_params' && expected === revision) return call('rc.ai.chat.poll', {});
+        throw error;
+      });
       if (expected !== revision) return;
       if (result.updates) {
         const messages = state.messages.slice();
@@ -114,13 +138,17 @@
   }
   RC.chatViewChanged = name => {
     const view = ++viewRevision;
-    if (['login', 'loading'].includes(name)) { packages = new Map(); if (opened) { opened = false; void clear(); } return; }
+    if (['login', 'loading'].includes(name)) { endpoint = null; configuredModel = ''; packages = new Map(); if (opened) { opened = false; void clear(); } return; }
     if (name === 'ai-chat') {
+      incremental = false;
       if (detailScroll !== null) $('ai-chat-scroll').scrollTop = detailScroll;
       if (!opened) { opened = true; ready = call('rc.ai.chat.clear'); }
       void call('rc.ai.settings.get').then(settings => {
         if (view !== viewRevision) return;
-        available = settings.enabled && settings.endpoints.some(e => e.id === settings.activeEndpointId && e.model);
+        endpoint = settings.endpoints.find(e => e.id === settings.activeEndpointId);
+        const local = endpoint?.type === 'local-tool';
+        available = settings.enabled && (local || Boolean(endpoint?.model));
+        RC.setAiChatModel(settings.enabled ? endpoint?.model : '', settings.enabled ? endpoint?.platform : '', endpoint?.defaultModel);
         render();
       }).catch(RC.actionFailed);
       void ready.then(poll).then(() => { if (state.running && timer === null) timer = setInterval(poll, 250); }).catch(RC.actionFailed);

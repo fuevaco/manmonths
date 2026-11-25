@@ -5,6 +5,7 @@ import activate from '../worker/index.mjs';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+export { createFakeSpawner } from './fake-spawner.mjs';
 
 /** 可在多個 worker 實例之間共用的主機狀態（模擬重開 Orca）。 */
 export function createHostState({ settings = {} } = {}) {

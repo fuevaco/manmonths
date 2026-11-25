@@ -31,18 +31,21 @@ import { resolveLcAiPackHome } from './paths.mjs';
 import { findMcpLauncher, refreshMcpLauncher } from './setup/find-mcp-launcher.mjs';
 import { registerSideloadHandlers } from './handlers/sideload.mjs';
 import { createAiEndpointService } from './ai-endpoint-service.mjs';
+import { createAiLocalTools } from './ai-local-tools.mjs';
 import { createAiCatalog } from './ai-catalog.mjs';
 import { createAiChat } from './ai-chat.mjs';
 import { registerAiHandlers } from './handlers/ai.mjs';
+import { createProcessSpawner } from './process-spawner.mjs';
 
 /**
  * @param {object} orca  Orca 主機 API
- * @param {object} [deps] 測試注入：now()、delay(ms, signal)、requestTimeoutMs、transport
+ * @param {object} [deps] 測試注入：now()、delay(ms, signal)、requestTimeoutMs、transport、spawn(file, args, options)
  */
 export default function activate(orca, deps = {}) {
   orca.log('AI 資源中心 worker 已啟動');
   const router = createRouter(orca);
-  registerDevHandlers(router, { folders: createFolderPickerService({ platform: deps.platform, spawn: deps.folderPickerSpawn }) });
+  const spawn = createProcessSpawner(deps.spawn);
+  registerDevHandlers(router, { folders: createFolderPickerService({ platform: deps.platform, spawn: deps.folderPickerSpawn ?? spawn }) });
   const preferences = createPreferences(router, orca.storage);
   // 安裝回報（工項 12）：成功連線時補送待送項目；回報需要登入工作階段，所以以延遲綁定接上 session。
   let reporting = null;
@@ -59,7 +62,9 @@ export default function activate(orca, deps = {}) {
     onConnected: () => { reporting?.flush(); void updates?.reschedule(); void ai?.reschedule().catch(() => orca.log('[ai] check_failed')); },
     onMarketChanged: () => { aiChat?.clear(); aiCatalog?.clear(); updates?.stop(); void updates?.reschedule(); ai?.stop(); },
     onSessionEnded: ({ expired }) => { aiChat?.clear(); aiCatalog?.clear(); ai?.stop(); deploy?.discardPending(); installation?.discardPending(); updates?.stop({ preserveSummary: expired }); guides?.stop(); void uploads?.clear().catch(() => orca.log('[upload] cleanup_failed')); } });
-  ai = createAiEndpointService({ orca, session, timeoutMs: deps.aiRequestTimeoutMs, now: deps.now, scheduler: deps.aiScheduler });
+  const localTools = createAiLocalTools({ spawn, env: deps.env, osPlatform: deps.platform, execPath: deps.execPath, userHome: deps.userHome });
+  ai = createAiEndpointService({ orca, session, localTools, onActiveEndpointChanged: () => aiChat?.clear(),
+    timeoutMs: deps.aiRequestTimeoutMs, now: deps.now, scheduler: deps.aiScheduler });
   void ai.reschedule().catch(() => orca.log('[ai] check_failed'));
   reporting = createInstallReporting({ storage: orca.storage, session, clientVersion: deps.clientVersion ?? pluginVersion(), now: deps.now });
 
@@ -71,7 +76,8 @@ export default function activate(orca, deps = {}) {
   const installed = createInstalledService({ ...deps, log: message => orca.log(message) });
   const packages = createPackageService(session, installed);
   aiCatalog = createAiCatalog({ session, preferences, packages });
-  aiChat = createAiChat({ session, endpoints: ai, catalog: aiCatalog, orca, timeoutMs: deps.aiChatTimeoutMs });
+  aiChat = createAiChat({ session, endpoints: ai, catalog: aiCatalog, orca, spawn, localTools,
+    osPlatform: deps.platform, timeoutMs: deps.aiChatTimeoutMs });
   registerAiHandlers(router, { endpoints: ai, catalog: aiCatalog, chat: aiChat });
   registerPackageHandlers(router, { packages, preferences, getParameters: input => installation.setup(input), enrich: async (detail, input) =>
     (await enrich(await session.requireClient(), [{ ...detail, latestVisibleVersion: detail.selectedVersion }], input.previewMode ?? (await preferences.get()).showPreview))[0] });
