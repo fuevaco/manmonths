@@ -37,7 +37,7 @@ const manifest = {
   publisher: "linkchain-corp",
   name: name || id,
   version: "1.0.0",
-  description: `${name || id}（linkchain維護）。`,
+  description: `${name || id}。`,
   author: {
     name: "人月",
     url: "https://github.com/fuevaco"
