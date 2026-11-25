@@ -2,7 +2,7 @@
 
 在 **[Orca](https://github.com/stablyai/orca)** 裡直接開啟並預覽 **Word、Excel、PowerPoint** 檔案：點檔案就看得到內容，不必再開外部程式。
 
-- **外掛 ID**：`manmonths.office-preview`
+- **外掛 ID**：`linkchain-corp.office-preview`
 - **執行方式**：`sandboxed-ui`（純前端沙盒，**不需要任何權限**，一鍵安裝）
 - **完全離線、唯讀**：所有解析程式都已打包在外掛內，不連網；只讀取檔案內容，**不會修改原檔**，也不會把檔案標成「已修改」。
 
@@ -75,7 +75,7 @@ orca plugin check . && orca plugin validate .
 - **為什麼打包結果也要 commit？** Orca 安裝外掛時只抓 Git 內的檔案，使用者端不會跑 npm / esbuild。
 - **離線與 CSP**：編輯器 frame 沒有網路，只能載入外掛資料夾內的檔案、`data:` 與 `blob:`；打包後不含任何外部 URL。Word 圖片以 base64 內嵌。
 - **為何補丁 `new Function`**：`jszip` 內的 `setimmediate` 含有 `new Function(字串)`（只在傳字串時才會用到，jszip 不會），Orca 編輯器 frame 禁止字串編譯，`build.mjs` 以 esbuild 外掛把它換成明確的錯誤，讓 `orca plugin check` 乾淨通過。
-- 在 Orca 開發：`orca plugin dev load .`，改了檔案會自動重新載入；`orca plugin shot manmonths.office-preview --editor <檔案>` 可截圖檢查渲染。
+- 在 Orca 開發：`orca plugin dev load .`，改了檔案會自動重新載入；`orca plugin shot linkchain-corp.office-preview --editor <檔案>` 可截圖檢查渲染。
 
 ### 使用的開源套件
 

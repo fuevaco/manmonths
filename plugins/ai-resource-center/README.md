@@ -1,4 +1,4 @@
-# AI 資源中心（manmonths.ai-resource-center）
+# AI 資源中心（ai-resource-center）
 
 在 Orca 右側欄的「資源中心」連到你有權使用的資源市集，獨立登入、搜尋資源包、閱讀說明，並一鍵安裝、更新或補裝 Skill、Agent、Prompt／Command 與 MCP。外掛與其他用戶端共用全域設定參數及部署收據，不需要另外安裝任何其他工具即可使用。
 

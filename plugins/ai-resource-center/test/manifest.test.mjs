@@ -34,7 +34,8 @@ test('外掛說明保留人月、市集與獨立登入，介紹一鍵安裝而�
 
 test('外掛識別、入口與右側欄面板「資源中心」', async () => {
   assert.equal(manifest.id, 'ai-resource-center');
-  assert.equal(manifest.publisher, 'manmonths');
+  // publisher 已被 Orca 棄用（以儲存庫擁有者識別外掛），且這個外掛資料夾不放組織名稱，所以不宣告
+  assert.equal(manifest.publisher, undefined);
   assert.equal(manifest.execution, 'trusted-worker');
   assert.equal(manifest.main, 'worker/index.mjs');
   const [panel] = manifest.contributes.panels;

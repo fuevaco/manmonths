@@ -309,7 +309,8 @@ function deriveIconCatalogEntry(manifest, pluginFolder, relPath) {
   const sha256 = createHash('sha256').update(buf).digest('hex');
   return {
     path: `${relPath}/${iconRel}`,
-    alt: `${manifest.name || manifest.id} icon`,
+    // 與 Orca 官方 `orca plugin release-entry` 一致：圖示的 alt 就是外掛名稱（不加 " icon"）
+    alt: manifest.name || manifest.id,
     sha256,
     width,
     height
@@ -353,7 +354,7 @@ export function generateCatalog() {
       ...derivePromotionalImages(manifest, pluginFolder, relPath)
     };
 
-    const publisher = manifest.publisher || 'manmonths';
+    const publisher = manifest.publisher || 'linkchain-corp';
     const qualifiedId = `${publisher}.${manifest.id}`;
 
     // 預設釘選在「最後一次修改該外掛目錄」的 commit；若 contentHash 沒變且未帶 --repin，沿用既有記錄的 commit。
@@ -400,7 +401,7 @@ export function generateCatalog() {
   const catalog = {
     catalogVersion: 2,
     name: '人月外掛庫',
-    owner: 'manmonths',
+    owner: 'linkchain-corp',
     plugins: pluginEntries
   };
 

@@ -1,10 +1,10 @@
 {
   "catalogVersion": 2,
   "name": "人月外掛庫",
-  "owner": "manmonths",
+  "owner": "linkchain-corp",
   "plugins": [
     {
-      "id": "manmonths.ai-resource-center",
+      "id": "linkchain-corp.ai-resource-center",
       "source": {
         "kind": "git",
         "url": "https://github.com/linkchain-corp/manmonths.git",
@@ -18,8 +18,8 @@
       "releases": [
         {
           "version": "1.3.0",
-          "commit": "7b3e8da5f45d3994068e8452061407defe48f57c",
-          "contentHash": "d5232a2d4afcebfa831f4b61a20264b46d8755314b621a68725156d44c3891b3",
+          "commit": "c092987ed592ee900581fa9c16caa3cbff75db24",
+          "contentHash": "c41313d5bfe7567fd43ffc4c1b9a29ccc765201574c02545478ee097c75c2c38",
           "execution": "trusted-worker",
           "minimumOrca": "1.4.259",
           "name": "AI 資源中心",
@@ -46,7 +46,7 @@
           "images": {
             "icon": {
               "path": "plugins/ai-resource-center/assets/icon.png",
-              "alt": "AI 資源中心 icon",
+              "alt": "AI 資源中心",
               "sha256": "5f1eff5edc4afd08373d481171df1081842a034a349627ccef8fb7b0892fc0a3",
               "width": 256,
               "height": 256
@@ -72,7 +72,7 @@
       ]
     },
     {
-      "id": "manmonths.marp-mermaid-preview",
+      "id": "linkchain-corp.marp-mermaid-preview",
       "source": {
         "kind": "git",
         "url": "https://github.com/linkchain-corp/manmonths.git",
@@ -86,8 +86,8 @@
       "releases": [
         {
           "version": "1.0.2",
-          "commit": "33a346e4d87c45bd702034d0d31bfb7b62aaf98b",
-          "contentHash": "ba0f60e6b67fc884852bb6d3878c62181c454fa4444e8ecb0bdb52bc0305abf7",
+          "commit": "c092987ed592ee900581fa9c16caa3cbff75db24",
+          "contentHash": "ba08f79fe34d085713329449604fefd25f114de30481781823a0edcd39478091",
           "execution": "sandboxed-ui",
           "minimumOrca": "1.4.248",
           "name": "Markdown Marp & Mermaid 預覽",
@@ -118,7 +118,7 @@
           "images": {
             "icon": {
               "path": "plugins/marp-mermaid-preview/assets/icon.png",
-              "alt": "Markdown Marp & Mermaid 預覽 icon",
+              "alt": "Markdown Marp & Mermaid 預覽",
               "sha256": "45e8b797007d4f0ce47ec380fa3c88b4cb65452f294079a005bfd480ffa61db9",
               "width": 256,
               "height": 256
@@ -128,7 +128,7 @@
       ]
     },
     {
-      "id": "manmonths.office-preview",
+      "id": "linkchain-corp.office-preview",
       "source": {
         "kind": "git",
         "url": "https://github.com/linkchain-corp/manmonths.git",
@@ -142,8 +142,8 @@
       "releases": [
         {
           "version": "1.0.0",
-          "commit": "4c7d8dfe9bd7e0ecfaa8d1ef5b2280cc25f845e1",
-          "contentHash": "ec2bdb2bed1903cb333181e3a7640ad372d3352961e8a7d6c1f418040009b70d",
+          "commit": "c092987ed592ee900581fa9c16caa3cbff75db24",
+          "contentHash": "ae928ee5540825ce2e4ef87ec93b60419f2438056f5942c3327360d85af50958",
           "execution": "sandboxed-ui",
           "minimumOrca": "1.4.248",
           "name": "Office 文件預覽",
@@ -198,7 +198,7 @@
           "images": {
             "icon": {
               "path": "plugins/office-preview/assets/icon.png",
-              "alt": "Office 文件預覽 icon",
+              "alt": "Office 文件預覽",
               "sha256": "d6156fe48a35afe29b62b0f988611f1da8bdea2a5f8089891676a49bf0b53f97",
               "width": 256,
               "height": 256
@@ -245,7 +245,7 @@
       ]
     },
     {
-      "id": "manmonths.tfs-work-items",
+      "id": "linkchain-corp.tfs-work-items",
       "source": {
         "kind": "git",
         "url": "https://github.com/linkchain-corp/manmonths.git",
@@ -259,8 +259,8 @@
       "releases": [
         {
           "version": "1.3.0",
-          "commit": "33a346e4d87c45bd702034d0d31bfb7b62aaf98b",
-          "contentHash": "9344bebc15428ee20f69f6f9252b462deea9573ed2ec43c06d3c49adb6bf4f55",
+          "commit": "c092987ed592ee900581fa9c16caa3cbff75db24",
+          "contentHash": "3e4b02805d696f8e525ea92a6ec01a8962f0e79e0499a3f33e805025bbd55393",
           "execution": "trusted-worker",
           "minimumOrca": "1.4.259",
           "name": "Azure DevOps",
@@ -287,7 +287,7 @@
           "images": {
             "icon": {
               "path": "plugins/tfs-work-items/assets/icon.png",
-              "alt": "Azure DevOps icon",
+              "alt": "Azure DevOps",
               "sha256": "48235316292bbad4d1143f77d425500f0e686652b7d872589cbe0457345ecf36",
               "width": 256,
               "height": 256
@@ -297,7 +297,7 @@
       ]
     },
     {
-      "id": "manmonths.zh-tw",
+      "id": "linkchain-corp.zh-tw",
       "source": {
         "kind": "git",
         "url": "https://github.com/linkchain-corp/manmonths.git",
@@ -311,8 +311,8 @@
       "releases": [
         {
           "version": "1.3.1",
-          "commit": "33a346e4d87c45bd702034d0d31bfb7b62aaf98b",
-          "contentHash": "7bce026313e23c4231bb2c2714d15a31923598ec538dc7a33b18386de5ce0402",
+          "commit": "c092987ed592ee900581fa9c16caa3cbff75db24",
+          "contentHash": "fbd48677c888b9f9aa8ffb076424f9e583ed3c66d9e95dd98b9d49dbf12d3c62",
           "execution": "data",
           "minimumOrca": "1.4.245",
           "name": "繁體中文 (台灣)",
@@ -328,7 +328,7 @@
           "images": {
             "icon": {
               "path": "plugins/zh-tw/assets/icon.png",
-              "alt": "繁體中文 (台灣) icon",
+              "alt": "繁體中文 (台灣)",
               "sha256": "edbda42c81897b7b6fbc6b001bd8d854281042e6e97799def827bc295f50aefc",
               "width": 256,
               "height": 256

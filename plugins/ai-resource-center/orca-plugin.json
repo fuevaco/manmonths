@@ -2,7 +2,6 @@
   "manifestVersion": 2,
   "execution": "trusted-worker",
   "id": "ai-resource-center",
-  "publisher": "manmonths",
   "name": "AI 資源中心",
   "version": "1.3.0",
   "description": "人月維護的 AI 資源中心：連到你有權使用的資源市集，在 Orca 內獨立登入，瀏覽並一鍵安裝 Skills、Agents、MCP 與組合包到 Codex、Claude Code 與桌面工具。",
