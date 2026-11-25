@@ -18,6 +18,11 @@
       </div>
       <div class="header-actions">
         <button id="btn-ai" type="button" class="btn btn-icon hidden" title="AI 助手" aria-label="AI 助手"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9 16h6"/></svg><span id="ai-status-dot" class="ai-dot"></span></button>
+        <div id="ai-tooltip" class="ai-status-tooltip hidden" role="tooltip">
+          <div>AI 助手：<span id="ai-tooltip-state"></span> · <span id="ai-tooltip-model"></span></div>
+          <div class="muted" id="ai-tooltip-detail"></div>
+          <div class="ai-warning hidden" id="ai-tooltip-warning"></div>
+        </div>
         <button id="btn-ai-clear" type="button" class="btn btn-icon hidden" title="清除對話" aria-label="清除對話"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
         <button id="btn-ai-settings" type="button" class="btn btn-icon hidden" title="AI 設定" aria-label="AI 設定"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg></button>
         <button id="btn-refresh" type="button" class="btn btn-icon hidden" title="重新整理" aria-label="重新整理"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><polyline points="20 4 20 9 15 9"/></svg></button>
@@ -145,11 +150,38 @@
       <div class="ai-section">AI 端點<button id="ai-add" type="button" class="btn">＋ 新增</button></div>
       <div id="ai-endpoints"></div>
       <form id="ai-editor" class="ai-editor hidden" novalidate>
+        <div class="field">
+          <span class="ai-field-label" id="ai-type-label">類型</span>
+          <div class="ai-type-switch" role="group" aria-labelledby="ai-type-label">
+            <button id="ai-type-openai" type="button" class="btn btn-primary" aria-pressed="true">OpenAI 相容</button>
+            <button id="ai-type-local" type="button" class="btn" aria-pressed="false" disabled>本機 AI 工具</button>
+          </div>
+          <div id="ai-local-unavailable" class="ai-hint hidden"></div>
+        </div>
         <div class="field"><label for="ai-name">名稱</label><input id="ai-name" type="text" autocomplete="off"></div>
-        <div class="field"><label for="ai-url">Base URL</label><input id="ai-url" type="url" spellcheck="false" autocomplete="off"><div id="ai-url-hint" class="ai-hint"></div><div id="ai-url-error" class="error hidden" role="alert"></div></div>
-        <div class="field"><label for="ai-pat">PAT（可選）</label><div class="ai-pat-box"><input id="ai-pat" type="password" placeholder="未填" autocomplete="off"><button id="ai-pat-eye" type="button" aria-label="顯示 PAT">👁</button></div></div>
+        <div id="ai-url-field" class="field"><label for="ai-url">Base URL</label><input id="ai-url" type="url" spellcheck="false" autocomplete="off"><div id="ai-url-hint" class="ai-hint"></div><div id="ai-url-error" class="error hidden" role="alert"></div></div>
+        <div id="ai-pat-field" class="field"><label for="ai-pat">PAT（可選）</label><div class="ai-pat-box"><input id="ai-pat" type="password" placeholder="未填" autocomplete="off"><button id="ai-pat-eye" type="button" aria-label="顯示 PAT">👁</button></div></div>
+        <div id="ai-platform-field" class="field hidden" role="group" aria-labelledby="ai-platform-label">
+          <span class="ai-field-label" id="ai-platform-label">平台</span>
+          <label class="ai-platform-option" id="ai-platform-claude-code-option">
+            <input id="ai-platform-claude-code" type="radio" name="ai-platform" value="claude-code" aria-label="Claude Code" aria-describedby="ai-platform-claude-code-hint ai-platform-claude-code-warning">
+            <span>Claude Code<span class="ai-hint" id="ai-platform-claude-code-hint"></span> <span class="ai-warning" id="ai-platform-claude-code-warning"></span></span>
+          </label>
+          <label class="ai-platform-option" id="ai-platform-codex-option">
+            <input id="ai-platform-codex" type="radio" name="ai-platform" value="codex" aria-label="Codex" aria-describedby="ai-platform-codex-hint ai-platform-codex-warning">
+            <span>Codex<span class="ai-hint" id="ai-platform-codex-hint"></span> <span class="ai-warning" id="ai-platform-codex-warning"></span></span>
+          </label>
+        </div>
         <div class="ai-test-row"><button id="ai-test" type="button" class="btn">測試連線</button><span id="ai-test-result" role="status"></span></div>
-        <div class="field"><label for="ai-model">模型</label><select id="ai-model"></select></div>
+        <div id="ai-openai-model" class="field"><label for="ai-model">模型</label><select id="ai-model"></select></div>
+        <div id="ai-local-model-field" class="field hidden">
+          <label for="ai-local-model">模型</label><select id="ai-local-model"></select>
+          <div id="ai-custom-model-field" class="ai-custom-model hidden">
+            <input id="ai-custom-model" type="text" aria-label="模型名稱" aria-describedby="ai-custom-model-hint" autocomplete="off" spellcheck="false">
+            <div class="ai-hint" id="ai-custom-model-hint"></div>
+          </div>
+        </div>
+        <div id="ai-local-notice" class="info-note ai-local-notice hidden"></div>
         <div id="ai-save-error" class="error hidden" role="alert"></div>
         <div class="ai-foot"><button id="ai-cancel" type="button" class="btn">取消</button><button id="ai-save" type="submit" class="btn btn-primary">儲存</button></div>
       </form>

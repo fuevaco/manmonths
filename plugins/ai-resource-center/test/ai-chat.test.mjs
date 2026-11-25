@@ -432,7 +432,8 @@ test('先以摘要挑選候選，再只讀候選 README 串流回答並保存參
   const { worker, market, requests } = await fixture(t, (req, res) => res.end(delta('回答') + 'data: [DONE]\n\n'));
   const { streamId } = await worker.call('rc.ai.chat.send', { message: '整理會議' });
   const result = await until(() => poll(worker, streamId), r => !r.running);
-  assert.deepEqual(result.messages.at(-1).reference, { packageCount: 1, keys: ['demo'], names: ['示範資源包'], fallback: false });
+  assert.deepEqual(result.messages.at(-1).reference, { packageCount: 1, keys: ['demo'], names: ['示範資源包'], fallback: false,
+    selectModel: 'sample-model', answerModel: 'sample-model', streamed: true });
   assert.match(requests[0].messages[0].content, /會議整理說明/);
   assert.equal(market.requests.filter(r => r.path.endsWith('/readme')).length, 1);
 });
@@ -563,7 +564,8 @@ test('候選無法解析時即使上一輪有候選，也只用說明回答且�
     const { streamId } = await worker.call('rc.ai.chat.send', { message: '推薦' });
     const result = await until(() => poll(worker, streamId), r => !r.running);
     if (content === '{"keys":["demo"]}') continue;
-    assert.deepEqual(result.messages.at(-1).reference, { packageCount: 1, keys: [], names: [], fallback: true });
+    assert.deepEqual(result.messages.at(-1).reference, { packageCount: 1, keys: [], names: [], fallback: true,
+      selectModel: 'sample-model', answerModel: 'sample-model', streamed: true });
     assert.equal(result.messages.at(-1).error, undefined);
     assert.equal(market.requests.filter(r => r.path.endsWith('/readme')).length, before);
     assert.ok(!requests.at(-1).messages[0].content.includes('會議整理說明'));
@@ -600,9 +602,9 @@ test('分隔線與送給模型的有效歷史一致，參考資訊各自保留�
   assert.equal(textOf(nodes[nodes.indexOf(dividers[0]) + 1]), '問題2');
   const references = nodes.flatMap(n => n.children).filter(n => n.classList.contains('ai-chat-context'));
   assert.equal(references.length, 9);
-  assert.equal(references[0].textContent, 'ⓘ 從 1 個資源包中挑出 1 個參考');
+  assert.equal(references[0].textContent, 'ⓘ 從 1 個資源包中挑出 1 個參考 · 模型 sample-model');
   assert.equal(references[0].getAttribute('title'), '本輪參考：示範資源包');
-  assert.equal(references[7].textContent, 'ⓘ 從 1 個資源包的說明中回答');
+  assert.equal(references[7].textContent, 'ⓘ 從 1 個資源包的說明中回答 · 模型 sample-model');
   assert.equal(references[7].getAttribute('title'), null);
   panel.get('ai-chat-question').value = '下一問';
   await panel.get('ai-chat-form').fire('submit');
@@ -669,4 +671,13 @@ test('讀候選時顯示數量，停止或清除後晚到 README 不會進入回
   assert.deepEqual(result.messages.at(-1).reference.keys, []);
   assert.equal(result.messages.at(-1).reference.fallback, false);
   assert.equal(result.messages.at(-1).error, undefined);
+});
+
+test('編輯使用中的 OpenAI 相容端點的名稱、Base URL、模型或 PAT 時保留對話', async t => {
+  const { worker } = await fixture(t, (req, res) => res.end(delta('推薦') + 'data: [DONE]\n\n'));
+  const { streamId } = await worker.call('rc.ai.chat.send', { message: '整理會議' });
+  await until(() => poll(worker, streamId), r => !r.running);
+  const [endpoint] = (await worker.call('rc.ai.settings.get')).endpoints;
+  await worker.call('rc.ai.settings.save', { endpoint: { id: endpoint.id, name: '改名', baseUrl: endpoint.baseUrl.replace('127.0.0.1', 'localhost'), model: 'other-model', pat: 'synthetic-new-secret' } });
+  assert.equal((await worker.call('rc.ai.chat.poll')).messages.length, 2);
 });
