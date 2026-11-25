@@ -25,8 +25,10 @@ test('狀態列只宣告一個無點擊動作的項目；不帶文字與圖示�
   assert.ok(!item.tone || ['neutral', 'accent', 'success', 'warning', 'danger'].includes(item.tone));
 });
 
-test('外掛說明保留人月、市集與獨立登入，介紹一鍵安裝而不提供下載', () => {
-  assert.match(manifest.description, /^人月維護/);
+test('外掛說明以資源中心開頭、不含維護者名稱，保留市集與獨立登入，介紹一鍵安裝而不提供下載', () => {
+  assert.match(manifest.description, /^AI 資源中心：/);
+  // 中性寫法：發布內容不帶維護者或組織名稱（release-hygiene 也掃描整個資料夾）
+  assert.doesNotMatch(manifest.description, /人月|維護/);
   assert.match(manifest.description, /有權使用的資源市集.*獨立登入/);
   assert.match(manifest.description, /一鍵安裝 Skills、Agents、MCP 與組合包到 Codex、Claude Code 與桌面工具/);
   assert.doesNotMatch(manifest.description, /下載/);
