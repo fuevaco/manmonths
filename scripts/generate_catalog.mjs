@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -106,11 +106,6 @@ function getPluginLastCommit(relPath) {
     if (/^[0-9a-f]{40}$/.test(sha)) return sha;
   } catch {}
   return getGitHeadCommit();
-}
-
-function isCommitInHistory(sha) {
-  if (typeof sha !== 'string' || !/^[0-9a-f]{40}$/.test(sha)) return false;
-  return spawnSync('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], { cwd: ROOT_DIR, stdio: 'ignore' }).status === 0;
 }
 
 function deriveCatalogTypes(manifest) {
@@ -362,13 +357,13 @@ export function generateCatalog() {
     const publisher = manifest.publisher || 'linkchain-corp';
     const qualifiedId = `${publisher}.${manifest.id}`;
 
-    // 只有內容相同且舊提交仍在 HEAD 歷史中時才沿用舊提交。amend 或 rebase 可能改寫提交。
+    // 預設釘選在「最後一次修改該外掛目錄」的 commit；若 contentHash 沒變且未帶 --repin，沿用既有記錄的 commit。
     const pluginCommit = getPluginLastCommit(relPath);
     let releaseCommit = pluginCommit;
     if (!process.argv.includes('--repin') && existingCatalog?.plugins) {
-      const previousRelease = existingCatalog.plugins.find((p) => p.id === qualifiedId)?.releases?.[0];
-      if (previousRelease?.contentHash === treeHash.hash && isCommitInHistory(previousRelease.commit)) {
-        releaseCommit = previousRelease.commit;
+      const prev = existingCatalog.plugins.find((p) => p.id === qualifiedId);
+      if (prev?.releases?.[0] && prev.releases[0].contentHash === treeHash.hash) {
+        releaseCommit = prev.releases[0].commit;
       }
     }
 
