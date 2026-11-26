@@ -23,7 +23,7 @@ export function validateSetup(m, check, known) {
     check(text(p.label), 'setup parameter label 為必填');
     check(['string', 'boolean', 'choice', 'secret'].includes(p.type), 'setup parameter type 不支援');
     check(p.required == null || typeof p.required === 'boolean', 'setup required 必須是布林值');
-    check(p.type === 'secret' ? ['runtime', 'setup-time'].includes(p.secretUsage) : p.secretUsage == null, 'secretUsage 與 type 不符');
+    check(p.type === 'secret' ? ['runtime', 'setup-time', 'setup-and-runtime'].includes(p.secretUsage) : p.secretUsage == null, 'secretUsage 與 type 不符');
     if (p.default !== undefined) check(p.type !== 'secret' && matches(p, p.default), 'setup default 與 type 不符或含秘密預設值', p.type === 'secret' ? 'setup-secret-exposure' : 'invalid-setup');
     const options = array(p.options, 'setup options');
     check(p.type === 'choice' ? options.length > 0 : options.length === 0, 'setup options 只適用於 choice 且不可為空');
@@ -81,7 +81,7 @@ export function validateSetup(m, check, known) {
     if (setup != null) for (const p of array(c.definition.parameters, 'MCP parameters')) {
       const declared = byId.get(p?.id);
       check(!(declared?.type === 'secret' && declared.secretUsage === 'setup-time'), 'setup-time 秘密不得成為 MCP runtime 身分', 'setup-secret-exposure');
-      if (p?.secret === true) check(declared?.type === 'secret' && declared.secretUsage === 'runtime', 'MCP secret parameter 必須對應 runtime setup parameter', 'invalid-setup-reference');
+      if (p?.secret === true) check(declared?.type === 'secret' && ['runtime', 'setup-and-runtime'].includes(declared.secretUsage), 'MCP secret parameter 必須對應 runtime setup parameter', 'invalid-setup-reference');
     }
   }
 }

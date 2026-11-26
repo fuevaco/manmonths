@@ -27,11 +27,18 @@
   RC.paramField = function paramField(p, inputs) {
     const input = setupInput(p);
     inputs.set(p.parameterId, input);
+    const clear = p.isSecret && p.isSet && !p.required && p.secretUsage === 'setup-and-runtime'
+      ? el('input', { type: 'checkbox' }) : null;
+    if (clear) {
+      inputs.set(p.parameterId + '/clear', clear);
+      clear.addEventListener('change', () => { input.disabled = clear.checked; if (clear.checked) input.value = ''; });
+    }
     const label = `${p.label || p.parameterId}${p.required ? '（必填）' : ''}`;
     const source = p.isSecret ? (p.isSet ? '已設定' : '未設定') : p.source && p.source !== 'Unset' ? `來源：${SOURCE_LABELS[p.source] || p.source}` : '';
     return el('div', { className: `field setup-field${p.type === 'boolean' ? ' setup-check' : ''}`, 'data-param-row': p.parameterId },
       p.type === 'boolean' ? el('label', { className: 'checkbox' }, input, el('span', { textContent: label })) : el('label', { textContent: label }),
       p.type === 'boolean' ? null : input,
+      clear ? el('label', { className: 'checkbox' }, clear, el('span', { textContent: '移除已儲存的權杖，改用公司網域帳號' })) : null,
       source ? el('div', { className: `hint${p.isSecret && p.isSet ? ' setup-set' : ''}`, 'data-role': 'param-state', textContent: source }) : null,
       p.description ? el('div', { className: 'hint', textContent: p.description }) : null);
   };
@@ -45,7 +52,8 @@
       if (!field) continue;
       const label = p.label || p.parameterId;
       if (p.isSecret) {
-        if (field.value) secrets[p.parameterId] = field.value;
+        if (inputs.get(p.parameterId + '/clear')?.checked) secrets[p.parameterId] = null;
+        else if (field.value) secrets[p.parameterId] = field.value;
         else if (p.required && !p.isSet && !error) error = `請輸入「${label}」`;
         continue;
       }
@@ -59,7 +67,7 @@
   RC.clearSecrets = (inputs) => { for (const field of inputs.values()) if (field.type === 'password') field.value = ''; };
 
   /** 儲存參數（與其他用戶端共用；秘密只存入作業系統的安全儲存區）。 */
-  RC.saveSetup = (packageKey, values, secrets) => call('rc.install.saveSetup', { packageKey, values, secrets }, SAVE_TIMEOUT_MS);
+  RC.saveSetup = (packageKey, values, secrets, planId) => call('rc.install.saveSetup', { packageKey, values, secrets, ...(planId ? { planId } : {}) }, SAVE_TIMEOUT_MS);
 
   // ---------- 明細區塊 ----------
   let setupInputs = new Map(); // 明細「設定參數」的輸入欄位

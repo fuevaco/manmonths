@@ -158,7 +158,9 @@ async function main() {
     }
     if (process.platform === 'darwin') {
       const result = run('security', ['find-generic-password', '-a', key, '-s', 'com.linkchain.lcaipack', '-w']);
-      return result.status === 0 ? result.stdout.replace(/\n$/, '') : null;
+      if (result.status === 44) return null;
+      if (result.status !== 0) throw new Error('無法讀取 macOS 鑰匙圈');
+      return result.stdout.replace(/\n$/, '');
     }
     if (process.platform !== 'linux') throw new Error('不支援的秘密儲存區');
     const env = secretServiceEnvironment(process.env);

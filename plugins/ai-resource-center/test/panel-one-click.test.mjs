@@ -211,6 +211,28 @@ test('缺少參數：表單沿用設定參數輸入元件，秘密用 password�
   assert.doesNotMatch(text(panel.get('view-main')), /canary-panel-token/);
 });
 
+test('選填的 PAT 可以留空、儲存或移除，而且安裝時不回顯', async () => {
+  const field = { parameterId: 'tfs-pat', label: 'PAT', type: 'secret', isSecret: true,
+    required: false, visible: true, secretUsage: 'setup-and-runtime' };
+  for (const mode of ['ad', 'pat', 'clear']) {
+    const { panel, calls, card, action } = await start({ run: input => input.confirmedPlanId ? ok(1)
+      : confirmation(['setupCommands'], { setupCommands: [command], optionalParameters: [{ ...field, isSet: mode === 'clear' }] }) });
+    await action(card(), 'install').fire('click'); await settle();
+    assert.equal(param(panel, 'tfs-pat').type, 'password');
+    if (mode === 'pat') param(panel, 'tfs-pat').value = 'synthetic-token';
+    if (mode === 'clear') {
+      const clear = findByData(panel.get('confirm-body'), 'param-row', 'tfs-pat').children
+        .flatMap(child => child.children).find(child => child.type === 'checkbox');
+      assert.ok(clear);
+      clear.checked = true;
+    }
+    await panel.get('confirm-primary').fire('click'); await settle();
+    const saved = calls.find(c => c.method === 'rc.install.saveSetup');
+    assert.deepEqual(saved?.input.secrets, mode === 'ad' ? undefined : { 'tfs-pat': mode === 'pat' ? 'synthetic-token' : null });
+    assert.equal(hidden(panel, 'confirm-layer'), true);
+  }
+});
+
 test('有失敗：卡片顯示紅色「N 個位置失敗」，點開精簡清單（工具、名稱、根目錄、原因、備份），只重試失敗項目', async () => {
   let fixed = false;
   const failure = { count: 1, targets: [{ ...claudeTarget, reason: '寫入失敗，已完整還原', backupPaths: ['/home/a/.claude/skills/hello.bak-lcaipack-1'] }] };

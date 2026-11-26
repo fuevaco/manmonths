@@ -103,7 +103,7 @@
       return b;
     };
     return el('div', { className: 'dev-card is-dev', 'data-role': 'local-package', 'data-package-key': key },
-      el('div', { className: 'dev-ct' }, el('span', { className: 'dev-name' }, span(name, { className: 'ell', 'data-role': 'package-name' })), more),
+      el('div', { className: 'dev-ct' }, el('span', { className: 'dev-name' }, span(name, { className: 'ell', 'data-role': 'package-name' })), RC.guideButton(pack), more),
       el('div', { className: 'dev-meta' }, span(key, { className: 'mono wrap', 'data-role': 'package-key' }), span(`開發中 ${pack.version}`, { className: 'badge b-dev', 'data-role': 'dev-badge' })),
       el('div', { className: 'muted mono ell', 'data-role': 'source-path', title: pack.sourcePath || '', textContent: pack.sourcePath || '（未記錄來源資料夾）' }),
       missing ? el('div', { className: 'dev-local-note', 'data-role': 'source-missing', textContent: '來源資料夾已不存在' }) : null,
@@ -233,10 +233,11 @@
       ctx.response = r; ctx.planId = r.planId ?? null; ctx.key = r.packageKey; ctx.inputs = new Map();
       ctx.phase = allBlocked ? 'blocked' : 'confirm';
       handle.setSubtitle(subtitleOf(r));
-      const params = !allBlocked ? plan.missingParameters || [] : [];
+      const params = !allBlocked ? [...(plan.missingParameters ?? []), ...(plan.optionalParameters ?? [])] : [];
       show([
         ctx.replanned ? el('div', { className: 'notice', 'data-role': 'replanned', textContent: '本機狀態已改變，以下是重新規劃後的內容，請再確認一次。' }) : null,
         okLine(allBlocked ? [] : r.tools),
+        r.summary?.hasFullGuide && ctx.planId ? RC.localGuideButton(ctx.planId) : null,
         disclosureBox(r.disclosures),
         r.replacesMarketVersion ? el('div', { className: 'notice', 'data-role': 'replaces-market', textContent: `將以開發中版本 ${r.version} 取代已安裝的市集版 ${r.replacesMarketVersion}；之後可在資源中心改用市集版。` }) : null,
         ...params.map(p => RC.paramField(p, ctx.inputs)),
@@ -265,9 +266,9 @@
       const r = ctx.response, plan = r.plan || {}, key = ctx.key;
       if (state.running.has(key)) throw new Error('這個資源包正在處理其他操作，請稍後再試');
       let saved = false;
-      if (plan.missingParameters?.length) {
-        const { values, secrets, error } = RC.collectSetup(plan.missingParameters, ctx.inputs);
-        if (error) { h.setError(error); return false; }
+      const { values, secrets, error } = RC.collectSetup([...(plan.missingParameters ?? []), ...(plan.optionalParameters ?? [])], ctx.inputs);
+      if (error) { h.setError(error); return false; }
+      if (Object.keys(values).length || Object.keys(secrets).length) {
         try {
           await call('rc.install.saveSetup', { packageKey: key, planId: ctx.planId, values, secrets }, SAVE_TIMEOUT_MS);
           saved = true;

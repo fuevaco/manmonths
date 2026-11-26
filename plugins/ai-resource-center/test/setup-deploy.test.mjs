@@ -9,6 +9,7 @@ import { ofBytes } from '../worker/deploy/digest.mjs';
 import { createPathRules } from '../worker/deploy/canonical-root.mjs';
 import { SetupValueStore } from '../worker/setup/values.mjs';
 import { createSecretManager, setupSecretReference } from '../worker/setup/secrets.mjs';
+import { openSecretChannel } from '../worker/setup/secret-channel.mjs';
 import { zip } from './zip-fixture.mjs';
 import { memoryStore } from './fake-secret-store.mjs';
 
@@ -96,6 +97,32 @@ test('執行期秘密 MCP：設定檔只寫受管 launcher 與非秘密身分，
   walk(e.dir);
   for (const f of files) assert.equal(fs.readFileSync(f, 'utf8').includes('canary-runtime-secret'), false, f);
   assert.equal(JSON.stringify(plan).includes('canary'), false);
+});
+
+test('雙用途選填秘密在兩個通道共用，留空也會登記可啟動的 MCP', t => {
+  const e = environment(t, { launcher: path.join(os.tmpdir(), 'launcher', 'lcaipack-mcp-launch.mjs') });
+  const parameter = { ...apiKey, required: false, secretUsage: 'setup-and-runtime' };
+  const pkg = setupPackage({ setup: { parameters: [parameter] }, parameters: [{ id: 'api-key', secret: true }] });
+  const plan = e.planner.plan(e.intent(pkg));
+  assert.equal(plan.canApply, true);
+  assert.equal(e.apply(plan).status, 'Succeeded');
+  const descriptor = JSON.parse(fs.readFileSync(path.join(plan.setup.setupRoot, 'mcp', 'echo.json'), 'utf8'));
+  assert.deepEqual(descriptor.runtimeSecrets, [{ parameterId: 'api-key', required: false }]);
+
+  const ref = setupSecretReference({ packageKey: 'demo-mcp', parameterId: 'api-key', scope: 'global', canonicalRoot: e.userHome });
+  const open = usage => openSecretChannel({
+    manager: e.secrets, packageKey: 'demo-mcp', scope: 'global', canonicalRoot: e.userHome,
+    declarations: [{ parameterId: 'api-key', required: false, usage: 'setup-and-runtime' }], usage
+  });
+  const empty = open('setup-time');
+  assert.equal(empty.isEmpty, true);
+  empty.dispose();
+  e.secrets.set(ref, 'synthetic-only');
+  for (const usage of ['setup-time', 'runtime']) {
+    const channel = open(usage);
+    assert.deepEqual(channel.parameterIds, ['api-key']);
+    channel.dispose();
+  }
 });
 
 test('Orca 沒有可用的受管 MCP launcher 時，需要執行期秘密的 MCP 揭露為阻擋問題', t => {

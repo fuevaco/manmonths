@@ -103,7 +103,7 @@ export function planSetup({ setup, packageKey, packageVersion, scope, projectRoo
   // 對照 ReportMissingParameters：沒有命令時，參數只為 MCP runtime 存在，缺值仍阻擋；有命令時只有真的會執行或 runtime 秘密才阻擋。
   const requiresValues = base.commands.length === 0 || base.commands.some(c => c.willExecute);
   for (const p of base.parameters.filter(p => p.needsInput)) {
-    if (!requiresValues && !(p.isSecret && p.secretUsage === SecretUsages.runtime)) continue;
+    if (!requiresValues && !(p.isSecret && (p.secretUsage === SecretUsages.runtime || p.secretUsage === SecretUsages.setupAndRuntime))) continue;
     base.problems.push(blocking(ProblemCodes.setupParameterMissing, `設定參數 '${p.parameterId}' 尚未提供值`,
       p.isSecret ? `'${p.label}' 是必填秘密，必須先存入作業系統安全儲存區才能繼續；秘密不會出現在 Plan、log 或設定檔。`
         : `'${p.label}' 是必填參數，請提供值後重新規劃。`,
@@ -139,7 +139,10 @@ function planCommands({ setup, packageKey, packageVersion, scope, projectRoot, h
     const runOnUpdate = command.runOnUpdate ?? SetupCommandLimits.defaultRunOnUpdate;
     const eligibility = eligibilityOf(command);
     const resolved = linux && runner === SetupRunners.powershell ? null : runners.resolve(runner, environment.operatingSystem);
-    const decision = completions.decide({ packageKey, commandId, packageVersion, scriptSha256: sha, intent, runOnUpdate });
+    let decision = completions.decide({ packageKey, commandId, packageVersion, scriptSha256: sha, intent, runOnUpdate });
+    if (!decision.shouldRun && (setup.parameters ?? []).some(p => p.secretUsage === SecretUsages.setupAndRuntime)) {
+      decision = { shouldRun: true, reason: 'VerifyCredentials' };
+    }
     const willExecute = decision.shouldRun && eligibility === 'Eligible' && resolved != null;
     if (timeout < SetupCommandLimits.minTimeoutMinutes || timeout > SetupCommandLimits.maxTimeoutMinutes) {
       problems.push(blocking(ProblemCodes.invalidSetup, `設定命令 '${commandId}' 的 timeoutMinutes ${timeout} 超出允許範圍`,

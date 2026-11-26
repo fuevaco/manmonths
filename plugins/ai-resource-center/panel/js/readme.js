@@ -128,25 +128,51 @@
 
   RC.guideButton = function guideButton(p) {
     if (p?.hasFullGuide !== true) return null;
-    const busy = preparingGuides.has(p.packageKey);
-    const ready = !busy && readyUrl(p.packageKey) !== null;
+    const key = p.localFullGuide ? `installed-local:${p.packageKey}` : p.packageKey;
+    const busy = preparingGuides.has(key);
+    const ready = !busy && readyUrl(key) !== null;
     const label = busy ? '準備中…' : ready ? '開啟完整說明頁（已準備好）' : '開啟完整說明頁';
     const button = el('button', { type: 'button', className: `btn btn-icon btn-card-icon${busy ? ' is-busy' : ''}${ready ? ' is-ready' : ''}`, title: label, 'aria-label': label, 'aria-busy': String(busy),
       'data-action': 'full-guide', disabled: busy }, busy ? RC.ICONS.spinner() : RC.ICONS.globe());
-    button.addEventListener('click', () => openFullGuide(p.packageKey));
+    button.addEventListener('click', () => openFullGuide(p.packageKey, key, p.localFullGuide));
     return button;
   };
 
-  async function openFullGuide(key) {
+  RC.localGuideButton = function localGuideButton(planId) {
+    const label = el('span', { textContent: '檢視完整說明頁' });
+    const button = el('button', { type: 'button', className: 'btn ghost', 'data-action': 'local-full-guide' },
+      RC.ICONS.globe(), label);
+    const key = `local-guide:${planId}`;
+    button.addEventListener('click', async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      label.textContent = '準備中…';
+      try {
+        const cached = readyUrl(key);
+        const result = cached ? { url: cached } : await call('rc.dev.guide.prepare', { planId }, GUIDE_TIMEOUT_MS);
+        if (typeof result?.url !== 'string' || !/^http:\/\/127\.0\.0\.1:\d+\//.test(result.url))
+          throw new Error('完整說明頁網址無效');
+        await launchGuide(key, result.url, !cached, { rerender: false });
+      } catch (e) {
+        RC.actionFailed(e);
+      } finally {
+        button.disabled = false;
+        label.textContent = readyUrl(key) ? '開啟完整說明頁（已準備好）' : '檢視完整說明頁';
+      }
+    });
+    return button;
+  };
+
+  async function openFullGuide(packageKey, key, local) {
     if (preparingGuides.has(key)) return;
     // 上一次準備好但沒能開啟（使用者手勢過期等）：直接用已拿到的網址，這次點擊就是新的手勢
     const ready = readyUrl(key);
-    if (ready) return launchGuide(key, ready);
+    if (ready) return launchGuide(key, ready, false, { packageKey });
     preparingGuides.add(key);
-    RC.rerenderPackage(key);
+    RC.rerenderPackage(packageKey);
     let url = null;
     try {
-      const result = await call('rc.guide.prepare', { packageKey: key }, GUIDE_TIMEOUT_MS);
+      const result = await call(local ? 'rc.dev.guide.openInstalled' : 'rc.guide.prepare', { packageKey }, GUIDE_TIMEOUT_MS);
       url = typeof result?.url === 'string' && /^https?:\/\//i.test(result.url) ? result.url : null;
       if (!url) RC.toast('這個版本的外掛無法開啟完整說明頁，請更新 Orca 外掛', 'error');
     } catch (e) {
@@ -155,11 +181,11 @@
       preparingGuides.delete(key);
     }
     // prepare 可能花了不少時間而使手勢過期：開啟失敗時改成「已準備好，再按一次開啟」
-    if (url) await launchGuide(key, url, true);
-    RC.rerenderPackage(key);
+    if (url) await launchGuide(key, url, true, { rerender: false });
+    RC.rerenderPackage(packageKey);
   }
 
-  async function launchGuide(key, url, fresh = false) {
+  async function launchGuide(key, url, fresh = false, { rerender = true, packageKey = key } = {}) {
     try {
       const result = await openExternalUrl(url);
       if (result?.opened === false) {
@@ -172,6 +198,6 @@
       readyGuides.set(key, { url, at: fresh ? Date.now() : readyGuides.get(key)?.at ?? Date.now() });
       RC.toast(`無法開啟完整說明頁：${RC.messageOf(e)}。說明頁已準備好，請再按一次 🌐 開啟`, 'error');
     }
-    RC.rerenderPackage(key);
+    if (rerender) RC.rerenderPackage(packageKey);
   }
 })();

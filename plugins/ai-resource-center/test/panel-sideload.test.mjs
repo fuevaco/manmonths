@@ -83,6 +83,33 @@ test('「從資料夾安裝…」開啟 sheet：標題、路徑列與「預檢�
   assert.equal(pathInput(typed.panel).value, '/work/mine');
 });
 
+test('本機包有完整說明頁時，確認畫面可開啟已預檢版本', async () => {
+  const env = await start({ handlers: {
+    'rc.dev.install.prepare': () => prepared({ summary: { ...summary, hasFullGuide: true } }),
+    'rc.dev.guide.prepare': () => ({ url: 'http://127.0.0.1:51234/index.html' })
+  } });
+  await precheck(env);
+  const button = findByData(env.panel.get('sheet-body'), 'action', 'local-full-guide');
+  assert.match(text(button), /檢視完整說明頁/);
+  await button.fire('click');
+  await settle();
+  assert.deepEqual(env.of('rc.dev.guide.prepare').map(c => c.input), [{ planId: 'plan-1' }]);
+  assert.equal(env.count('rc.install.run'), 0);
+});
+
+test('本機開發中卡片的地球圖示開啟本機說明頁', async () => {
+  const env = await start({
+    local: [localPkg({ hasFullGuide: true, localFullGuide: true })],
+    handlers: { 'rc.dev.guide.openInstalled': () => ({ url: 'http://127.0.0.1:51234/index.html' }) }
+  });
+  const button = findByData(env.panel.get('developer-local'), 'action', 'full-guide');
+  assert.ok(button);
+  await button.fire('click');
+  await settle();
+  assert.deepEqual(env.of('rc.dev.guide.openInstalled').map(c => c.input), [{ packageKey: 'example.dev' }]);
+  assert.equal(env.count('rc.guide.prepare'), 0);
+});
+
 test('沒有路徑時「預檢」停用；貼上的路徑會去掉前後空白與雙引號再送出', async () => {
   const env = await start({ handlers: { 'rc.dev.install.prepare': () => prepared() } });
   await openInstall(env.panel);

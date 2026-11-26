@@ -6,12 +6,11 @@
 //   <parameterId> <base64(utf8(value))>
 //   LCAIPACK-SECRET-END
 // 值以 base64 編碼，含換行、空白或結束標記都不可能破壞框架；即使沒有任何秘密也會輸出 begin／end，讓腳本永遠面對同一個確定性協定。
-import { setupSecretReference, SecretUsages, SetupSecretStoreError } from './secrets.mjs';
+import { setupSecretReference, knownUsage, includesUsage, SetupSecretStoreError } from './secrets.mjs';
 
 export const BeginMarker = 'LCAIPACK-SECRET-BEGIN 1';
 export const EndMarker = 'LCAIPACK-SECRET-END';
 const LineEnding = '\n';
-const knownUsage = u => u === SecretUsages.setupTime || u === SecretUsages.runtime;
 
 /**
  * 依 usage 過濾宣告後開啟通道；值在此刻自安全儲存區讀出，只留在本物件的位元組緩衝內。
@@ -21,7 +20,7 @@ export function openSecretChannel({ manager, packageKey, scope, canonicalRoot, d
   if (!knownUsage(usage)) throw new RangeError(`未知的 secretUsage：${usage}`);
   const entries = [];
   for (const declaration of declarations ?? []) {
-    if (declaration.usage !== usage) continue;
+    if (!includesUsage(declaration.usage, usage)) continue;
     const reference = setupSecretReference({ packageKey, parameterId: declaration.parameterId, scope, canonicalRoot }, rules);
     const value = manager.read(reference);
     if (typeof value !== 'string' || !value) {

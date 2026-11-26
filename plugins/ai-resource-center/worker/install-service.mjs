@@ -174,11 +174,15 @@ export function createInstallService({ packages, session, preferences, installed
     }
   }
   function confirmation(state) {
-    const missingParameters = [], setupCommands = [], blocked = [];
+    const missingParameters = [], optionalParameters = [], setupCommands = [], blocked = [];
     let deployableCount = 0;
     for (const g of state.groups.filter(g => !g.completed)) {
       deployableCount += g.plan.deployableCount;
-      missingParameters.push(...parameters(g.plan.setup).filter(p => p.required && p.needsInput));
+      const fields = parameters(g.plan.setup);
+      missingParameters.push(...fields.filter(p => p.required && p.needsInput));
+      for (const field of fields.filter(p => p.visible && !p.required && p.secretUsage === 'setup-and-runtime')) {
+        if (!optionalParameters.some(p => p.parameterId === field.parameterId)) optionalParameters.push(field);
+      }
       setupCommands.push(...(g.plan.setup?.commands ?? []));
       for (const t of g.plan.targets.filter(t => !t.canApply)) {
         blocked.push({ ...targetSummary(g.selected.find(s => s.id === t.id)), ...describeBlockedTarget(t.problems.filter(p => p.severity === 'Blocking')) });
@@ -191,7 +195,7 @@ export function createInstallService({ packages, session, preferences, installed
     }
     const reasons = [...(missingParameters.length ? ['missingParameters'] : []), ...(setupCommands.some(c => c.willExecute) ? ['setupCommands'] : []), ...(blocked.length ? ['blockedTargets'] : [])];
     const allBlocked = deployableCount === 0 && blocked.length > 0;
-    return { reasons, allBlocked, plan: { deployableCount, blockedTargets: blocked, setupCommands, missingParameters } };
+    return { reasons, allBlocked, plan: { deployableCount, blockedTargets: blocked, setupCommands, missingParameters, ...(optionalParameters.length ? { optionalParameters } : {}) } };
   }
   /** 從資料夾安裝的摘要：將安裝到的 AI 工具（可部署的目標，依工具去重）。 */
   function toolsOf(state) {
@@ -350,6 +354,11 @@ export function createInstallService({ packages, session, preferences, installed
         const { planId, ...rest } = input;
         return parameters(await createDeploy().packageSetup({ ...rest, version: local.version, previewMode: true, localSource: local.planInput.localSource }, save));
       }
+      const group = state.groups.find(g => !g.completed && g.plan.setup?.parameters?.some(p => p.secretUsage === 'setup-and-runtime'));
+      if (group) {
+        const { planId, ...rest } = input;
+        return parameters(await createDeploy().packageSetup({ ...rest, version: group.version, previewMode: group.planInput.previewMode }, save));
+      }
     }
     if (input.version === undefined) {
       // 目前安裝的是開發中版本：設定參數依來源資料夾重新打包的確切內容解析（市集可能沒有此資源包）。
@@ -401,6 +410,17 @@ export function createInstallService({ packages, session, preferences, installed
     await disposeState(state);
     return { discarded: true };
   }
-  return { run, cancel, setup, installFromFolder, discard, lastFailure, lastSkipped, refreshSkipped, backupsFor, detachedFor,
+  async function localGuideArtifact(planId) {
+    const state = typeof planId === 'string' ? pending.get(planId) : null;
+    const origin = await session.identity();
+    if (!state?.sideload || pending.get(planId) !== state ||
+        state.origin?.marketUrl !== origin?.marketUrl || state.origin?.account !== origin?.account)
+      throw new RcError(ErrorCode.planStale, '確認已失效，請重新執行預檢');
+    if (!state.review?.summary?.hasFullGuide)
+      throw new RcError(ErrorCode.guideUnavailable, '此資源包未提供完整說明頁');
+    return state.artifacts.get(state.review.sourcePath);
+  }
+
+  return { run, cancel, setup, installFromFolder, discard, localGuideArtifact, lastFailure, lastSkipped, refreshSkipped, backupsFor, detachedFor,
     discardPending() { for (const state of pending.values()) void disposeState(state); pending.clear(); } };
 }

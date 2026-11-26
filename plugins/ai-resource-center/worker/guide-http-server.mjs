@@ -48,7 +48,7 @@ export function createGuideHttpServer({ makeServer = createServer, scheduler = {
     } catch { res.writeHead(404); res.end(); }
   }
 
-  async function register(packageKey, version, file) {
+  async function register(packageKey, version, file, localRevision) {
     if (!server) {
       const current = makeServer((req, res) => { void respond(req, res); });
       server = current;
@@ -67,7 +67,7 @@ export function createGuideHttpServer({ makeServer = createServer, scheduler = {
       throw new RcError(ErrorCode.saveFailed, '無法啟動完整說明頁本機伺服器，請重試');
     }
     if (server !== current) { current.close(); throw stopped(); }
-    const route = `/${token}/${packageKey}/${version}/index.html`;
+    const route = `/${token}/${packageKey}/${version}/${localRevision ? `local-${localRevision}/` : ''}index.html`;
     pages.set(route, file);
     touch();
     return `http://127.0.0.1:${current.address().port}${route}`;

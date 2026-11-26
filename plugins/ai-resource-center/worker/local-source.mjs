@@ -18,6 +18,12 @@ export function sourceExists(folder) {
   catch { return false; }
 }
 
+export function sourceHasFullGuide(folder) {
+  if (!sourceExists(folder)) return false;
+  try { return fs.lstatSync(path.join(folder, 'index.html')).isFile(); }
+  catch { return false; }
+}
+
 /** 讀來源資料夾的 lcpack.json（允許註解與尾逗號）；讀不到或格式錯誤時回傳 null，由呼叫端退回收據。 */
 export function readSourceManifest(folder) {
   if (typeof folder !== 'string' || !path.isAbsolute(folder)) return null;
@@ -81,6 +87,7 @@ export function listLocalPackages(receipts) {
     const manifest = readSourceManifest(sourcePath);
     const name = typeof manifest?.name === 'string' && manifest.name.trim() ? manifest.name : packageKey;
     const tools = supportedTools.filter(tool => records.some(r => toolId(r) === tool.hostId)).map(({ hostId, label }) => ({ hostId, label }));
-    return { packageKey, name, version: current.packageVersion, sourcePath, sourceExists: sourceExists(sourcePath), tools };
+    return { packageKey, name, version: current.packageVersion, sourcePath, sourceExists: sourceExists(sourcePath),
+      ...(sourceHasFullGuide(sourcePath) ? { hasFullGuide: true, localFullGuide: true } : {}), tools };
   }).sort((a, b) => a.packageKey < b.packageKey ? -1 : a.packageKey > b.packageKey ? 1 : 0);
 }

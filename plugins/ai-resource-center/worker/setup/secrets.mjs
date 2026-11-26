@@ -13,8 +13,9 @@ import { ofText } from '../deploy/digest.mjs';
 
 export const KeyPrefix = 'lcaipack:setup:';
 export const KeychainService = 'com.linkchain.lcaipack';
-export const SecretUsages = Object.freeze({ setupTime: 'setup-time', runtime: 'runtime' });
-const knownUsage = u => u === SecretUsages.setupTime || u === SecretUsages.runtime;
+export const SecretUsages = Object.freeze({ setupTime: 'setup-time', runtime: 'runtime', setupAndRuntime: 'setup-and-runtime' });
+export const knownUsage = u => Object.values(SecretUsages).includes(u);
+export const includesUsage = (declared, usage) => declared === usage || (declared === SecretUsages.setupAndRuntime && knownUsage(usage));
 
 /** 安全儲存區操作失敗：一律阻擋，呼叫端不得改用明文來源。訊息只含參數身分。 */
 export class SetupSecretStoreError extends Error {
@@ -53,7 +54,7 @@ export function createSecretManager(store, rules = createPathRules()) {
       const selected = [];
       for (const d of declarations) {
         if (!knownUsage(d.usage)) throw new RangeError(`未知的 secretUsage：${d.usage}`);
-        if (usageFilter === null || d.usage === usageFilter) selected.push(d);
+        if (usageFilter === null || includesUsage(d.usage, usageFilter)) selected.push(d);
       }
       if (!selected.length) return [];
       const refs = selected.map(d => setupSecretReference({ packageKey, parameterId: d.parameterId, scope, canonicalRoot }, rules));
@@ -154,22 +155,24 @@ export function createWindowsCredentialStore({ run = defaultRun, systemRoot = pr
 const quote = text => `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
 export function createMacKeychainStore({ run = defaultRun } = {}) {
-  // 與 MacKeychainSecretStore 相同：讀取以 exit code 判斷有無，寫入與刪除不因 exit code 中斷。
-  // 差異：原實作的 Trim() 會吃掉秘密前後的空白，這裡只去掉 `security -w` 附加的單一結尾換行；
-  // 存在性查詢不帶 -w（原實作的 Exists 其實是讀出值再判斷 null），只看 exit code，不讀出秘密。
+  const existsResult = (result, mayBeMissing = true) => {
+    if (mayBeMissing && result.status === 44) return false;
+    if (result.status !== 0) throw new Error('無法存取 macOS 鑰匙圈');
+    return true;
+  };
   const get = key => {
     const r = run('security', ['find-generic-password', '-a', key, '-s', KeychainService, '-w'], undefined);
-    return r.status === 0 ? r.stdout.replace(/\n$/, '') : null;
+    return existsResult(r) ? r.stdout.replace(/\n$/, '') : null;
   };
-  const exists = key => run('security', ['find-generic-password', '-a', key, '-s', KeychainService], undefined).status === 0;
+  const exists = key => existsResult(run('security', ['find-generic-password', '-a', key, '-s', KeychainService], undefined));
   return {
     existsMany: keys => keys.map(exists),
     get,
     set(key, value) {
       if (/[\r\n]/.test(value) || /[\r\n]/.test(key)) throw new Error('macOS Keychain 的秘密值不可包含換行');
-      run('security', ['-i'], `add-generic-password -U -a ${quote(key)} -s ${quote(KeychainService)} -w ${quote(value)}\n`);
+      existsResult(run('security', ['-i'], `add-generic-password -U -a ${quote(key)} -s ${quote(KeychainService)} -w ${quote(value)}\n`), false);
     },
-    delete: key => void run('security', ['delete-generic-password', '-a', key, '-s', KeychainService], undefined)
+    delete: key => { existsResult(run('security', ['delete-generic-password', '-a', key, '-s', KeychainService], undefined)); }
   };
 }
 

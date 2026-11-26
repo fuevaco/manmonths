@@ -10,13 +10,13 @@
 // rc.dev.listLocal → { packages: [{ packageKey, name, version, sourcePath, sourceExists, tools: [{ hostId, label }] }] }
 // rc.dev.reinstallLocal { packageKey } → 同 rc.dev.install.prepare（來源資料夾為收據記錄的 sourcePath；不存在時錯誤碼 source_missing）
 import path from 'node:path';
-import { badParams } from '../contract.mjs';
+import { badParams, RcError, ErrorCode } from '../contract.mjs';
 import { packageInput } from '../package-service.mjs';
-import { listLocalPackages, sourceExists, sourceMissingError } from '../local-source.mjs';
+import { listLocalPackages, sourceExists, sourceMissingError, resolveSourceFolder, disposeArtifact } from '../local-source.mjs';
 
 const lastFolderKey = 'resource-center.lastFolder.install';
 
-export function registerSideloadHandlers(router, { installation, installed, storage, ready = async () => {} }) {
+export function registerSideloadHandlers(router, { installation, installed, storage, guides, tempRoot, ready = async () => {} }) {
   async function prepare(folder) {
     await ready();
     return installation.installFromFolder(folder);
@@ -32,6 +32,20 @@ export function registerSideloadHandlers(router, { installation, installed, stor
     return { folder: typeof folder === 'string' ? folder : null };
   });
   router.handle('rc.dev.listLocal', () => ({ packages: listLocalPackages(installed.receipts({ globalOnly: true })) }));
+  router.handle('rc.dev.guide.openInstalled', async input => {
+    packageInput(input);
+    await ready();
+    const local = listLocalPackages(installed.receipts({ globalOnly: true })).find(p => p.packageKey === input.packageKey);
+    if (!local) throw badParams('找不到這個資源包的開發中版本安裝紀錄');
+    if (!local.sourceExists) throw sourceMissingError(local.sourcePath);
+    if (!local.hasFullGuide) throw new RcError(ErrorCode.guideUnavailable, '來源資料夾未提供完整說明頁');
+    const { inspection, artifact } = await resolveSourceFolder(local.sourcePath, { tempRoot });
+    if (!artifact) throw new RcError(ErrorCode.invalidPackage, inspection.blocking[0]?.message ?? '來源資料夾未通過預檢');
+    try {
+      if (artifact.key !== input.packageKey) throw badParams('來源資料夾的資源包識別碼已變更');
+      return await guides.prepareLocal(artifact);
+    } finally { await disposeArtifact(artifact); }
+  });
   router.handle('rc.dev.reinstallLocal', async input => {
     packageInput(input);
     const local = listLocalPackages(installed.receipts({ globalOnly: true })).find(p => p.packageKey === input.packageKey);

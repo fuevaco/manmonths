@@ -85,6 +85,30 @@ export function createFullGuideService({ downloads, packages, session, preferenc
       return { url: await http.register(input.packageKey, selected.version, file), path: file };
     });
   }
+
+  async function prepareLocal({ key, version, zipPath, sha256 }) {
+    const started = generation;
+    packageInput({ packageKey: key, version }, true);
+    if (version.endsWith('.')) throw badParams('資源版本包含不安全的路徑片段');
+    return serial(async () => {
+      const stat = await lstat(zipPath).catch(error => {
+        if (error.code === 'ENOENT') throw new RcError(ErrorCode.planStale, '確認已失效，請重新執行預檢');
+        throw error;
+      });
+      if (!stat.isFile()) throw new RcError(ErrorCode.unsafePath, '本機打包內容無法安全讀取');
+      const zip = await readFile(zipPath);
+      if (digest(zip) !== sha256) throw new RcError(ErrorCode.checksumMismatch, '本機打包內容已變更，請重新預檢');
+      const bytes = readPackageZip(zip, limits).get('index.html');
+      if (!bytes) throw new RcError(ErrorCode.guideIndexMissing, '來源資料夾缺少根目錄 index.html');
+      if (bytes.length > maxGuideBytes) throw tooLarge();
+      const revision = sha256.slice(0, 16);
+      const file = path.join(root, key, version, revision, 'index.html');
+      await atomicCacheWrite(file, bytes);
+      if (disposed || started !== generation) throw new RcError(ErrorCode.saveFailed, '完整說明頁準備已停止，請重新開啟');
+      return { url: await http.register(key, version, file, revision) };
+    });
+  }
+
   function stop() { generation++; http.stop(); }
-  return { prepare, ready, stop, dispose() { disposed = true; stop(); } };
+  return { prepare, prepareLocal, ready, stop, dispose() { disposed = true; stop(); } };
 }
