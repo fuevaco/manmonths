@@ -156,9 +156,11 @@ const mcpDriver = Object.freeze({ kind: 'mcp', expand(content, route, ctx) {
       host: ctx.host, scope: ctx.scope, operatingSystem: ctx.operatingSystem, packageKey: ctx.package.identity.key, configPath: destination, setup: ctx.setup ?? null
     });
     adapter.applyPatch(local, exists, patch); // 在規劃時確認可安全 render；不寫檔。
-  } catch {
+  } catch (error) {
+    // 保留原因方便排查。JSON／TOML 解析訊息會引用設定檔片段（可能含權杖），只記錄錯誤類型、代碼與位置。
+    const cause = [error?.name ?? 'Error', error?.code, error?.line != null ? `第 ${error.line} 行` : null].filter(Boolean).join(' ');
     return { mutations: [], configuration: [], artifacts: [], problems: [blocking(ProblemCodes.configConflict,
-      `目標設定檔無法安全解析或寫入：${destination}`, '請修正設定檔後重試。',
+      `目標設定檔無法安全解析或寫入：${destination}`, `請修正設定檔後重試。（${cause}）`,
       { host: ctx.host, scope: ctx.scope, contentId: content.id, path: destination, configPath: destination })] };
   }
   const current = exists ? adapter.readNodeJson(local, patch.nodePath) : null;
