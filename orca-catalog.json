@@ -18,7 +18,7 @@
       "releases": [
         {
           "version": "1.5.0",
-          "commit": "447beddc2e9f45e86cb42ab0cfb41f94dd9eada4",
+          "commit": "f7b88f2e8e4a1c5a4b5f0b4883258847dbc4ff23",
           "contentHash": "fcf345d15c10a7f61105bdcad151fffae1f15b9edf0ac94790a5250a2dd25619",
           "execution": "trusted-worker",
           "minimumOrca": "1.4.259",
