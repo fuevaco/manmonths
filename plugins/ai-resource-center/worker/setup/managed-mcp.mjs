@@ -13,7 +13,7 @@ export const LaunchFormatVersion = 1;
 /** launcherPath 是腳本絕對路徑或延遲解析函式；沒有 setup 回傳 null，規劃與套用共用此建構點。 */
 export function buildSetupRenderContext(pkg, setupPlan, launcherPath) {
   if (!setupPlan?.hasSetup) return null;
-  const runtimeSecretParameterIds = new Set(setupPlan.parameters.filter(p => p.isSecret && p.secretUsage === 'runtime').map(p => p.parameterId));
+  const runtimeSecretParameterIds = new Set(setupPlan.parameters.filter(p => p.isSecret && ['runtime', 'setup-and-runtime'].includes(p.secretUsage)).map(p => p.parameterId));
   let launcherUnavailableReason;
   if (typeof launcherPath === 'function') {
     try {
@@ -26,7 +26,8 @@ export function buildSetupRenderContext(pkg, setupPlan, launcherPath) {
     }
   }
   return Object.freeze({ packageKey: pkg.identity.key, packageVersion: pkg.identity.version, scope: setupPlan.scope, canonicalRoot: setupPlan.canonicalRoot,
-    ...(launcherUnavailableReason ? { launcherUnavailableReason } : {}), setupRoot: setupPlan.setupRoot, launcherPath: launcherPath ?? null, runtimeSecretParameterIds });
+    ...(launcherUnavailableReason ? { launcherUnavailableReason } : {}), setupRoot: setupPlan.setupRoot, launcherPath: launcherPath ?? null, runtimeSecretParameterIds,
+    optionalRuntimeSecretIds: new Set(setupPlan.parameters.filter(p => p.secretUsage === 'setup-and-runtime' && !p.required).map(p => p.parameterId)) });
 }
 
 export function runtimeSecretIds(definition, setup) {
@@ -47,7 +48,7 @@ export function buildLaunchDescriptor(content, setup, operatingSystem, resolveLa
   return { launchFormatVersion: LaunchFormatVersion, packageKey: setup.packageKey, packageVersion: setup.packageVersion, contentId: content.id,
     scope: setup.scope, canonicalRoot: rules.normalize(setup.canonicalRoot), setupRoot: setup.setupRoot, command, args,
     cwd: typeof definition.cwd === 'string' ? resolve(definition.cwd) : null, env,
-    runtimeSecrets: runtimeSecretIds(definition, setup).map(id => ({ parameterId: id, required: true })) };
+    runtimeSecrets: runtimeSecretIds(definition, setup).map(id => ({ parameterId: id, required: !setup.optionalRuntimeSecretIds?.has(id) })) };
 }
 
 export function launchDescriptorPath(setupRoot, contentId) {

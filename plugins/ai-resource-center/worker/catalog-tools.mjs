@@ -3,7 +3,7 @@ import { withDisplayPath } from './display-path.mjs';
 import { targetSummary, toolId, supportedTools } from './host-labels.mjs';
 import { HostIds, SurfaceIds } from './deploy/host-profiles.mjs';
 import { pendingRoots } from './deploy/root-coverage.mjs';
-import { currentReceipt, readSourceManifest, manifestContents, sourceExists, sourceMissingMessage } from './local-source.mjs';
+import { currentReceipt, readSourceManifest, manifestContents, sourceExists, sourceHasFullGuide, sourceMissingMessage } from './local-source.mjs';
 export function createCatalogTools({ packages, downloads, detectTargets, readReceipts = () => [], lastFailure = async () => null, lastSkipped = async () => null, refreshSkipped = async () => {}, backupsFor = async () => [], detachedFor = async () => [], platform = process.platform }) {
   const caches = new WeakMap();
   let active = 0;
@@ -89,6 +89,7 @@ export function createCatalogTools({ packages, downloads, detectTargets, readRec
       return { ...p, ...(p.deployments ? { deployments: p.deployments.map(d => ({ ...withDisplayPath(d, local), label: targetSummary(d).label,
         backupPaths: backups.filter(b => b.targetId === d.id).map(b => b.backupPath) })) } : {}),
         hosts, tools, pendingTargets: { count: pending.length, targets: pending },
+        ...(devSource ? { hasFullGuide: sourceHasFullGuide(current.sourcePath), localFullGuide: true } : {}),
         // 補裝開發中版本要從來源資料夾重新打包；來源已不存在時停用「補裝」並說明原因。
         fillUnavailableReason: pending.length && devSource && !sourceExists(current.sourcePath) ? sourceMissingMessage(current.sourcePath) : null,
         lastFailure: failure, lastSkipped: skipped, backups };

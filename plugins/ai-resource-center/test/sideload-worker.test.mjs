@@ -85,6 +85,21 @@ async function environment(t, { marketVersions = null } = {}) {
   return { dir, userHome, lcaipackHome, tempRoot, source, write, root, market, installs, worker, secretStore, executions, control, receipts, receiptsText, temps, prepare, run, install, list };
 }
 
+test('從資料夾預檢可開啟打包時的完整說明頁，丟棄後無法準備新網址', async t => {
+  const e = await environment(t);
+  const html = '<!doctype html><title>Local guide</title><p>Reviewed snapshot</p>';
+  e.write('index.html', html);
+  const review = await e.prepare();
+  assert.equal(review.summary.hasFullGuide, true);
+  e.write('index.html', '<p>Changed after review</p>');
+  const { url } = await e.worker.call('rc.dev.guide.prepare', { planId: review.planId });
+  const response = await fetch(url);
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), html);
+  assert.equal((await e.worker.call('rc.install.discard', { planId: review.planId })).discarded, true);
+  await assert.rejects(e.worker.call('rc.dev.guide.prepare', { planId: review.planId }), { code: 'plan_stale' });
+});
+
 test('預檢有阻擋項時只回傳阻擋清單，不打包也不規劃', async t => {
   const e = await environment(t);
   fs.rmSync(path.join(e.source, 'README.md'));
@@ -164,6 +179,19 @@ test('取代已安裝的市集版時提示版號；同一個開發中版本重�
   assert.deepEqual(again.reasons, [], '設定參數已儲存、命令已完成時只剩摘要確認');
   assert.equal((await e.run({ action: 'install', confirmedPlanId: again.planId })).ok, true);
   assert.equal(e.installs.length, 1, '只有市集安裝送出回報');
+});
+
+test('已側載的資源包可從卡片預覽來源說明頁，不需重新安裝', async t => {
+  const e = await environment(t);
+  e.write('index.html', '<p>Original</p>');
+  assert.equal((await e.install(await e.prepare())).ok, true);
+  e.write('index.html', '<p>Updated after install</p>');
+  const [local] = (await e.worker.call('rc.dev.listLocal')).packages;
+  assert.equal(local.hasFullGuide, true);
+  assert.equal(local.localFullGuide, true);
+  const { url } = await e.worker.call('rc.dev.guide.openInstalled', { packageKey: KEY });
+  assert.equal(await (await fetch(url)).text(), '<p>Updated after install</p>');
+  assert.equal(e.executions.length, 1);
 });
 
 test('本機開發中清單讀來源 lcpack.json；來源資料夾不存在時只能解除安裝', async t => {

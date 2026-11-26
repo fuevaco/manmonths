@@ -55,11 +55,14 @@ export function createSetupInputService({ home, userHome, platform = process.pla
     for (const [id, value] of Object.entries(secretValues)) {
       const p = byId.get(id);
       if (!p?.isSecret) throw badParams(`未知的秘密參數：${id}`);
-      if (typeof value !== 'string' || value === '') throw badParams(`秘密參數 ${id} 不得為空`);
+      if (!(value === null && !p.required && p.secretUsage === 'setup-and-runtime') && (typeof value !== 'string' || value === '')) throw badParams(`秘密參數 ${id} 不得為空`);
       pendingSecrets.push([setupSecretReference({ packageKey: setup.packageKey, parameterId: id, scope: setup.scope, canonicalRoot: setup.canonicalRoot }, rules), value]);
     }
 
-    for (const [ref, value] of pendingSecrets) secrets.set(ref, value);
+    for (const [ref, value] of pendingSecrets) {
+      if (value === null) secrets.delete(ref);
+      else secrets.set(ref, value);
+    }
     if (Object.keys(plain).length) {
       SetupValueStore.forGlobal({ home, userProfile: userHome, rules })
         .setValues(setup.packageKey, plain, setup.parameters.filter(p => p.isSecret).map(p => p.parameterId));

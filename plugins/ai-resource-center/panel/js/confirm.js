@@ -8,7 +8,7 @@
 
   // 設定命令執行或略過的理由（對照 PlanRenderer.DescribeReason）
   const REASON_LABELS = { FirstRun: '第一次執行', PreviousFailure: '上一次執行沒有成功，這次重試', ScriptChanged: '腳本內容與上次成功時不同', Reconfigure: '重新套用設定',
-    UpdateRunOnUpdate: '版本改變且作者宣告更新時執行', SkippedAlreadySucceeded: '同版本且上次已成功', SkippedUpdateWithoutRunOnUpdate: '版本改變但作者未宣告更新時執行' };
+    VerifyCredentials: '重新驗證連線憑證', UpdateRunOnUpdate: '版本改變且作者宣告更新時執行', SkippedAlreadySucceeded: '同版本且上次已成功', SkippedUpdateWithoutRunOnUpdate: '版本改變但作者未宣告更新時執行' };
   const BORROWED_NOTICE = '此命令是為 macOS 撰寫，將在 Linux 以 bash 執行。'; // Linux 借用 macOS 命令（planning.mjs 的 borrowedFromOs）
   const ELIGIBILITY_LABELS = { UnsupportedOperatingSystem: '不適用於本機作業系統', UnsupportedArchitecture: '不適用於本機處理器架構' };
 
@@ -146,6 +146,8 @@
       !allBlocked && plan.missingParameters?.length ? confirmSection('missingParameters', '需要設定參數',
         el('div', { className: 'hint', textContent: '設定儲存在這台電腦的共用設定檔；秘密只存入作業系統的安全儲存區。' }),
         ...plan.missingParameters.map(param => RC.paramField(param, st.inputs))) : null,
+      !allBlocked && plan.optionalParameters?.length ? confirmSection('optionalParameters', '選用的安裝設定',
+        ...plan.optionalParameters.map(param => RC.paramField(param, st.inputs))) : null,
       !allBlocked && plan.setupCommands?.length ? commandSection(plan.setupCommands) : null,
       plan.blockedTargets?.length ? blockedSection(plan, spec.label, allBlocked) : null].filter(Boolean));
     RC.renderConfirmButtons();
@@ -206,12 +208,12 @@
     const plan = st.response.plan || {};
     RC.setText('confirm-error', '');
     let saved = false;
-    if (plan.missingParameters?.length) {
-      const { values, secrets, error } = RC.collectSetup(plan.missingParameters, st.inputs);
-      if (error) return RC.setText('confirm-error', error);
+    const { values, secrets, error } = RC.collectSetup([...(plan.missingParameters ?? []), ...(plan.optionalParameters ?? [])], st.inputs);
+    if (error) return RC.setText('confirm-error', error);
+    if (Object.keys(values).length || Object.keys(secrets).length) {
       st.busy = true; RC.renderConfirmButtons();
       try {
-        await RC.saveSetup(st.key, values, secrets);
+        await RC.saveSetup(st.key, values, secrets, plan.optionalParameters?.length ? st.response.planId : undefined);
         saved = true;
       } catch (e) {
         if (confirmState !== st) return;

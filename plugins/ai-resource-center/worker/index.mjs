@@ -126,7 +126,8 @@ export default function activate(orca, deps = {}) {
   router.handle('rc.install.cancel', input => installation.cancel(input));
   router.handle('rc.install.saveSetup', async input => ({ parameters: await installation.setup(input, true) }));
   router.handle('rc.install.discard', input => installation.discard(input?.planId));
-  registerSideloadHandlers(router, { installation, installed, storage: orca.storage, ready: () => migration });
+  router.handle('rc.dev.guide.prepare', async input => guides.prepareLocal(await installation.localGuideArtifact(input?.planId)));
+  registerSideloadHandlers(router, { installation, installed, storage: orca.storage, guides, tempRoot: deps.tempRoot, ready: () => migration });
   const enrich = createCatalogTools({ platform: deps.platform ?? process.platform, packages, downloads, detectTargets: () => deploy.detectTargets(), readReceipts: () => installed.tryReceipts({ globalOnly: true }).records ?? [],
     lastFailure: key => installation.lastFailure(key), lastSkipped: key => installation.lastSkipped(key), refreshSkipped: key => installation.refreshSkipped(key), backupsFor: key => installation.backupsFor(key), detachedFor: key => installation.detachedFor(key) });
   registerCatalogHandlers(router, { session, installed, preferences, enrich });
