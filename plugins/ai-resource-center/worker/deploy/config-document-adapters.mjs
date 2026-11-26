@@ -15,7 +15,8 @@ export function nodeJson(value, sorted = true) {
   if (object(value)) return '{' + (sorted ? Object.keys(value).sort(ordinal) : Object.keys(value)).map(k => jsonString(k) + ':' + nodeJson(value[k], sorted)).join(',') + '}';
   return JSON.stringify(value ?? null);
 }
-const hashValue = value => ofText(value == null ? '<missing>' : nodeJson(value, false));
+// 欄位值依鍵排序後雜湊：設定檔一律以排序後的節點寫入，讀回時才會與收據一致。
+const hashValue = value => ofText(value == null ? '<missing>' : nodeJson(value));
 const idOf = path => path.includes('.') ? path.slice(path.indexOf('.') + 1) : path;
 function redact(value) {
   if (Array.isArray(value)) return value.map(redact);
@@ -54,6 +55,9 @@ function makeAdapter(id, format, rootProperty, flavor, parse, write, remove) {
       else if (!owner) { change = 'Replace'; problems.push(problem(ProblemCodes.unmanagedCollision, nodePath, `已有非本工具管理的 MCP server '${incoming.id}'`)); }
       else if (!ownership.isSameOwner) { change = 'Merge'; problems.push(problem(ProblemCodes.ownershipCollision, nodePath, `MCP server '${incoming.id}' 已由資源包 '${owner.ownerPackageKey}' 擁有`)); }
       else if (nodeJson(comparable(existing)) === renderedNodeJson) change = 'NoOp';
+      // 整個節點仍與上次安裝相同（baseValueHashes[0] 為排序後的完整節點）：本機沒有修改，直接套用新版。
+      // 舊版外掛的欄位雜湊未排序，鍵順序不同就會誤判為本機修改；以完整節點比對可相容這些收據。
+      else if (ofText(nodeJson(comparable(existing))) === owner.baseValueHashes?.[0]) change = 'Merge';
       else {
         change = 'Merge';
         for (const field of new Set([...Object.keys(existing), ...Object.keys(rendered)])) {
